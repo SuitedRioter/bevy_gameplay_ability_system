@@ -1,6 +1,8 @@
 use bevy::app::{App, Plugin, Startup};
 use bevy::log::info;
 
+pub mod macros;
+
 pub struct AttributePlugin;
 
 impl Plugin for AttributePlugin {
@@ -10,5 +12,5 @@ impl Plugin for AttributePlugin {
 }
 
 fn setup() {
-    info!("Attribute plugin loaded")
+    info!("AttributePlugin")
 }
