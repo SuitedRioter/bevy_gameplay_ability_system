@@ -1,5 +1,5 @@
-use bevy::prelude::Reflect;
 use bevy::prelude::Component;
+use bevy::prelude::Reflect;
 
 #[macro_export]
 macro_rules! define_attribute {
@@ -119,7 +119,11 @@ macro_rules! define_attribute_with_limits_and_default {
         /// 实现 Display trait 用于用户友好的输出
         impl std::fmt::Display for $name {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "base:{:.1}, current:{:.1}", self.base_value, self.current_value)
+                write!(
+                    f,
+                    "base:{:.1}, current:{:.1}",
+                    self.base_value, self.current_value
+                )
             }
         }
     };
