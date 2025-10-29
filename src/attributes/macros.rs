@@ -1,5 +1,5 @@
-use bevy::prelude::Reflect;
 use bevy::prelude::Component;
+use bevy::prelude::Reflect;
 
 #[macro_export]
 macro_rules! define_attribute {
@@ -47,7 +47,12 @@ macro_rules! define_attribute {
 /// 核心宏：生成带限制和默认值的属性组件  
 #[macro_export]
 macro_rules! define_attribute_with_limits_and_default {
-    ($name:ident, $min:expr, $max:expr, $default:expr) => {
+    (
+        $name:ident,
+        $min:expr,
+        $max:expr,
+        $default:expr
+    ) => {
         #[derive(Component, Debug, Clone, Copy, PartialEq, Reflect)]
         pub struct $name {
             pub base_value: f32,
@@ -119,10 +124,15 @@ macro_rules! define_attribute_with_limits_and_default {
         /// 实现 Display trait 用于用户友好的输出
         impl std::fmt::Display for $name {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "base:{:.1}, current:{:.1}", self.base_value, self.current_value)
+                write!(
+                    f,
+                    "base:{:.1}, current:{:.1}",
+                    self.base_value, self.current_value
+                )
             }
         }
     };
 }
 
-define_attribute!(Health, min = 0.0, max = 100.0, default = 100.0);
+define_attribute!(Health, default = 100.0);
+define_attribute!(MaxHealth, min = 0.0, max = 1000.0, default = 100.0);

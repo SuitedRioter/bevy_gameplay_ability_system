@@ -1,10 +1,10 @@
 use bevy::DefaultPlugins;
 use bevy::app::App;
 use bevy::prelude::*;
+use bevy_gameplay_ability_system::attributes::macros::Health;
 use bevy_gameplay_ability_system::gameplay_ability_system_plugin::GameplayAbilitySystemPlugin;
 use bevy_inspector_egui::bevy_egui::EguiPlugin;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
-use bevy_gameplay_ability_system::attributes::macros::Health;
 
 fn main() {
     App::new()
@@ -16,12 +16,8 @@ fn main() {
         .run();
 }
 
-
 fn setup(mut commands: Commands) {
-    commands.spawn((
-            Name::new("Player"),
-            Health::new(),
-        ));
+    commands.spawn((Name::new("Player"), Health::new()));
     // camera
     commands.spawn((
         Name::new("Camera"),
