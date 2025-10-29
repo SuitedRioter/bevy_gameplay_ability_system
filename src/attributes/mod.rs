@@ -1,6 +1,7 @@
 use bevy::app::{App, Plugin, Startup};
 use bevy::log::info;
 
+pub mod attributes;
 pub mod macros;
 
 pub struct AttributePlugin;

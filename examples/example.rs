@@ -1,8 +1,10 @@
 use bevy::DefaultPlugins;
 use bevy::app::App;
 use bevy::prelude::*;
-use bevy_gameplay_ability_system::attributes::macros::Health;
+use bevy_gameplay_ability_system::attributes::attributes::MaxHealth;
+use bevy_gameplay_ability_system::attributes::attributes::AttributeSet;
 use bevy_gameplay_ability_system::gameplay_ability_system_plugin::GameplayAbilitySystemPlugin;
+use bevy_gameplay_tag::gameplay_tag_container::GameplayTagContainer;
 use bevy_inspector_egui::bevy_egui::EguiPlugin;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 
@@ -17,7 +19,15 @@ fn main() {
 }
 
 fn setup(mut commands: Commands) {
-    commands.spawn((Name::new("Player"), Health::new()));
+    commands
+        .spawn((Name::new("Player"), GameplayTagContainer::new()))
+        .with_children(|parent| {
+            parent
+                .spawn((Name::new("Attributes"), AttributeSet))
+                .with_children(|attr_parent| {
+                    attr_parent.spawn((Name::new("MaxHealth"), MaxHealth::with_value(500.0)));
+                });
+        });
     // camera
     commands.spawn((
         Name::new("Camera"),

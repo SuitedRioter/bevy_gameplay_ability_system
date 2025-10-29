@@ -1,6 +1,3 @@
-use bevy::prelude::Component;
-use bevy::prelude::Reflect;
-
 #[macro_export]
 macro_rules! define_attribute {
     // 完整参数：最小值、最大值、默认值
@@ -133,6 +130,3 @@ macro_rules! define_attribute_with_limits_and_default {
         }
     };
 }
-
-define_attribute!(Health, default = 100.0);
-define_attribute!(MaxHealth, min = 0.0, max = 1000.0, default = 100.0);
