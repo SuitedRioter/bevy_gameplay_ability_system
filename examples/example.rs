@@ -25,7 +25,7 @@ fn setup(mut commands: Commands) {
             parent
                 .spawn((Name::new("Attributes"), AttributeSet))
                 .with_children(|attr_parent| {
-                    attr_parent.spawn((Name::new("MaxHealth"), MaxHealth::with_value(500.0)));
+                    attr_parent.spawn((Name::new("MaxHealth"), Health::with_value(500.0)));
                 });
         });
     // camera
@@ -36,7 +36,15 @@ fn setup(mut commands: Commands) {
     ));
 }
 
-define_attribute_manual!(Health, default = 100.0);
-define_attribute!(MaxHealth, min = 0.0, max = 1000.0, default = 100.0);
+define_attribute_manual!(Health, min = 0.0, max = f32::MAX);
+define_attribute!(MaxHealth, min = 0.0, max = 1000.0);
 
-impl GameplayAttribute for Health {}
+impl GameplayAttribute for Health {
+    fn pre_attribute_base_change(&mut self, _old_value: f32, _new_value: &mut f32) {
+        *_new_value += 1.0;
+    }
+
+    fn post_attribute_base_change(&mut self, _old_value: f32, _new_value: f32) {
+        println!("post change {}", _new_value);
+    }
+}

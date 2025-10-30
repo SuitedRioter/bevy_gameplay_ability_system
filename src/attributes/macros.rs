@@ -1,44 +1,12 @@
 // 自动实现 GameplayAttribute trait 的宏
 #[macro_export]
 macro_rules! define_attribute {
-    // 完整参数：最小值、最大值、默认值
-    ($name:ident, min = $min:expr, max = $max:expr, default = $default:expr) => {
-        $crate::define_attribute_with_auto_impl!($name, $min, $max, $default);
-    };
-
-    // 最小值和最大值（默认值为最小值）
     ($name:ident, min = $min:expr, max = $max:expr) => {
-        $crate::define_attribute_with_auto_impl!($name, $min, $max, $min);
-    };
+        // 生成结构体和基本方法
+        $crate::define_attribute_core!($name, $min, $max);
 
-    // 只有最小值和默认值
-    ($name:ident, min = $min:expr, default = $default:expr) => {
-        $crate::define_attribute_with_auto_impl!($name, $min, f32::MAX, $default);
-    };
-
-    // 只有最大值和默认值
-    ($name:ident, max = $max:expr, default = $default:expr) => {
-        $crate::define_attribute_with_auto_impl!($name, f32::MIN, $max, $default);
-    };
-
-    // 只有默认值（无限制）
-    ($name:ident, default = $default:expr) => {
-        $crate::define_attribute_with_auto_impl!($name, f32::MIN, f32::MAX, $default);
-    };
-
-    // 只有最小值（默认值为最小值）
-    ($name:ident, min = $min:expr) => {
-        $crate::define_attribute_with_auto_impl!($name, $min, f32::MAX, $min);
-    };
-
-    // 只有最大值（默认值为 0.0）
-    ($name:ident, max = $max:expr) => {
-        $crate::define_attribute_with_auto_impl!($name, f32::MIN, $max, 0.0);
-    };
-
-    // 无限制（默认值为 0.0）
-    ($name:ident) => {
-        $crate::define_attribute_with_auto_impl!($name, f32::MIN, f32::MAX, 0.0);
+        // 自动实现空 trait
+        impl $crate::attributes::core::GameplayAttribute for $name {}
     };
 }
 
@@ -46,65 +14,9 @@ macro_rules! define_attribute {
 /// 需要用户手动实现 GameplayAttribute trait，否则会报错。
 #[macro_export]
 macro_rules! define_attribute_manual {
-    // 完整参数：最小值、最大值、默认值
-    ($name:ident, min = $min:expr, max = $max:expr, default = $default:expr) => {
-        $crate::define_attribute_without_auto_impl!($name, $min, $max, $default);
-    };
-
-    // 最小值和最大值（默认值为最小值）
     ($name:ident, min = $min:expr, max = $max:expr) => {
-        $crate::define_attribute_without_auto_impl!($name, $min, $max, $min);
-    };
-
-    // 只有最小值和默认值
-    ($name:ident, min = $min:expr, default = $default:expr) => {
-        $crate::define_attribute_without_auto_impl!($name, $min, f32::MAX, $default);
-    };
-
-    // 只有最大值和默认值
-    ($name:ident, max = $max:expr, default = $default:expr) => {
-        $crate::define_attribute_without_auto_impl!($name, f32::MIN, $max, $default);
-    };
-
-    // 只有默认值（无限制）
-    ($name:ident, default = $default:expr) => {
-        $crate::define_attribute_without_auto_impl!($name, f32::MIN, f32::MAX, $default);
-    };
-
-    // 只有最小值（默认值为最小值）
-    ($name:ident, min = $min:expr) => {
-        $crate::define_attribute_without_auto_impl!($name, $min, f32::MAX, $min);
-    };
-
-    // 只有最大值（默认值为 0.0）
-    ($name:ident, max = $max:expr) => {
-        $crate::define_attribute_without_auto_impl!($name, f32::MIN, $max, 0.0);
-    };
-
-    // 无限制（默认值为 0.0）
-    ($name:ident) => {
-        $crate::define_attribute_without_auto_impl!($name, f32::MIN, f32::MAX, 0.0);
-    };
-}
-
-// 内部宏：自动实现 GameplayAttribute trait
-#[macro_export]
-macro_rules! define_attribute_with_auto_impl {
-    ($name:ident, $min:expr, $max:expr, $default:expr) => {
-        // 生成结构体和基本方法
-        $crate::define_attribute_core!($name, $min, $max, $default);
-
-        // 自动实现空 trait
-        impl $crate::attributes::core::GameplayAttribute for $name {}
-    };
-}
-
-// 内部宏：不自动实现 GameplayAttribute trait
-#[macro_export]
-macro_rules! define_attribute_without_auto_impl {
-    ($name:ident, $min:expr, $max:expr, $default:expr) => {
         // 只生成结构体和基本方法，不实现 trait
-        $crate::define_attribute_core!($name, $min, $max, $default);
+        $crate::define_attribute_core!($name, $min, $max);
     };
 }
 
@@ -114,8 +26,7 @@ macro_rules! define_attribute_core {
     (
         $name:ident,
         $min:expr,
-        $max:expr,
-        $default:expr
+        $max:expr
     ) => {
         #[derive(Component, Debug, Clone, Copy, PartialEq, Reflect)]
         pub struct $name {
@@ -126,10 +37,9 @@ macro_rules! define_attribute_core {
         impl $name {
             /// 使用默认值创建
             pub fn new() -> Self {
-                let default_value = ($default as f32).clamp($min, $max);
                 Self {
-                    base_value: default_value,
-                    current_value: default_value,
+                    base_value: 0.0,
+                    current_value: 0.0,
                 }
             }
 
@@ -184,11 +94,6 @@ macro_rules! define_attribute_core {
             /// 获取最大值
             pub const fn max_value() -> f32 {
                 $max
-            }
-
-            /// 获取默认值
-            pub const fn default_value() -> f32 {
-                $default
             }
 
             /// 检查值是否在有效范围内
