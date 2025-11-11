@@ -1,3 +1,7 @@
+mod components;
+mod states;
+mod systems;
+
 use bevy::app::{App, Plugin, Startup};
 use bevy::log::info;
 
