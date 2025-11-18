@@ -12,6 +12,7 @@ pub struct AbilityPreActivating;
 pub struct AbilityActivated;
 
 #[derive(Component)]
+#[expect(dead_code)]
 pub struct AbilityApplyingEffects;
 
 #[derive(Component)]

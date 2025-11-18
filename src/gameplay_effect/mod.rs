@@ -1,6 +1,8 @@
 use bevy::app::{App, Plugin, Startup};
 use bevy::log::info;
 
+mod components;
+
 pub struct GameplayEffectPlugin;
 
 impl Plugin for GameplayEffectPlugin {
