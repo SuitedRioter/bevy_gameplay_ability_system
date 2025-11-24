@@ -2,6 +2,8 @@ use bevy::app::{App, Plugin, Startup};
 use bevy::log::info;
 
 mod components;
+mod events;
+mod types;
 
 pub struct GameplayEffectPlugin;
 
