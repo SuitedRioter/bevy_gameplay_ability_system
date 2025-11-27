@@ -1,7 +1,7 @@
 use bevy::DefaultPlugins;
 use bevy::app::App;
 use bevy::prelude::*;
-use bevy_gameplay_ability_system::attributes::core::AttributeSet;
+use bevy_gameplay_ability_system::attributes::core::{AttributeSet, GameplayAttributeId};
 use bevy_gameplay_ability_system::gameplay_ability_system_plugin::GameplayAbilitySystemPlugin;
 use bevy_gameplay_ability_system::{GameplayAttribute, define_attribute, define_attribute_manual};
 use bevy_gameplay_tag::gameplay_tag_container::GameplayTagContainer;
@@ -25,7 +25,10 @@ fn setup(mut commands: Commands) {
             parent
                 .spawn((Name::new("Attributes"), AttributeSet))
                 .with_children(|attr_parent| {
-                    attr_parent.spawn((Name::new("MaxHealth"), Health::with_value(500.0)));
+                    attr_parent.spawn((Name::new("MaxHealth"), MaxHealth::with_value(500.0)));
+                })
+                .with_children(|attr_parent| {
+                    attr_parent.spawn((Name::new("Health"), Health::with_value(300.0)));
                 });
         });
     // camera
@@ -36,15 +39,27 @@ fn setup(mut commands: Commands) {
     ));
 }
 
-define_attribute_manual!(Health, min = 0.0, max = f32::MAX);
-define_attribute!(MaxHealth, min = 0.0, max = 1000.0);
+define_attribute!(MaxHealth);
+define_attribute_manual!(Health);
 
 impl GameplayAttribute for Health {
-    fn pre_attribute_base_change(&mut self, _old_value: f32, _new_value: &mut f32) {
-        *_new_value += 1.0;
+    fn attribute_id() -> GameplayAttributeId {
+        GameplayAttributeId::of::<Self>()
     }
 
-    fn post_attribute_base_change(&mut self, _old_value: f32, _new_value: f32) {
-        println!("post change {}", _new_value);
+    fn get_base_value(&self) -> f32 {
+        self.base_value
+    }
+    fn get_current_value(&self) -> f32 {
+        self.current_value
+    }
+
+    /// 设置current_value
+    fn set_current_value_internal(&mut self, value: f32) {
+        self.current_value = value;
+    }
+    /// 设置base_value
+    fn set_base_value_internal(&mut self, value: f32) {
+        self.base_value = value;
     }
 }

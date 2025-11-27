@@ -1,7 +1,7 @@
 // 自动实现 GameplayAttribute trait 的宏
 #[macro_export]
 macro_rules! define_attribute {
-    ($name:ident, min = $min:expr, max = $max:expr) => {
+    ($name:ident) => {
         #[derive(Component, Debug, Clone, Copy, PartialEq, Reflect)]
         pub struct $name {
             pub base_value: f32,
@@ -19,60 +19,10 @@ macro_rules! define_attribute {
 
             /// 使用自定义值创建
             pub fn with_value(value: f32) -> Self {
-                let clamped_value = value.clamp($min, $max);
                 Self {
-                    base_value: clamped_value,
-                    current_value: clamped_value,
+                    base_value: value,
+                    current_value: value,
                 }
-            }
-
-            pub fn get_base_value(&self) -> f32 {
-                self.base_value
-            }
-
-            pub fn get_current_value(&self) -> f32 {
-                self.current_value
-            }
-
-            pub fn set_current_value(&mut self, value: f32) {
-                let old_value = self.current_value;
-                let mut new_value = value;
-                // 调用 pre hook,允许进一步修改 new_value
-                self.pre_attribute_change(old_value, &mut new_value);
-                // 再次 clamp 确保 pre hook 修改后的值仍在范围内
-                new_value = new_value.clamp($min, $max);
-                // 实际修改值
-                self.current_value = new_value;
-                // 调用 post hook
-                self.post_attribute_change(old_value, new_value);
-            }
-
-            pub fn set_base_value(&mut self, value: f32) {
-                let old_value = self.base_value;
-                let mut new_value = value;
-                // 调用 pre hook,允许进一步修改 new_value
-                self.pre_attribute_base_change(old_value, &mut new_value);
-                // 再次 clamp 确保 pre hook 修改后的值仍在范围内
-                new_value = new_value.clamp($min, $max);
-                // 实际修改值
-                self.base_value = new_value;
-                // 调用 post hook
-                self.post_attribute_base_change(old_value, new_value);
-            }
-
-            /// 获取最小值
-            pub const fn min_value() -> f32 {
-                $min
-            }
-
-            /// 获取最大值
-            pub const fn max_value() -> f32 {
-                $max
-            }
-
-            /// 检查值是否在有效范围内
-            pub fn is_valid_value(value: f32) -> bool {
-                ($min..$max).contains(&value)
             }
         }
 
@@ -93,8 +43,49 @@ macro_rules! define_attribute {
             }
         }
 
-        // 自动实现空 trait
-        impl $crate::attributes::core::GameplayAttribute for $name {}
+        // 实现 GameplayAttribute trait
+        impl $crate::attributes::core::GameplayAttribute for $name {
+            fn attribute_id() -> $crate::attributes::core::GameplayAttributeId {
+                $crate::attributes::core::GameplayAttributeId::of::<Self>()
+            }
+
+            fn get_base_value(&self) -> f32 {
+                self.base_value
+            }
+
+            fn get_current_value(&self) -> f32 {
+                self.current_value
+            }
+
+            fn set_current_value_internal(&mut self, value: f32) {
+                self.current_value = value;
+            }
+            fn set_base_value_internal(&mut self, value: f32) {
+                self.base_value = value;
+            }
+
+            fn set_current_value(&mut self, value: f32) {
+                let old_value = self.current_value;
+                let mut new_value = value;
+                // 调用 pre hook,允许进一步修改 new_value
+                self.pre_attribute_change(old_value, &mut new_value);
+                // 实际修改值
+                self.current_value = new_value;
+                // 调用 post hook
+                self.post_attribute_change(old_value, new_value);
+            }
+
+            fn set_base_value(&mut self, value: f32) {
+                let old_value = self.base_value;
+                let mut new_value = value;
+                // 调用 pre hook,允许进一步修改 new_value
+                self.pre_attribute_base_change(old_value, &mut new_value);
+                // 实际修改值
+                self.base_value = new_value;
+                // 调用 post hook
+                self.post_attribute_base_change(old_value, new_value);
+            }
+        }
     };
 }
 
@@ -102,11 +93,21 @@ macro_rules! define_attribute {
 /// 需要用户手动实现 GameplayAttribute trait，否则会报错。
 #[macro_export]
 macro_rules! define_attribute_manual {
-    ($name:ident, min = $min:expr, max = $max:expr) => {
+    ($name:ident) => {
         #[derive(Component, Debug, Clone, Copy, PartialEq, Reflect)]
         pub struct $name {
             pub base_value: f32,
             pub current_value: f32,
+        }
+
+        // 编译时检查：使用 where 子句
+        impl $name
+        where
+            Self: $crate::attributes::core::GameplayAttribute,
+        {
+            pub fn _verify_attribute_impl(&self) {
+                // 空实现，仅用于编译时检查
+            }
         }
 
         impl $name {
@@ -120,60 +121,10 @@ macro_rules! define_attribute_manual {
 
             /// 使用自定义值创建
             pub fn with_value(value: f32) -> Self {
-                let clamped_value = value.clamp($min, $max);
                 Self {
-                    base_value: clamped_value,
-                    current_value: clamped_value,
+                    base_value: value,
+                    current_value: value,
                 }
-            }
-
-            pub fn get_base_value(&self) -> f32 {
-                self.base_value
-            }
-
-            pub fn get_current_value(&self) -> f32 {
-                self.current_value
-            }
-
-            pub fn set_current_value(&mut self, value: f32) {
-                let old_value = self.current_value;
-                let mut new_value = value;
-                // 调用 pre hook,允许进一步修改 new_value
-                self.pre_attribute_change(old_value, &mut new_value);
-                // 再次 clamp 确保 pre hook 修改后的值仍在范围内
-                new_value = new_value.clamp($min, $max);
-                // 实际修改值
-                self.current_value = new_value;
-                // 调用 post hook
-                self.post_attribute_change(old_value, new_value);
-            }
-
-            pub fn set_base_value(&mut self, value: f32) {
-                let old_value = self.base_value;
-                let mut new_value = value;
-                // 调用 pre hook,允许进一步修改 new_value
-                self.pre_attribute_base_change(old_value, &mut new_value);
-                // 再次 clamp 确保 pre hook 修改后的值仍在范围内
-                new_value = new_value.clamp($min, $max);
-                // 实际修改值
-                self.base_value = new_value;
-                // 调用 post hook
-                self.post_attribute_base_change(old_value, new_value);
-            }
-
-            /// 获取最小值
-            pub const fn min_value() -> f32 {
-                $min
-            }
-
-            /// 获取最大值
-            pub const fn max_value() -> f32 {
-                $max
-            }
-
-            /// 检查值是否在有效范围内
-            pub fn is_valid_value(value: f32) -> bool {
-                ($min..$max).contains(&value)
             }
         }
 
