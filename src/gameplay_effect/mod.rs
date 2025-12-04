@@ -3,7 +3,8 @@ use bevy::log::info;
 
 mod components;
 mod events;
-mod types;
+mod systems;
+pub mod types;
 
 pub struct GameplayEffectPlugin;
 

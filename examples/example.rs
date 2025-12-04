@@ -1,7 +1,7 @@
 use bevy::DefaultPlugins;
 use bevy::app::App;
 use bevy::prelude::*;
-use bevy_gameplay_ability_system::attributes::core::{AttributeSet, GameplayAttributeId};
+use bevy_gameplay_ability_system::attributes::components::{AttributeSet, GameplayAttributeId};
 use bevy_gameplay_ability_system::gameplay_ability_system_plugin::GameplayAbilitySystemPlugin;
 use bevy_gameplay_ability_system::{GameplayAttribute, define_attribute, define_attribute_manual};
 use bevy_gameplay_tag::gameplay_tag_container::GameplayTagContainer;

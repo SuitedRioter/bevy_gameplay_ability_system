@@ -777,6 +777,7 @@ dependencies = [
  "bevy",
  "bevy-inspector-egui",
  "bevy_gameplay_tag",
+ "string_cache",
 ]
 
 [[package]]

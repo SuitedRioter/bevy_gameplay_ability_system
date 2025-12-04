@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 bevy = "0.17.3"
 bevy_gameplay_tag = { git = "https://github.com/SuitedRioter/bevy_gameplay_tag.git", branch = "main" }
-
+string_cache = "0.9"
 
 [dev-dependencies]
 bevy-inspector-egui = "0.35.0"
