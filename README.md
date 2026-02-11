@@ -36,7 +36,7 @@ A comprehensive gameplay ability system for Bevy, inspired by Unreal Engine's Ga
 ## Bevy Compatibility
 
 | Bevy Version | Plugin Version |
-|--------------|----------------|
+| ------------ | -------------- |
 | 0.18         | 0.1            |
 
 ## Installation
@@ -167,6 +167,7 @@ commands.spawn((
 ```
 
 **Effect Features:**
+
 - Duration policies: Instant, HasDuration, Infinite
 - Periodic execution (damage/healing over time)
 - Stacking policies: Independent, RefreshDuration, StackCount
@@ -199,6 +200,7 @@ commands.spawn((
 ```
 
 **Ability Features:**
+
 - Instancing policies: NonInstanced, InstancedPerActor, InstancedPerExecution
 - Cost effects (mana, stamina, etc.)
 - Cooldown effects (tag-based)
@@ -226,6 +228,7 @@ commands.trigger(TriggerGameplayCueEvent {
 ```
 
 **Cue Features:**
+
 - Static cues (lightweight, no entity)
 - Actor cues (spawned entities with lifetime)
 - Hierarchical tag matching
@@ -254,6 +257,7 @@ let ability_entity = commands.spawn((
 ```
 
 **Benefits:**
+
 - Better ECS performance (query optimization)
 - Parallel system execution
 - Memory locality
@@ -304,12 +308,14 @@ GasSystemSet::Input
 ### Basic Attributes
 
 See `examples/basic_attributes.rs` for a complete example of:
+
 - Defining custom attribute sets
 - Creating attributes for entities
 - Modifying attribute values
 - Querying attributes
 
 Run with:
+
 ```bash
 cargo run --example basic_attributes
 ```
@@ -317,12 +323,14 @@ cargo run --example basic_attributes
 ### Gameplay Effects
 
 See `examples/gameplay_effects.rs` for examples of:
+
 - Instant effects (damage, healing)
 - Duration effects (buffs, debuffs)
 - Periodic effects (damage over time)
 - Effect stacking
 
 Run with:
+
 ```bash
 cargo run --example gameplay_effects
 ```
@@ -330,12 +338,14 @@ cargo run --example gameplay_effects
 ### Ability Activation
 
 See `examples/ability_activation.rs` for examples of:
+
 - Granting abilities to entities
 - Activating abilities with costs
 - Cooldown management
 - Tag-based requirements
 
 Run with:
+
 ```bash
 cargo run --example ability_activation
 ```
@@ -343,6 +353,7 @@ cargo run --example ability_activation
 ### Complete RPG Example
 
 See `examples/complete_rpg.rs` for a full combat simulation featuring:
+
 - Player vs Enemy combat
 - Multiple abilities (attacks, spells, healing)
 - AI-controlled enemy
@@ -350,6 +361,7 @@ See `examples/complete_rpg.rs` for a full combat simulation featuring:
 - All four core systems working together
 
 Run with:
+
 ```bash
 cargo run --example complete_rpg
 ```

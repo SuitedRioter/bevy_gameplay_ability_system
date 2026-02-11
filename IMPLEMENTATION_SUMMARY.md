@@ -7,6 +7,7 @@ Successfully implemented a complete Gameplay Ability System for Bevy 0.18, inspi
 ## Implementation Status
 
 ### ✅ Phase 1: Attribute System (COMPLETED)
+
 - **Components**: `AttributeData`, `AttributeOwner`, `AttributeName`, `AttributeMetadataComponent`
 - **Traits**: `AttributeSetDefinition` with metadata and default values
 - **Systems**: Attribute initialization, clamping, change detection
@@ -14,12 +15,14 @@ Successfully implemented a complete Gameplay Ability System for Bevy 0.18, inspi
 - **Example**: `examples/basic_attributes.rs`
 
 **Key Features**:
+
 - Dual-value system (BaseValue/CurrentValue)
 - Optional min/max constraints
 - Trait-based attribute set definitions
 - Entity-based attribute storage
 
 ### ✅ Phase 2: Gameplay Effects (COMPLETED)
+
 - **Components**: `ActiveGameplayEffect`, `EffectTarget`, `EffectDuration`, `PeriodicEffect`
 - **Definitions**: `GameplayEffectDefinition`, `ModifierInfo`, `MagnitudeCalculation`
 - **Duration Policies**: Instant, HasDuration, Infinite
@@ -29,6 +32,7 @@ Successfully implemented a complete Gameplay Ability System for Bevy 0.18, inspi
 - **Example**: `examples/gameplay_effects.rs`
 
 **Key Features**:
+
 - Entity-based effect instances
 - Periodic effects (damage/healing over time)
 - Tag requirements for application
@@ -36,6 +40,7 @@ Successfully implemented a complete Gameplay Ability System for Bevy 0.18, inspi
 - Effect stacking support
 
 ### ✅ Phase 3: Gameplay Abilities (COMPLETED)
+
 - **Components**: `AbilitySpec`, `AbilityOwner`, `ActiveAbilityInstance`
 - **Definitions**: `AbilityDefinition` with costs, cooldowns, and requirements
 - **Instancing Policies**: NonInstanced, InstancedPerActor, InstancedPerExecution
@@ -44,6 +49,7 @@ Successfully implemented a complete Gameplay Ability System for Bevy 0.18, inspi
 - **Example**: `examples/ability_activation.rs`
 
 **Key Features**:
+
 - Cost effects (mana, stamina, etc.)
 - Cooldown effects (tag-based)
 - Tag requirements and blocking
@@ -51,6 +57,7 @@ Successfully implemented a complete Gameplay Ability System for Bevy 0.18, inspi
 - Activation events
 
 ### ✅ Phase 4: GameplayCues (COMPLETED)
+
 - **Manager**: `GameplayCueManager` with static and actor cue support
 - **Parameters**: `GameplayCueParameters` for cue context
 - **Notify Traits**: `GameplayCueNotifyStatic` for lightweight cues
@@ -59,6 +66,7 @@ Successfully implemented a complete Gameplay Ability System for Bevy 0.18, inspi
 - **Plugin**: `CuePlugin` with hierarchical tag matching
 
 **Key Features**:
+
 - Static cues (no entity overhead)
 - Actor cues (spawned entities)
 - Hierarchical tag matching
@@ -66,63 +74,73 @@ Successfully implemented a complete Gameplay Ability System for Bevy 0.18, inspi
 - Event types: OnActive, WhileActive, Executed, Removed
 
 ### ✅ Core Module (COMPLETED)
+
 - **Handles**: `AbilityHandle`, `EffectHandle`, `AttributeHandle` with generation counters
 - **Events**: Centralized event re-exports and `BatchableEvent` trait
 - **SystemSets**: Proper execution ordering (Input → Attributes → Effects → Abilities → Cues → Cleanup)
 
 **Key Features**:
+
 - Safe entity references with generation counters
 - Deterministic system execution order
 - Event-driven architecture
 
 ### ✅ Utils Module (COMPLETED)
-- **Tag Requirements**: `TagRequirements` with builder pattern for tag checking
+
+- **Tag Requirements**: `GameplayTagRequirements` with builder pattern for tag checking
 - **Math Utilities**: `clamp_optional`, `lerp`, `remap`, `smoothstep`, `percentage`, `normalize`
 - **Query Helpers**: Common ECS query patterns for attributes, effects, and abilities
 
 **Key Features**:
+
 - Flexible tag requirement checking
 - Mathematical utilities for gameplay calculations
 - Helper functions for common queries
 
 ### ✅ Examples (COMPLETED)
+
 1. **basic_attributes.rs** - Attribute system demonstration
 2. **gameplay_effects.rs** - Effect system with instant, duration, and periodic effects
 3. **ability_activation.rs** - Ability activation with costs and cooldowns
 4. **complete_rpg.rs** - Full combat simulation (Player vs Enemy)
 
 ### ✅ Documentation (COMPLETED)
+
 - **README.md**: Comprehensive documentation with:
-  - Installation instructions
-  - Quick start guide
-  - Architecture overview
-  - API examples for all modules
-  - Best practices
-  - Utility function documentation
-  - Performance considerations
-  - Roadmap
+    - Installation instructions
+    - Quick start guide
+    - Architecture overview
+    - API examples for all modules
+    - Best practices
+    - Utility function documentation
+    - Performance considerations
+    - Roadmap
 
 ## Architecture Highlights
 
 ### Entity-Based Design
+
 - Effects are entities (not stored in vectors)
 - Abilities are entities (not stored in vectors)
 - Attributes are entities (not stored in vectors)
 - Benefits: Better ECS performance, parallel execution, memory locality
 
 ### Pure ECS Architecture
+
 - Components = Pure data
 - Systems = Pure logic
 - No logic in components
 - Leverages Bevy's query optimization
 
 ### Tag-Based System
+
 - Uses `bevy_gameplay_tag` for hierarchical tags
 - Tag requirements for effects and abilities
 - Tag-based cooldowns and blocking
 - Granted tags from effects
 
 ### Handle System
+
 - Safe references with generation counters
 - Prevents dangling entity references
 - Stable identifiers for external storage
@@ -172,6 +190,7 @@ src/
 ## API Compatibility (Bevy 0.18)
 
 Fixed compatibility issues:
+
 - `delta_seconds()` → `delta_secs()`
 - `get_single()` → `single()`
 - `despawn_recursive()` → `despawn()`

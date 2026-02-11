@@ -6,6 +6,7 @@
 use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 use bevy::prelude::*;
 use bevy_gameplay_ability_system::prelude::*;
+use bevy_gameplay_tag::GameplayTagRequirements;
 use bevy_gameplay_tag::gameplay_tag::GameplayTag;
 const NUM_ENTITIES: usize = 100;
 const EFFECTS_PER_ENTITY: usize = 10;
@@ -84,7 +85,7 @@ fn setup(
                 magnitude: MagnitudeCalculation::ScalableFloat { base_value: 10.0 },
             }],
             granted_tags: vec![GameplayTag::new(&format!("Effect.Test{}", i))],
-            application_tag_requirements: TagRequirements::default(),
+            application_tag_requirements: GameplayTagRequirements::default(),
             stacking_policy: match i % 3 {
                 0 => StackingPolicy::RefreshDuration,
                 1 => StackingPolicy::StackCount { max_stacks: 5 },

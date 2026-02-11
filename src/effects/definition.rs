@@ -3,9 +3,8 @@
 //! This module defines the structure of gameplay effects and their properties.
 
 use super::components::ModifierOperation;
-use crate::utils::TagRequirements;
 use bevy::prelude::*;
-use bevy_gameplay_tag::gameplay_tag::GameplayTag;
+use bevy_gameplay_tag::{GameplayTagRequirements, gameplay_tag::GameplayTag};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DurationPolicy {
     /// Effect applies instantly and is removed immediately.
@@ -124,7 +123,7 @@ pub struct GameplayEffectDefinition {
     /// Tags granted while this effect is active.
     pub granted_tags: Vec<GameplayTag>,
     /// Tag requirements for applying this effect.
-    pub application_tag_requirements: TagRequirements,
+    pub application_tag_requirements: GameplayTagRequirements,
     /// Stacking policy.
     pub stacking_policy: StackingPolicy,
 }
@@ -139,7 +138,7 @@ impl GameplayEffectDefinition {
             period: 0.0,
             modifiers: Vec::new(),
             granted_tags: Vec::new(),
-            application_tag_requirements: TagRequirements::new(),
+            application_tag_requirements: GameplayTagRequirements::default(),
             stacking_policy: StackingPolicy::Independent,
         }
     }
@@ -176,7 +175,7 @@ impl GameplayEffectDefinition {
     }
 
     /// Sets the tag requirements.
-    pub fn with_tag_requirements(mut self, requirements: TagRequirements) -> Self {
+    pub fn with_tag_requirements(mut self, requirements: GameplayTagRequirements) -> Self {
         self.application_tag_requirements = requirements;
         self
     }
