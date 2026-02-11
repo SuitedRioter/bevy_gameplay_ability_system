@@ -6,7 +6,6 @@ use super::components::*;
 use super::definition::*;
 use crate::abilities::AbilityRegistry;
 use bevy::prelude::*;
-use bevy_gameplay_tag::gameplay_tag::GameplayTag;
 use bevy_gameplay_tag::gameplay_tag_count_container::GameplayTagCountContainer;
 
 /// Event for trying to activate an ability.
@@ -222,6 +221,7 @@ pub fn update_ability_cooldowns_system(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bevy_gameplay_tag::gameplay_tag::GameplayTag;
 
     #[test]
     fn test_check_activation_requirements() {

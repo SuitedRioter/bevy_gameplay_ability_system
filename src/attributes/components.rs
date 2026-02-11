@@ -102,12 +102,6 @@ impl AttributeMetadata {
 #[derive(Component, Debug, Clone, PartialEq)]
 pub struct AttributeMetadataComponent(pub AttributeMetadata);
 
-/// Marker component for attribute set entities.
-///
-/// An attribute set is a collection of related attributes owned by a single entity.
-#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
-pub struct AttributeSet;
-
 /// Component that links an attribute to its owner entity.
 ///
 /// This creates a relationship between an attribute entity and the entity that owns it.
