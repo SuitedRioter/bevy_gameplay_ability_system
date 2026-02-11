@@ -182,7 +182,6 @@ src/
 │   └── system_sets.rs
 └── utils/                          # Utilities
     ├── mod.rs
-    ├── tag_requirements.rs
     ├── math.rs
     └── query_helpers.rs
 ```
@@ -229,7 +228,6 @@ Fixed compatibility issues:
 ✅ Comprehensive documentation
 ✅ Pure ECS architecture
 ✅ Entity-based design
-✅ Tag-based requirements
 ✅ Handle system for safe references
 ✅ Proper system ordering
 ✅ Bevy 0.18 compatibility

@@ -268,15 +268,25 @@ let ability_entity = commands.spawn((
 Tag requirements control when effects and abilities can be applied/activated:
 
 ```rust
-use bevy_gameplay_ability_system::utils::TagRequirements;
+use bevy_gameplay_tag::GameplayTagRequirements;
 
-let requirements = TagRequirements::new()
-    .require_tag(GameplayTag::new("State.Alive"))
-    .ignore_tag(GameplayTag::new("State.Stunned"))
-    .require_all_tag(GameplayTag::new("Ability.CanCast"));
+let mut requirements = GameplayTagRequirements::new();
 
-if requirements.are_requirements_met(&entity_tags) {
-    // Apply effect or activate ability
+// Must have these tags
+requirements.require_tags.add_tag(
+    GameplayTag::new("Ability.Skill"),
+    &tags_manager
+);
+
+// Must NOT have these tags
+requirements.ignore_tags.add_tag(
+    GameplayTag::new("Status.Debuff.Silence"),
+    &tags_manager
+);
+
+// Check if requirements are met
+if requirements.requirements_met(&entity_tags) {
+    println!("Can use ability!");
 }
 ```
 

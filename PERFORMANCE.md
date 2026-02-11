@@ -99,6 +99,7 @@ The attribute aggregation system is designed for efficiency:
 ```
 
 **Optimization Tips:**
+
 - Use `AddBase` for permanent stat changes (level-ups, equipment)
 - Use `AddCurrent` for temporary flat bonuses (buffs)
 - Prefer `MultiplyAdditive` over `MultiplyMultiplicative` when possible
@@ -124,22 +125,24 @@ StackingPolicy::Independent
 Tag checks are performed frequently, so optimize them:
 
 ```rust
-// ❌ Bad: Many individual tag requirements
-TagRequirements::new()
-    .require_tag(tag1)
-    .require_tag(tag2)
-    .require_tag(tag3)
-    // Each tag checked individually
+let mut requirements = GameplayTagRequirements::new();
 
-// ✅ Good: Use require_all_tags for AND logic
-TagRequirements::new()
-    .require_all_tags(vec![tag1, tag2, tag3])
-    // Single hierarchical check
+// Must have these tags
+requirements.require_tags.add_tag(
+    GameplayTag::new("Ability.Skill"),
+    &tags_manager
+);
 
-// ✅ Good: Use require_any_tags for OR logic
-TagRequirements::new()
-    .require_any_tags(vec![tag1, tag2, tag3])
-    // Early exit on first match
+// Must NOT have these tags
+requirements.ignore_tags.add_tag(
+    GameplayTag::new("Status.Debuff.Silence"),
+    &tags_manager
+);
+
+// Check if requirements are met
+if requirements.requirements_met(&entity_tags) {
+    println!("Can use ability!");
+}
 ```
 
 ### 6. Periodic Effect Optimization
