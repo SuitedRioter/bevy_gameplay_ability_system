@@ -1,0 +1,17 @@
+[package]
+name = "bevy_gameplay_ability_system"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bevy = "0.18.0"
+bevy_gameplay_tag = { git = "https://github.com/SuitedRioter/bevy_gameplay_tag.git", branch = "main" }
+string_cache = "0.9"
+
+[dev-dependencies]
+bevy-inspector-egui = "0.36.0"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "gas_benchmarks"
+harness = false
