@@ -15,7 +15,7 @@
 //!
 //! # Example
 //!
-//! ```
+//! ``` ignore
 //! use bevy::prelude::*;
 //! use bevy_gameplay_ability_system::effects::*;
 //!

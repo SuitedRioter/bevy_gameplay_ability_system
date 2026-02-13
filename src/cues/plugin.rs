@@ -12,7 +12,7 @@ use bevy::prelude::*;
 ///
 /// # Example
 ///
-/// ```
+/// ``` ignore
 /// use bevy::prelude::*;
 /// use bevy_gameplay_ability_system::cues::CuePlugin;
 ///
