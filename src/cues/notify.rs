@@ -108,7 +108,7 @@ mod tests {
     #[test]
     fn test_cue_notify_actor_creation() {
         let tag = GameplayTag::new("GameplayCue.Test");
-        let target = Entity::from_bits(0);
+        let target = Entity::PLACEHOLDER;
         let actor = GameplayCueNotifyActor::new(tag.clone(), target, 0.0);
 
         assert_eq!(actor.cue_tag, tag);
@@ -119,7 +119,7 @@ mod tests {
     #[test]
     fn test_cue_notify_actor_builder() {
         let tag = GameplayTag::new("GameplayCue.Test");
-        let target = Entity::from_bits(0);
+        let target = Entity::PLACEHOLDER;
         let actor = GameplayCueNotifyActor::new(tag, target, 0.0).with_auto_destroy(false);
 
         assert!(!actor.auto_destroy_on_remove);

@@ -17,7 +17,7 @@ pub fn find_attribute_by_name(
     query
         .iter()
         .find(|(_, _, attr_owner, name)| attr_owner.0 == owner && name.0 == attribute_name)
-        .map(|(entity, data, _, _)| (entity, data.clone()))
+        .map(|(entity, data, _, _)| (entity, *data))
 }
 
 /// Helper for getting all attributes for a specific owner.
@@ -28,7 +28,7 @@ pub fn get_owner_attributes(
     query
         .iter()
         .filter(|(_, _, attr_owner, _)| attr_owner.0 == owner)
-        .map(|(entity, data, _, name)| (entity, name.0.clone(), data.clone()))
+        .map(|(entity, data, _, name)| (entity, name.0.clone(), *data))
         .collect()
 }
 

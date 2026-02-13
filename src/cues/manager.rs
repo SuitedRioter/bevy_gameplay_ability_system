@@ -121,7 +121,7 @@ pub struct PendingCueExecution {
 /// GameplayCue manager resource.
 ///
 /// This manages all registered cues and handles cue execution.
-#[derive(Resource)]
+#[derive(Resource, Default)]
 pub struct GameplayCueManager {
     /// Map of registered cues.
     pub loaded_cues: HashMap<GameplayTag, CueNotifyInfo>,
@@ -131,17 +131,6 @@ pub struct GameplayCueManager {
     pub pending_cues: Vec<PendingCueExecution>,
     /// Whether batching is currently active.
     pub batching_active: bool,
-}
-
-impl Default for GameplayCueManager {
-    fn default() -> Self {
-        Self {
-            loaded_cues: HashMap::new(),
-            active_cues: HashMap::new(),
-            pending_cues: Vec::new(),
-            batching_active: false,
-        }
-    }
 }
 
 impl GameplayCueManager {

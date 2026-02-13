@@ -19,12 +19,10 @@
 //! use bevy::prelude::*;
 //! use bevy_gameplay_ability_system::prelude::*;
 //!
-//! fn main() {
-//!     App::new()
-//!         .add_plugins(DefaultPlugins)
-//!         .add_plugins(GasPlugin)
-//!         .run();
-//! }
+//! App::new()
+//!     .add_plugins(DefaultPlugins)
+//!     .add_plugins(GasPlugin)
+//!     .run();
 //! ```
 //!
 //! # Architecture

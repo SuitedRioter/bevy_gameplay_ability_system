@@ -44,7 +44,7 @@ mod tests {
     #[test]
     fn test_batchable_event_trait() {
         let event = ApplyGameplayEffectEvent {
-            target: Entity::from_bits(0),
+            target: Entity::PLACEHOLDER,
             effect_id: "test".to_string(),
             level: 1,
             instigator: None,
