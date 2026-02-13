@@ -73,6 +73,7 @@ pub fn trigger_attribute_change_events_system(
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
     use crate::attributes::components::{AttributeMetadata, AttributeMetadataComponent};
 
@@ -103,39 +104,45 @@ mod tests {
         assert_eq!(attr.base_value, 100.0);
     }
 
-    // //     #[test]
-    // //     fn test_attribute_change_events() {
-    // //         let mut app = App::new();
-    // //         app.init_resource::<bevy::ecs::event::Events<AttributeChangedEvent>>();
-    // //         app.add_systems(Update, trigger_attribute_change_events_system);
-    // //
-    // //         let owner = app.world_mut().spawn_empty().id();
-    // //         let attr_entity = app
-    // //             .world_mut()
-    // //             .spawn((
-    // //                 AttributeData::new(100.0),
-    // //                 AttributeName::new("Health"),
-    // //                 AttributeOwner(owner),
-    // //             ))
-    // //             .id();
-    // //
-    // //         app.update();
-    // //
-    // //         // Modify the attribute
-    // //         app.world_mut()
-    // //             .entity_mut(attr_entity)
-    // //             .get_mut::<AttributeData>()
-    // //             .unwrap()
-    // //             .current_value = 80.0;
-    // //
-    // //         app.update();
-    // //
-    // //         let mut event_reader = app.world_mut().resource_mut::<bevy::ecs::event::Events<AttributeChangedEvent>>();
-    // //         let events: Vec<_> = event_reader.drain().collect();
-    // //
-    // //         assert_eq!(events.len(), 1);
-    // //         assert_eq!(events[0].owner, owner);
-    // //         assert_eq!(events[0].attribute, attr_entity);
-    // //         assert_eq!(events[0].attribute_name, "Health");
-    // //     }
+    #[derive(Resource, Default)]
+    struct ReceivedEvents(Vec<AttributeChangedEvent>);
+
+    #[test]
+    fn test_attribute_change_events() {
+        let mut app = App::new();
+        app.init_resource::<ReceivedEvents>();
+        app.add_observer(
+            |ev: On<AttributeChangedEvent>, mut received: ResMut<ReceivedEvents>| {
+                received.0.push(ev.event().clone());
+            },
+        );
+        app.add_systems(Update, trigger_attribute_change_events_system);
+
+        let owner = app.world_mut().spawn_empty().id();
+        let attr_entity = app
+            .world_mut()
+            .spawn((
+                AttributeData::new(100.0),
+                AttributeName::new("Health"),
+                AttributeOwner(owner),
+            ))
+            .id();
+
+        app.update();
+        // Modify the attribute
+        app.world_mut()
+            .entity_mut(attr_entity)
+            .get_mut::<AttributeData>()
+            .unwrap()
+            .current_value = 80.0;
+
+        app.update();
+
+        let received = app.world().resource::<ReceivedEvents>();
+        // spawn也会触发Event
+        assert_eq!(received.0.len(), 2);
+        assert_eq!(received.0[0].owner, owner);
+        assert_eq!(received.0[0].attribute, attr_entity);
+        assert_eq!(received.0[0].attribute_name, "Health");
+    }
 }

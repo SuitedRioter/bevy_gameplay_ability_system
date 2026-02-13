@@ -190,13 +190,12 @@ pub fn update_ability_states_system(
         }
 
         // Check if blocked by tags
-        if let Some(definition) = registry.get(&spec.definition_id) {
-            if let Ok(tags) = tag_containers.get(owner.0) {
-                if !check_ability_activation_requirements(definition, tags) {
-                    *state = AbilityState::Blocked;
-                    continue;
-                }
-            }
+        if let Some(definition) = registry.get(&spec.definition_id)
+            && let Ok(tags) = tag_containers.get(owner.0)
+            && !check_ability_activation_requirements(definition, tags)
+        {
+            *state = AbilityState::Blocked;
+            continue;
         }
 
         *state = AbilityState::Ready;
