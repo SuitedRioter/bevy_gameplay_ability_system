@@ -14,9 +14,13 @@ use bevy::prelude::*;
 use bevy_gameplay_ability_system::prelude::*;
 use bevy_gameplay_tag::gameplay_tag::GameplayTag;
 use bevy_gameplay_tag::gameplay_tag_count_container::GameplayTagCountContainer;
+use bevy_gameplay_tag::{GameplayTagsManager, GameplayTagsPlugin};
 
 fn main() {
     App::new()
+        .add_plugins(GameplayTagsPlugin::with_data_path(
+            "assets/gameplay_tags.json".to_string(),
+        ))
         .add_plugins(DefaultPlugins)
         .add_plugins(GasPlugin)
         .add_systems(Startup, setup_game)
@@ -198,7 +202,7 @@ struct AbilityRegistry {
 // SETUP
 // ============================================================================
 
-fn setup_game(mut commands: Commands) {
+fn setup_game(mut commands: Commands, tags_manager: Res<GameplayTagsManager>) {
     // Initialize resources
     commands.insert_resource(CombatLog {
         messages: Vec::new(),
@@ -209,7 +213,7 @@ fn setup_game(mut commands: Commands) {
     commands.insert_resource(effect_registry);
 
     // Create ability definitions
-    let ability_registry = create_ability_registry();
+    let ability_registry = create_ability_registry(&tags_manager);
     commands.insert_resource(ability_registry);
 
     // Spawn player
@@ -455,16 +459,16 @@ fn create_effect_registry() -> EffectRegistry {
 // ABILITY DEFINITIONS
 // ============================================================================
 
-fn create_ability_registry() -> AbilityRegistry {
+fn create_ability_registry(tags_manager: &Res<GameplayTagsManager>) -> AbilityRegistry {
     let mut definitions = Vec::new();
 
     // Basic attack
     definitions.push(
         AbilityDefinition::new("ability.attack.basic")
             .with_instancing_policy(InstancingPolicy::InstancedPerExecution)
-            .add_activation_required_tag(GameplayTag::new("State.Alive"))
-            .add_activation_blocked_tag(GameplayTag::new("State.Stunned"))
-            .add_activation_blocked_tag(GameplayTag::new("Cooldown.Attack"))
+            .add_activation_required_tag(GameplayTag::new("State.Alive"), tags_manager)
+            .add_activation_blocked_tag(GameplayTag::new("State.Stunned"), tags_manager)
+            .add_activation_blocked_tag(GameplayTag::new("Cooldown.Attack"), tags_manager)
             .add_cost_effect("effect.cost.stamina".to_string())
             .with_cooldown_effect("effect.cooldown.attack".to_string()),
     );
@@ -473,9 +477,9 @@ fn create_ability_registry() -> AbilityRegistry {
     definitions.push(
         AbilityDefinition::new("ability.spell.fireball")
             .with_instancing_policy(InstancingPolicy::InstancedPerExecution)
-            .add_activation_required_tag(GameplayTag::new("State.Alive"))
-            .add_activation_blocked_tag(GameplayTag::new("State.Stunned"))
-            .add_activation_blocked_tag(GameplayTag::new("Cooldown.Spell"))
+            .add_activation_required_tag(GameplayTag::new("State.Alive"), tags_manager)
+            .add_activation_blocked_tag(GameplayTag::new("State.Stunned"), tags_manager)
+            .add_activation_blocked_tag(GameplayTag::new("Cooldown.Spell"), tags_manager)
             .add_cost_effect("effect.cost.mana.medium".to_string())
             .with_cooldown_effect("effect.cooldown.spell".to_string()),
     );
@@ -484,9 +488,9 @@ fn create_ability_registry() -> AbilityRegistry {
     definitions.push(
         AbilityDefinition::new("ability.spell.heal")
             .with_instancing_policy(InstancingPolicy::InstancedPerExecution)
-            .add_activation_required_tag(GameplayTag::new("State.Alive"))
-            .add_activation_blocked_tag(GameplayTag::new("State.Stunned"))
-            .add_activation_blocked_tag(GameplayTag::new("Cooldown.Heal"))
+            .add_activation_required_tag(GameplayTag::new("State.Alive"), tags_manager)
+            .add_activation_blocked_tag(GameplayTag::new("State.Stunned"), tags_manager)
+            .add_activation_blocked_tag(GameplayTag::new("Cooldown.Heal"), tags_manager)
             .add_cost_effect("effect.cost.mana.small".to_string())
             .with_cooldown_effect("effect.cooldown.heal".to_string()),
     );
@@ -495,9 +499,9 @@ fn create_ability_registry() -> AbilityRegistry {
     definitions.push(
         AbilityDefinition::new("ability.attack.power")
             .with_instancing_policy(InstancingPolicy::InstancedPerExecution)
-            .add_activation_required_tag(GameplayTag::new("State.Alive"))
-            .add_activation_blocked_tag(GameplayTag::new("State.Stunned"))
-            .add_activation_blocked_tag(GameplayTag::new("Cooldown.Attack"))
+            .add_activation_required_tag(GameplayTag::new("State.Alive"), tags_manager)
+            .add_activation_blocked_tag(GameplayTag::new("State.Stunned"), tags_manager)
+            .add_activation_blocked_tag(GameplayTag::new("Cooldown.Attack"), tags_manager)
             .add_cost_effect("effect.cost.stamina".to_string())
             .with_cooldown_effect("effect.cooldown.attack".to_string()),
     );

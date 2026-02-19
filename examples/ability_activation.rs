@@ -11,9 +11,13 @@ use bevy::prelude::*;
 use bevy_gameplay_ability_system::prelude::*;
 use bevy_gameplay_tag::gameplay_tag::GameplayTag;
 use bevy_gameplay_tag::gameplay_tag_count_container::GameplayTagCountContainer;
+use bevy_gameplay_tag::{GameplayTagsManager, GameplayTagsPlugin};
 
 fn main() {
     App::new()
+        .add_plugins(GameplayTagsPlugin::with_data_path(
+            "assets/gameplay_tags.json".to_string(),
+        ))
         .add_plugins(MinimalPlugins)
         .add_plugins(AttributePlugin)
         .add_plugins(EffectPlugin)
@@ -88,7 +92,7 @@ impl AttributeSetDefinition for CharacterAttributes {
 }
 
 /// Setup system that creates abilities and a character.
-fn setup(mut commands: Commands) {
+fn setup(mut commands: Commands, tags_manager: Res<GameplayTagsManager>) {
     info!("=== Ability Activation Example ===");
 
     // Create the character entity with tags
@@ -109,26 +113,26 @@ fn setup(mut commands: Commands) {
     // Define a fireball ability (costs mana, has cooldown)
     let fireball = AbilityDefinition::new("ability.fireball")
         .with_instancing_policy(InstancingPolicy::InstancedPerExecution)
-        .add_activation_required_tag(GameplayTag::new("State.Alive"))
-        .add_activation_blocked_tag(GameplayTag::new("State.Stunned"))
-        .add_activation_owned_tag(GameplayTag::new("Ability.Casting"))
+        .add_activation_required_tag(GameplayTag::new("State.Alive"), &tags_manager)
+        .add_activation_blocked_tag(GameplayTag::new("State.Stunned"), &tags_manager)
+        .add_activation_owned_tag(GameplayTag::new("Ability.Casting"), &tags_manager)
         .add_cost_effect("effect.cost.mana".to_string())
         .with_cooldown_effect("effect.cooldown.fireball".to_string());
 
     // Define a melee attack ability (costs stamina)
     let melee_attack = AbilityDefinition::new("ability.melee")
         .with_instancing_policy(InstancingPolicy::NonInstanced)
-        .add_activation_required_tag(GameplayTag::new("State.Alive"))
-        .add_activation_blocked_tag(GameplayTag::new("State.Disarmed"))
+        .add_activation_required_tag(GameplayTag::new("State.Alive"), &tags_manager)
+        .add_activation_blocked_tag(GameplayTag::new("State.Disarmed"), &tags_manager)
         .add_cost_effect("effect.cost.stamina".to_string());
 
     // Define a defensive ability (no cost, but requires not attacking)
     let block = AbilityDefinition::new("ability.block")
         .with_instancing_policy(InstancingPolicy::InstancedPerActor)
-        .add_activation_required_tag(GameplayTag::new("State.Alive"))
-        .add_activation_blocked_tag(GameplayTag::new("Ability.Attacking"))
-        .add_activation_owned_tag(GameplayTag::new("Ability.Blocking"))
-        .add_cancel_on_tag_added(GameplayTag::new("Ability.Attacking"));
+        .add_activation_required_tag(GameplayTag::new("State.Alive"), &tags_manager)
+        .add_activation_blocked_tag(GameplayTag::new("Ability.Attacking"), &tags_manager)
+        .add_activation_owned_tag(GameplayTag::new("Ability.Blocking"), &tags_manager)
+        .add_cancel_on_tag_added(GameplayTag::new("Ability.Attacking"), &tags_manager);
 
     // Register abilities
     ability_registry.register(fireball);

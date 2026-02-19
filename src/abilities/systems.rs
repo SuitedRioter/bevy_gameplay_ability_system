@@ -75,17 +75,19 @@ pub fn check_ability_activation_requirements(
     tags: &GameplayTagCountContainer,
 ) -> bool {
     // Check required tags
-    for required_tag in &ability_def.activation_required_tags {
-        if !tags.has_matching_gameplay_tag(required_tag) {
-            return false;
-        }
+    if !tags
+        .explicit_tags
+        .has_all(&ability_def.activation_required_tags)
+    {
+        return false;
     }
 
     // Check blocked tags
-    for blocked_tag in &ability_def.activation_blocked_tags {
-        if tags.has_matching_gameplay_tag(blocked_tag) {
-            return false;
-        }
+    if tags
+        .explicit_tags
+        .has_any(&ability_def.activation_blocked_tags)
+    {
+        return false;
     }
 
     true
@@ -147,11 +149,8 @@ pub fn cancel_abilities_by_tags_system(
 
         // Check if any cancel tags are present
         let mut should_cancel = false;
-        for cancel_tag in &definition.cancel_on_tags_added {
-            if tags.has_matching_gameplay_tag(cancel_tag) {
-                should_cancel = true;
-                break;
-            }
+        if tags.explicit_tags.has_any(&definition.cancel_on_tags_added) {
+            should_cancel = true;
         }
 
         if should_cancel {
@@ -220,22 +219,33 @@ pub fn update_ability_cooldowns_system(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bevy::ecs::system::RunSystemOnce;
     use bevy_gameplay_tag::gameplay_tag::GameplayTag;
+    use bevy_gameplay_tag::{GameplayTagsManager, GameplayTagsPlugin};
 
     #[test]
     fn test_check_activation_requirements() {
         // Note: This test is simplified because GameplayTagCountContainer requires
         // Commands, Entity, and GameplayTagsManager to properly add tags.
         // In a real scenario, you would set up a full Bevy app with the tag system.
+        let mut app = App::new();
+        app.add_plugins(GameplayTagsPlugin::with_data_path(
+            "assets/gameplay_tags.json".to_string(),
+        ));
+        app.update();
 
-        // Create ability definition
-        let ability = AbilityDefinition::new("test")
-            .add_activation_required_tag(GameplayTag::new("State.Alive"))
-            .add_activation_blocked_tag(GameplayTag::new("State.Stunned"));
+        app.world_mut()
+            .run_system_once(|tags_manager: Res<GameplayTagsManager>| {
+                // Create ability definition
+                let ability = AbilityDefinition::new("test")
+                    .add_activation_required_tag(GameplayTag::new("State.Alive"), &tags_manager)
+                    .add_activation_blocked_tag(GameplayTag::new("State.Stunned"), &tags_manager);
 
-        // Verify the ability definition was created correctly
-        assert_eq!(ability.id, "test");
-        assert_eq!(ability.activation_required_tags.len(), 1);
-        assert_eq!(ability.activation_blocked_tags.len(), 1);
+                // Verify the ability definition was created correctly
+                assert_eq!(ability.id, "test");
+                assert_eq!(ability.activation_required_tags.gameplay_tags.len(), 1);
+                assert_eq!(ability.activation_blocked_tags.gameplay_tags.len(), 1);
+            })
+            .expect("System should run successfully");
     }
 }

@@ -1,0 +1,132 @@
+{
+  "GameplayTagList": [
+    {
+      "Tag": "State",
+      "DevComment": "Entity state tags"
+    },
+    {
+      "Tag": "State.Alive",
+      "DevComment": "Entity is alive; required for most ability activations"
+    },
+    {
+      "Tag": "State.Stunned",
+      "DevComment": "Entity is stunned; blocks ability activation"
+    },
+    {
+      "Tag": "State.Disarmed",
+      "DevComment": "Entity is disarmed; blocks melee ability activation"
+    },
+    {
+      "Tag": "State.Buffed",
+      "DevComment": "Entity has an active damage buff (granted by effect.buff.damage)"
+    },
+    {
+      "Tag": "Ability",
+      "DevComment": "Root tag for ability activation state"
+    },
+    {
+      "Tag": "Ability.Casting",
+      "DevComment": "Entity is casting a spell (owned tag for fireball ability)"
+    },
+    {
+      "Tag": "Ability.Blocking",
+      "DevComment": "Entity is blocking (owned tag for block ability)"
+    },
+    {
+      "Tag": "Ability.Attacking",
+      "DevComment": "Entity is attacking; blocks block ability and cancels it when added"
+    },
+    {
+      "Tag": "Cooldown",
+      "DevComment": "Root tag for cooldown tracking"
+    },
+    {
+      "Tag": "Cooldown.Fireball",
+      "DevComment": "Fireball is on cooldown (granted by effect.cooldown.fireball)"
+    },
+    {
+      "Tag": "Cooldown.Attack",
+      "DevComment": "Attack is on cooldown (granted by effect.cooldown.attack)"
+    },
+    {
+      "Tag": "Cooldown.Spell",
+      "DevComment": "Spell is on cooldown (granted by effect.cooldown.spell)"
+    },
+    {
+      "Tag": "Cooldown.Heal",
+      "DevComment": "Heal is on cooldown (granted by effect.cooldown.heal)"
+    },
+    {
+      "Tag": "Effect",
+      "DevComment": "Root tag for active effect tracking"
+    },
+    {
+      "Tag": "Effect.HealOverTime",
+      "DevComment": "Heal over time effect is active (granted by effect.heal.overtime)"
+    },
+    {
+      "Tag": "Effect.Buff",
+      "DevComment": "Root tag for buff effects"
+    },
+    {
+      "Tag": "Effect.Buff.Attack",
+      "DevComment": "Attack buff is active (granted by effect.buff.attack)"
+    },
+    {
+      "Tag": "Effect.Buff.Defense",
+      "DevComment": "Defense buff is active (granted by effect.buff.defense)"
+    },
+    {
+      "Tag": "Effect.Debuff",
+      "DevComment": "Root tag for debuff effects"
+    },
+    {
+      "Tag": "Effect.Debuff.Poison",
+      "DevComment": "Poison debuff is active (granted by effect.debuff.poison)"
+    },
+    {
+      "Tag": "Effect.Test",
+      "DevComment": "Root tag for stress test effects"
+    },
+    {
+      "Tag": "Effect.Test0",
+      "DevComment": "Stress test effect 0"
+    },
+    {
+      "Tag": "Effect.Test1",
+      "DevComment": "Stress test effect 1"
+    },
+    {
+      "Tag": "Effect.Test2",
+      "DevComment": "Stress test effect 2"
+    },
+    {
+      "Tag": "Effect.Test3",
+      "DevComment": "Stress test effect 3"
+    },
+    {
+      "Tag": "Effect.Test4",
+      "DevComment": "Stress test effect 4"
+    },
+    {
+      "Tag": "Effect.Test5",
+      "DevComment": "Stress test effect 5"
+    },
+    {
+      "Tag": "Effect.Test6",
+      "DevComment": "Stress test effect 6"
+    },
+    {
+      "Tag": "Effect.Test7",
+      "DevComment": "Stress test effect 7"
+    },
+    {
+      "Tag": "Effect.Test8",
+      "DevComment": "Stress test effect 8"
+    },
+    {
+      "Tag": "Effect.Test9",
+      "DevComment": "Stress test effect 9"
+    }
+  ]
+}

@@ -8,7 +8,9 @@
 
 use bevy::prelude::*;
 use bevy_gameplay_ability_system::prelude::*;
-use bevy_gameplay_tag::gameplay_tag_count_container::GameplayTagCountContainer;
+use bevy_gameplay_tag::{
+    GameplayTagContainer, gameplay_tag_count_container::GameplayTagCountContainer,
+};
 use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 
 // Helper to create a test app with GAS plugin
@@ -136,11 +138,11 @@ fn bench_ability_spec_creation(c: &mut Criterion) {
                             net_execution_policy: NetExecutionPolicy::LocalOnly,
                             cost_effects: vec![],
                             cooldown_effect: None,
-                            activation_owned_tags: vec![],
-                            activation_required_tags: vec![],
-                            activation_blocked_tags: vec![],
-                            cancel_abilities_with_tags: vec![],
-                            cancel_on_tags_added: vec![],
+                            activation_owned_tags: GameplayTagContainer::default(),
+                            activation_required_tags: GameplayTagContainer::default(),
+                            activation_blocked_tags: GameplayTagContainer::default(),
+                            cancel_abilities_with_tags: GameplayTagContainer::default(),
+                            cancel_on_tags_added: GameplayTagContainer::default(),
                         });
                     }
                 }

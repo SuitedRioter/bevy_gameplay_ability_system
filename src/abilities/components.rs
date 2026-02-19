@@ -68,9 +68,10 @@ impl ActiveAbilityInstance {
 /// Ability state component.
 ///
 /// Tracks the current state of an ability.
-#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AbilityState {
     /// Ability is ready to be activated.
+    #[default]
     Ready,
     /// Ability is currently active.
     Active,
@@ -78,12 +79,6 @@ pub enum AbilityState {
     Cooldown,
     /// Ability is blocked by tags or other conditions.
     Blocked,
-}
-
-impl Default for AbilityState {
-    fn default() -> Self {
-        Self::Ready
-    }
 }
 
 /// Component that marks an ability as being on cooldown.

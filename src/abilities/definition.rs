@@ -3,7 +3,7 @@
 //! This module defines the structure of gameplay abilities and their properties.
 
 use bevy::prelude::*;
-use bevy_gameplay_tag::gameplay_tag::GameplayTag;
+use bevy_gameplay_tag::{GameplayTagContainer, GameplayTagsManager, gameplay_tag::GameplayTag};
 
 /// Instancing policy for abilities.
 ///
@@ -49,15 +49,15 @@ pub struct AbilityDefinition {
     /// Effect ID to apply as cooldown when the ability is committed.
     pub cooldown_effect: Option<String>,
     /// Tags granted to the owner while this ability is active.
-    pub activation_owned_tags: Vec<GameplayTag>,
+    pub activation_owned_tags: GameplayTagContainer,
     /// Tags required on the owner to activate this ability.
-    pub activation_required_tags: Vec<GameplayTag>,
+    pub activation_required_tags: GameplayTagContainer,
     /// Tags that block activation if present on the owner.
-    pub activation_blocked_tags: Vec<GameplayTag>,
+    pub activation_blocked_tags: GameplayTagContainer,
     /// Tags to cancel when this ability activates.
-    pub cancel_abilities_with_tags: Vec<GameplayTag>,
+    pub cancel_abilities_with_tags: GameplayTagContainer,
     /// Tags that, if added to the owner, will cancel this ability.
-    pub cancel_on_tags_added: Vec<GameplayTag>,
+    pub cancel_on_tags_added: GameplayTagContainer,
 }
 
 impl AbilityDefinition {
@@ -69,11 +69,11 @@ impl AbilityDefinition {
             net_execution_policy: NetExecutionPolicy::LocalOnly,
             cost_effects: Vec::new(),
             cooldown_effect: None,
-            activation_owned_tags: Vec::new(),
-            activation_required_tags: Vec::new(),
-            activation_blocked_tags: Vec::new(),
-            cancel_abilities_with_tags: Vec::new(),
-            cancel_on_tags_added: Vec::new(),
+            activation_owned_tags: GameplayTagContainer::default(),
+            activation_required_tags: GameplayTagContainer::default(),
+            activation_blocked_tags: GameplayTagContainer::default(),
+            cancel_abilities_with_tags: GameplayTagContainer::default(),
+            cancel_on_tags_added: GameplayTagContainer::default(),
         }
     }
 
@@ -102,32 +102,52 @@ impl AbilityDefinition {
     }
 
     /// Adds an activation owned tag.
-    pub fn add_activation_owned_tag(mut self, tag: GameplayTag) -> Self {
-        self.activation_owned_tags.push(tag);
+    pub fn add_activation_owned_tag(
+        mut self,
+        tag: GameplayTag,
+        tags_manager: &Res<GameplayTagsManager>,
+    ) -> Self {
+        self.activation_owned_tags.add_tag(tag, tags_manager);
         self
     }
 
     /// Adds an activation required tag.
-    pub fn add_activation_required_tag(mut self, tag: GameplayTag) -> Self {
-        self.activation_required_tags.push(tag);
+    pub fn add_activation_required_tag(
+        mut self,
+        tag: GameplayTag,
+        tags_manager: &Res<GameplayTagsManager>,
+    ) -> Self {
+        self.activation_required_tags.add_tag(tag, tags_manager);
         self
     }
 
     /// Adds an activation blocked tag.
-    pub fn add_activation_blocked_tag(mut self, tag: GameplayTag) -> Self {
-        self.activation_blocked_tags.push(tag);
+    pub fn add_activation_blocked_tag(
+        mut self,
+        tag: GameplayTag,
+        tags_manager: &Res<GameplayTagsManager>,
+    ) -> Self {
+        self.activation_blocked_tags.add_tag(tag, tags_manager);
         self
     }
 
     /// Adds a tag that will cancel abilities when this ability activates.
-    pub fn add_cancel_abilities_with_tag(mut self, tag: GameplayTag) -> Self {
-        self.cancel_abilities_with_tags.push(tag);
+    pub fn add_cancel_abilities_with_tag(
+        mut self,
+        tag: GameplayTag,
+        tags_manager: &Res<GameplayTagsManager>,
+    ) -> Self {
+        self.cancel_abilities_with_tags.add_tag(tag, tags_manager);
         self
     }
 
     /// Adds a tag that will cancel this ability if added to the owner.
-    pub fn add_cancel_on_tag_added(mut self, tag: GameplayTag) -> Self {
-        self.cancel_on_tags_added.push(tag);
+    pub fn add_cancel_on_tag_added(
+        mut self,
+        tag: GameplayTag,
+        tags_manager: &Res<GameplayTagsManager>,
+    ) -> Self {
+        self.cancel_on_tags_added.add_tag(tag, tags_manager);
         self
     }
 }
@@ -157,23 +177,34 @@ impl AbilityRegistry {
 
 #[cfg(test)]
 mod tests {
+    use bevy::ecs::system::RunSystemOnce;
+    use bevy_gameplay_tag::GameplayTagsPlugin;
+
     use super::*;
 
     #[test]
     fn test_ability_definition_builder() {
-        let ability = AbilityDefinition::new("test_ability")
-            .with_instancing_policy(InstancingPolicy::NonInstanced)
-            .add_cost_effect("mana_cost")
-            .with_cooldown_effect("cooldown_5s")
-            .add_activation_required_tag(GameplayTag::new("State.Alive"))
-            .add_activation_blocked_tag(GameplayTag::new("State.Stunned"));
+        let mut app = App::new();
+        app.add_plugins(GameplayTagsPlugin::with_data_path(
+            "assets/gameplay_tags.json".to_string(),
+        ));
+        app.update();
 
-        assert_eq!(ability.id, "test_ability");
-        assert_eq!(ability.instancing_policy, InstancingPolicy::NonInstanced);
-        assert_eq!(ability.cost_effects.len(), 1);
-        assert_eq!(ability.cooldown_effect, Some("cooldown_5s".to_string()));
-        assert_eq!(ability.activation_required_tags.len(), 1);
-        assert_eq!(ability.activation_blocked_tags.len(), 1);
+        app.world_mut()
+            .run_system_once(|tags_manager: Res<GameplayTagsManager>| {
+                let ability = AbilityDefinition::new("test_ability")
+                    .with_instancing_policy(InstancingPolicy::NonInstanced)
+                    .add_cost_effect("mana_cost")
+                    .with_cooldown_effect("cooldown_5s")
+                    .add_activation_required_tag(GameplayTag::new("State.Alive"), &tags_manager)
+                    .add_activation_blocked_tag(GameplayTag::new("State.Stunned"), &tags_manager);
+
+                assert_eq!(ability.id, "test_ability");
+                assert_eq!(ability.cost_effects.len(), 1);
+                assert_eq!(ability.activation_required_tags.gameplay_tags.len(), 1);
+                assert_eq!(ability.activation_blocked_tags.gameplay_tags.len(), 1);
+            })
+            .expect("System should run successfully");
     }
 
     #[test]

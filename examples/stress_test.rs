@@ -6,8 +6,8 @@
 use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 use bevy::prelude::*;
 use bevy_gameplay_ability_system::prelude::*;
-use bevy_gameplay_tag::GameplayTagRequirements;
 use bevy_gameplay_tag::gameplay_tag::GameplayTag;
+use bevy_gameplay_tag::{GameplayTagContainer, GameplayTagRequirements};
 const NUM_ENTITIES: usize = 100;
 const EFFECTS_PER_ENTITY: usize = 10;
 const ABILITIES_PER_ENTITY: usize = 5;
@@ -106,11 +106,11 @@ fn setup(
             net_execution_policy: NetExecutionPolicy::LocalOnly,
             cost_effects: vec![],
             cooldown_effect: None,
-            activation_owned_tags: vec![],
-            activation_required_tags: vec![],
-            activation_blocked_tags: vec![],
-            cancel_abilities_with_tags: vec![],
-            cancel_on_tags_added: vec![],
+            activation_owned_tags: GameplayTagContainer::default(),
+            activation_required_tags: GameplayTagContainer::default(),
+            activation_blocked_tags: GameplayTagContainer::default(),
+            cancel_abilities_with_tags: GameplayTagContainer::default(),
+            cancel_on_tags_added: GameplayTagContainer::default(),
         });
     }
 
