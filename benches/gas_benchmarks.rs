@@ -136,7 +136,7 @@ fn bench_ability_spec_creation(c: &mut Criterion) {
                             id: ability_id.clone(),
                             instancing_policy: InstancingPolicy::NonInstanced,
                             net_execution_policy: NetExecutionPolicy::LocalOnly,
-                            cost_effects: vec![],
+                            cost_effect: None,
                             cooldown_effect: None,
                             activation_owned_tags: GameplayTagContainer::default(),
                             activation_required_tags: GameplayTagContainer::default(),

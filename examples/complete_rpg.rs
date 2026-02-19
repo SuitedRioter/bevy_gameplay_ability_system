@@ -306,10 +306,8 @@ fn create_enemy_attributes(commands: &mut Commands, owner: Entity) {
 // ============================================================================
 
 fn create_effect_registry() -> EffectRegistry {
-    let mut definitions = Vec::new();
-
-    // Damage effects
-    definitions.push(
+    let definitions = vec![
+        // Damage effects
         GameplayEffectDefinition::new("effect.damage.physical")
             .with_duration_policy(DurationPolicy::Instant)
             .add_modifier(ModifierInfo {
@@ -317,9 +315,6 @@ fn create_effect_registry() -> EffectRegistry {
                 operation: ModifierOperation::AddBase,
                 magnitude: MagnitudeCalculation::ScalableFloat { base_value: -15.0 },
             }),
-    );
-
-    definitions.push(
         GameplayEffectDefinition::new("effect.damage.magic")
             .with_duration_policy(DurationPolicy::Instant)
             .add_modifier(ModifierInfo {
@@ -327,10 +322,7 @@ fn create_effect_registry() -> EffectRegistry {
                 operation: ModifierOperation::AddBase,
                 magnitude: MagnitudeCalculation::ScalableFloat { base_value: -20.0 },
             }),
-    );
-
-    // Healing effects
-    definitions.push(
+        // Healing effects
         GameplayEffectDefinition::new("effect.heal.instant")
             .with_duration_policy(DurationPolicy::Instant)
             .add_modifier(ModifierInfo {
@@ -338,9 +330,6 @@ fn create_effect_registry() -> EffectRegistry {
                 operation: ModifierOperation::AddBase,
                 magnitude: MagnitudeCalculation::ScalableFloat { base_value: 25.0 },
             }),
-    );
-
-    definitions.push(
         GameplayEffectDefinition::new("effect.heal.overtime")
             .with_duration_policy(DurationPolicy::HasDuration)
             .with_duration(6.0)
@@ -351,10 +340,7 @@ fn create_effect_registry() -> EffectRegistry {
                 magnitude: MagnitudeCalculation::ScalableFloat { base_value: 5.0 },
             })
             .grant_tag(GameplayTag::new("Effect.HealOverTime")),
-    );
-
-    // Buff effects
-    definitions.push(
+        // Buff effects
         GameplayEffectDefinition::new("effect.buff.attack")
             .with_duration_policy(DurationPolicy::HasDuration)
             .with_duration(10.0)
@@ -364,9 +350,6 @@ fn create_effect_registry() -> EffectRegistry {
                 magnitude: MagnitudeCalculation::ScalableFloat { base_value: 0.5 },
             })
             .grant_tag(GameplayTag::new("Effect.Buff.Attack")),
-    );
-
-    definitions.push(
         GameplayEffectDefinition::new("effect.buff.defense")
             .with_duration_policy(DurationPolicy::HasDuration)
             .with_duration(8.0)
@@ -376,17 +359,11 @@ fn create_effect_registry() -> EffectRegistry {
                 magnitude: MagnitudeCalculation::ScalableFloat { base_value: 0.3 },
             })
             .grant_tag(GameplayTag::new("Effect.Buff.Defense")),
-    );
-
-    // Debuff effects
-    definitions.push(
+        // Debuff effects
         GameplayEffectDefinition::new("effect.debuff.stun")
             .with_duration_policy(DurationPolicy::HasDuration)
             .with_duration(3.0)
             .grant_tag(GameplayTag::new("State.Stunned")),
-    );
-
-    definitions.push(
         GameplayEffectDefinition::new("effect.debuff.poison")
             .with_duration_policy(DurationPolicy::HasDuration)
             .with_duration(10.0)
@@ -397,10 +374,7 @@ fn create_effect_registry() -> EffectRegistry {
                 magnitude: MagnitudeCalculation::ScalableFloat { base_value: -3.0 },
             })
             .grant_tag(GameplayTag::new("Effect.Debuff.Poison")),
-    );
-
-    // Cost effects
-    definitions.push(
+        // Cost effects
         GameplayEffectDefinition::new("effect.cost.mana.small")
             .with_duration_policy(DurationPolicy::Instant)
             .add_modifier(ModifierInfo {
@@ -408,9 +382,6 @@ fn create_effect_registry() -> EffectRegistry {
                 operation: ModifierOperation::AddBase,
                 magnitude: MagnitudeCalculation::ScalableFloat { base_value: -10.0 },
             }),
-    );
-
-    definitions.push(
         GameplayEffectDefinition::new("effect.cost.mana.medium")
             .with_duration_policy(DurationPolicy::Instant)
             .add_modifier(ModifierInfo {
@@ -418,9 +389,6 @@ fn create_effect_registry() -> EffectRegistry {
                 operation: ModifierOperation::AddBase,
                 magnitude: MagnitudeCalculation::ScalableFloat { base_value: -20.0 },
             }),
-    );
-
-    definitions.push(
         GameplayEffectDefinition::new("effect.cost.stamina")
             .with_duration_policy(DurationPolicy::Instant)
             .add_modifier(ModifierInfo {
@@ -428,30 +396,20 @@ fn create_effect_registry() -> EffectRegistry {
                 operation: ModifierOperation::AddBase,
                 magnitude: MagnitudeCalculation::ScalableFloat { base_value: -15.0 },
             }),
-    );
-
-    // Cooldown effects
-    definitions.push(
+        // Cooldown effects
         GameplayEffectDefinition::new("effect.cooldown.attack")
             .with_duration_policy(DurationPolicy::HasDuration)
             .with_duration(1.5)
             .grant_tag(GameplayTag::new("Cooldown.Attack")),
-    );
-
-    definitions.push(
         GameplayEffectDefinition::new("effect.cooldown.spell")
             .with_duration_policy(DurationPolicy::HasDuration)
             .with_duration(3.0)
             .grant_tag(GameplayTag::new("Cooldown.Spell")),
-    );
-
-    definitions.push(
         GameplayEffectDefinition::new("effect.cooldown.heal")
             .with_duration_policy(DurationPolicy::HasDuration)
             .with_duration(5.0)
             .grant_tag(GameplayTag::new("Cooldown.Heal")),
-    );
-
+    ];
     EffectRegistry { definitions }
 }
 
@@ -460,52 +418,37 @@ fn create_effect_registry() -> EffectRegistry {
 // ============================================================================
 
 fn create_ability_registry(tags_manager: &Res<GameplayTagsManager>) -> AbilityRegistry {
-    let mut definitions = Vec::new();
-
-    // Basic attack
-    definitions.push(
+    let definitions = vec![
+        // Basic attack
         AbilityDefinition::new("ability.attack.basic")
             .with_instancing_policy(InstancingPolicy::InstancedPerExecution)
             .add_activation_required_tag(GameplayTag::new("State.Alive"), tags_manager)
             .add_activation_blocked_tag(GameplayTag::new("State.Stunned"), tags_manager)
             .add_activation_blocked_tag(GameplayTag::new("Cooldown.Attack"), tags_manager)
-            .add_cost_effect("effect.cost.stamina".to_string())
+            .with_cost_effect("effect.cost.stamina".to_string())
             .with_cooldown_effect("effect.cooldown.attack".to_string()),
-    );
-
-    // Fireball spell
-    definitions.push(
         AbilityDefinition::new("ability.spell.fireball")
             .with_instancing_policy(InstancingPolicy::InstancedPerExecution)
             .add_activation_required_tag(GameplayTag::new("State.Alive"), tags_manager)
             .add_activation_blocked_tag(GameplayTag::new("State.Stunned"), tags_manager)
             .add_activation_blocked_tag(GameplayTag::new("Cooldown.Spell"), tags_manager)
-            .add_cost_effect("effect.cost.mana.medium".to_string())
+            .with_cost_effect("effect.cost.mana.medium".to_string())
             .with_cooldown_effect("effect.cooldown.spell".to_string()),
-    );
-
-    // Healing spell
-    definitions.push(
         AbilityDefinition::new("ability.spell.heal")
             .with_instancing_policy(InstancingPolicy::InstancedPerExecution)
             .add_activation_required_tag(GameplayTag::new("State.Alive"), tags_manager)
             .add_activation_blocked_tag(GameplayTag::new("State.Stunned"), tags_manager)
             .add_activation_blocked_tag(GameplayTag::new("Cooldown.Heal"), tags_manager)
-            .add_cost_effect("effect.cost.mana.small".to_string())
+            .with_cost_effect("effect.cost.mana.small".to_string())
             .with_cooldown_effect("effect.cooldown.heal".to_string()),
-    );
-
-    // Power strike
-    definitions.push(
         AbilityDefinition::new("ability.attack.power")
             .with_instancing_policy(InstancingPolicy::InstancedPerExecution)
             .add_activation_required_tag(GameplayTag::new("State.Alive"), tags_manager)
             .add_activation_blocked_tag(GameplayTag::new("State.Stunned"), tags_manager)
             .add_activation_blocked_tag(GameplayTag::new("Cooldown.Attack"), tags_manager)
-            .add_cost_effect("effect.cost.stamina".to_string())
+            .with_cost_effect("effect.cost.stamina".to_string())
             .with_cooldown_effect("effect.cooldown.attack".to_string()),
-    );
-
+    ];
     AbilityRegistry { definitions }
 }
 

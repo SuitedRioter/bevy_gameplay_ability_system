@@ -116,7 +116,7 @@ fn setup(mut commands: Commands, tags_manager: Res<GameplayTagsManager>) {
         .add_activation_required_tag(GameplayTag::new("State.Alive"), &tags_manager)
         .add_activation_blocked_tag(GameplayTag::new("State.Stunned"), &tags_manager)
         .add_activation_owned_tag(GameplayTag::new("Ability.Casting"), &tags_manager)
-        .add_cost_effect("effect.cost.mana".to_string())
+        .with_cost_effect("effect.cost.mana".to_string())
         .with_cooldown_effect("effect.cooldown.fireball".to_string());
 
     // Define a melee attack ability (costs stamina)
@@ -124,7 +124,7 @@ fn setup(mut commands: Commands, tags_manager: Res<GameplayTagsManager>) {
         .with_instancing_policy(InstancingPolicy::NonInstanced)
         .add_activation_required_tag(GameplayTag::new("State.Alive"), &tags_manager)
         .add_activation_blocked_tag(GameplayTag::new("State.Disarmed"), &tags_manager)
-        .add_cost_effect("effect.cost.stamina".to_string());
+        .with_cost_effect("effect.cost.stamina".to_string());
 
     // Define a defensive ability (no cost, but requires not attacking)
     let block = AbilityDefinition::new("ability.block")
