@@ -3,7 +3,7 @@
 //! This module defines the core components for the gameplay effect system.
 
 use bevy::prelude::*;
-use bevy_gameplay_tag::gameplay_tag::GameplayTag;
+use bevy_gameplay_tag::GameplayTagContainer;
 
 /// Active gameplay effect instance component.
 ///
@@ -166,7 +166,7 @@ impl ModifierOperation {
 /// These tags are added to the target entity while the effect is active.
 #[derive(Component, Debug, Clone)]
 pub struct EffectGrantedTags {
-    pub tags: Vec<GameplayTag>,
+    pub tags: GameplayTagContainer,
 }
 
 #[cfg(test)]

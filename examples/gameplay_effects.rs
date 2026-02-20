@@ -10,7 +10,7 @@
 
 use bevy::prelude::*;
 use bevy_gameplay_ability_system::prelude::*;
-use bevy_gameplay_tag::gameplay_tag::GameplayTag;
+use bevy_gameplay_tag::{GameplayTagsManager, gameplay_tag::GameplayTag};
 
 fn main() {
     App::new()
@@ -93,7 +93,7 @@ impl AttributeSetDefinition for CharacterAttributes {
 }
 
 /// Setup system that creates effects and a character.
-fn setup(mut commands: Commands) {
+fn setup(mut commands: Commands, tags_manager: Res<GameplayTagsManager>) {
     info!("=== Gameplay Effects Example ===");
 
     // Create the character entity
@@ -123,7 +123,7 @@ fn setup(mut commands: Commands) {
             operation: ModifierOperation::AddCurrent,
             magnitude: MagnitudeCalculation::ScalableFloat { base_value: 15.0 },
         })
-        .grant_tag(GameplayTag::new("State.Buffed"));
+        .grant_tag(GameplayTag::new("State.Buffed"), &tags_manager);
 
     // Define an infinite effect (permanent stat increase)
     let permanent_health_boost = GameplayEffectDefinition::new("effect.permanent.health")

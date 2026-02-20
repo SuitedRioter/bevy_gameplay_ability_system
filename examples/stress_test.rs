@@ -84,7 +84,7 @@ fn setup(
                 },
                 magnitude: MagnitudeCalculation::ScalableFloat { base_value: 10.0 },
             }],
-            granted_tags: vec![GameplayTag::new(&format!("Effect.Test{}", i))],
+            granted_tags: GameplayTagContainer::default(),
             application_tag_requirements: GameplayTagRequirements::default(),
             stacking_policy: match i % 3 {
                 0 => StackingPolicy::RefreshDuration,

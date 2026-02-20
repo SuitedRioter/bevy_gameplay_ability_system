@@ -166,7 +166,7 @@ fn setup(mut commands: Commands, tags_manager: Res<GameplayTagsManager>) {
     let cooldown = GameplayEffectDefinition::new("effect.cooldown.fireball")
         .with_duration_policy(DurationPolicy::HasDuration)
         .with_duration(3.0)
-        .grant_tag(GameplayTag::new("Cooldown.Fireball"));
+        .grant_tag(GameplayTag::new("Cooldown.Fireball"), &tags_manager);
 
     effect_registry.register(mana_cost);
     effect_registry.register(stamina_cost);

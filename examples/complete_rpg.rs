@@ -209,7 +209,7 @@ fn setup_game(mut commands: Commands, tags_manager: Res<GameplayTagsManager>) {
     });
 
     // Create effect definitions
-    let effect_registry = create_effect_registry();
+    let effect_registry = create_effect_registry(&tags_manager);
     commands.insert_resource(effect_registry);
 
     // Create ability definitions
@@ -305,7 +305,7 @@ fn create_enemy_attributes(commands: &mut Commands, owner: Entity) {
 // EFFECT DEFINITIONS
 // ============================================================================
 
-fn create_effect_registry() -> EffectRegistry {
+fn create_effect_registry(tags_manager: &Res<GameplayTagsManager>) -> EffectRegistry {
     let definitions = vec![
         // Damage effects
         GameplayEffectDefinition::new("effect.damage.physical")
@@ -339,7 +339,7 @@ fn create_effect_registry() -> EffectRegistry {
                 operation: ModifierOperation::AddBase,
                 magnitude: MagnitudeCalculation::ScalableFloat { base_value: 5.0 },
             })
-            .grant_tag(GameplayTag::new("Effect.HealOverTime")),
+            .grant_tag(GameplayTag::new("Effect.HealOverTime"), tags_manager),
         // Buff effects
         GameplayEffectDefinition::new("effect.buff.attack")
             .with_duration_policy(DurationPolicy::HasDuration)
@@ -349,7 +349,7 @@ fn create_effect_registry() -> EffectRegistry {
                 operation: ModifierOperation::MultiplyAdditive,
                 magnitude: MagnitudeCalculation::ScalableFloat { base_value: 0.5 },
             })
-            .grant_tag(GameplayTag::new("Effect.Buff.Attack")),
+            .grant_tag(GameplayTag::new("Effect.Buff.Attack"), tags_manager),
         GameplayEffectDefinition::new("effect.buff.defense")
             .with_duration_policy(DurationPolicy::HasDuration)
             .with_duration(8.0)
@@ -358,12 +358,12 @@ fn create_effect_registry() -> EffectRegistry {
                 operation: ModifierOperation::MultiplyAdditive,
                 magnitude: MagnitudeCalculation::ScalableFloat { base_value: 0.3 },
             })
-            .grant_tag(GameplayTag::new("Effect.Buff.Defense")),
+            .grant_tag(GameplayTag::new("Effect.Buff.Defense"), tags_manager),
         // Debuff effects
         GameplayEffectDefinition::new("effect.debuff.stun")
             .with_duration_policy(DurationPolicy::HasDuration)
             .with_duration(3.0)
-            .grant_tag(GameplayTag::new("State.Stunned")),
+            .grant_tag(GameplayTag::new("State.Stunned"), tags_manager),
         GameplayEffectDefinition::new("effect.debuff.poison")
             .with_duration_policy(DurationPolicy::HasDuration)
             .with_duration(10.0)
@@ -373,7 +373,7 @@ fn create_effect_registry() -> EffectRegistry {
                 operation: ModifierOperation::AddBase,
                 magnitude: MagnitudeCalculation::ScalableFloat { base_value: -3.0 },
             })
-            .grant_tag(GameplayTag::new("Effect.Debuff.Poison")),
+            .grant_tag(GameplayTag::new("Effect.Debuff.Poison"), tags_manager),
         // Cost effects
         GameplayEffectDefinition::new("effect.cost.mana.small")
             .with_duration_policy(DurationPolicy::Instant)
@@ -400,15 +400,15 @@ fn create_effect_registry() -> EffectRegistry {
         GameplayEffectDefinition::new("effect.cooldown.attack")
             .with_duration_policy(DurationPolicy::HasDuration)
             .with_duration(1.5)
-            .grant_tag(GameplayTag::new("Cooldown.Attack")),
+            .grant_tag(GameplayTag::new("Cooldown.Attack"), tags_manager),
         GameplayEffectDefinition::new("effect.cooldown.spell")
             .with_duration_policy(DurationPolicy::HasDuration)
             .with_duration(3.0)
-            .grant_tag(GameplayTag::new("Cooldown.Spell")),
+            .grant_tag(GameplayTag::new("Cooldown.Spell"), tags_manager),
         GameplayEffectDefinition::new("effect.cooldown.heal")
             .with_duration_policy(DurationPolicy::HasDuration)
             .with_duration(5.0)
-            .grant_tag(GameplayTag::new("Cooldown.Heal")),
+            .grant_tag(GameplayTag::new("Cooldown.Heal"), tags_manager),
     ];
     EffectRegistry { definitions }
 }

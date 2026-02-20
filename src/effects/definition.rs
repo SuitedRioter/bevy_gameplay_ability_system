@@ -4,7 +4,9 @@
 
 use super::components::ModifierOperation;
 use bevy::prelude::*;
-use bevy_gameplay_tag::{GameplayTagRequirements, gameplay_tag::GameplayTag};
+use bevy_gameplay_tag::{
+    GameplayTagContainer, GameplayTagRequirements, GameplayTagsManager, gameplay_tag::GameplayTag,
+};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DurationPolicy {
     /// Effect applies instantly and is removed immediately.
@@ -121,7 +123,7 @@ pub struct GameplayEffectDefinition {
     /// Modifiers applied by this effect.
     pub modifiers: Vec<ModifierInfo>,
     /// Tags granted while this effect is active.
-    pub granted_tags: Vec<GameplayTag>,
+    pub granted_tags: GameplayTagContainer,
     /// Tag requirements for applying this effect.
     pub application_tag_requirements: GameplayTagRequirements,
     /// Stacking policy.
@@ -137,7 +139,7 @@ impl GameplayEffectDefinition {
             duration_magnitude: 0.0,
             period: 0.0,
             modifiers: Vec::new(),
-            granted_tags: Vec::new(),
+            granted_tags: GameplayTagContainer::default(),
             application_tag_requirements: GameplayTagRequirements::default(),
             stacking_policy: StackingPolicy::Independent,
         }
@@ -169,8 +171,8 @@ impl GameplayEffectDefinition {
     }
 
     /// Adds a granted tag.
-    pub fn grant_tag(mut self, tag: GameplayTag) -> Self {
-        self.granted_tags.push(tag);
+    pub fn grant_tag(mut self, tag: GameplayTag, tags_manager: &Res<GameplayTagsManager>) -> Self {
+        self.granted_tags.add_tag(tag, tags_manager);
         self
     }
 
