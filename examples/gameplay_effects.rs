@@ -173,57 +173,57 @@ fn apply_effects_over_time(
     // Apply different effects at different times
     if (elapsed - 2.0).abs() < time.delta_secs() {
         info!("\n[t=2s] Applying instant damage effect...");
-        if let Some(character) = characters.iter().next() {
-            if let Some(effect) = registry.get("effect.damage.instant") {
-                commands.trigger(ApplyGameplayEffectEvent {
-                    target: character,
-                    effect_id: effect.id.clone(),
-                    level: 1,
-                    instigator: None,
-                });
-            }
+        if let Some(character) = characters.iter().next()
+            && let Some(effect) = registry.get("effect.damage.instant")
+        {
+            commands.trigger(ApplyGameplayEffectEvent {
+                target: character,
+                effect_id: effect.id.clone(),
+                level: 1,
+                instigator: None,
+            });
         }
     }
 
     if (elapsed - 4.0).abs() < time.delta_secs() {
         info!("\n[t=4s] Applying permanent health boost...");
-        if let Some(character) = characters.iter().next() {
-            if let Some(effect) = registry.get("effect.permanent.health") {
-                commands.trigger(ApplyGameplayEffectEvent {
-                    target: character,
-                    effect_id: effect.id.clone(),
-                    level: 1,
-                    instigator: None,
-                });
-            }
+        if let Some(character) = characters.iter().next()
+            && let Some(effect) = registry.get("effect.permanent.health")
+        {
+            commands.trigger(ApplyGameplayEffectEvent {
+                target: character,
+                effect_id: effect.id.clone(),
+                level: 1,
+                instigator: None,
+            });
         }
     }
 
     if (elapsed - 6.0).abs() < time.delta_secs() {
         info!("\n[t=6s] Applying damage buff (5 second duration)...");
-        if let Some(character) = characters.iter().next() {
-            if let Some(effect) = registry.get("effect.buff.damage") {
-                commands.trigger(ApplyGameplayEffectEvent {
-                    target: character,
-                    effect_id: effect.id.clone(),
-                    level: 1,
-                    instigator: None,
-                });
-            }
+        if let Some(character) = characters.iter().next()
+            && let Some(effect) = registry.get("effect.buff.damage")
+        {
+            commands.trigger(ApplyGameplayEffectEvent {
+                target: character,
+                effect_id: effect.id.clone(),
+                level: 1,
+                instigator: None,
+            });
         }
     }
 
     if (elapsed - 8.0).abs() < time.delta_secs() {
         info!("\n[t=8s] Applying attack speed buff (3 second duration)...");
-        if let Some(character) = characters.iter().next() {
-            if let Some(effect) = registry.get("effect.buff.attackspeed") {
-                commands.trigger(ApplyGameplayEffectEvent {
-                    target: character,
-                    effect_id: effect.id.clone(),
-                    level: 1,
-                    instigator: None,
-                });
-            }
+        if let Some(character) = characters.iter().next()
+            && let Some(effect) = registry.get("effect.buff.attackspeed")
+        {
+            commands.trigger(ApplyGameplayEffectEvent {
+                target: character,
+                effect_id: effect.id.clone(),
+                level: 1,
+                instigator: None,
+            });
         }
     }
 }

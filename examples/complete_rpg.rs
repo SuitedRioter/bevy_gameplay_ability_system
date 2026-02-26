@@ -466,12 +466,7 @@ fn grant_player_abilities(commands: &mut Commands, owner: Entity) {
 
     for ability_id in abilities {
         commands.spawn((
-            AbilitySpec {
-                definition_id: ability_id.to_string(),
-                level: 1,
-                input_id: None,
-                is_active: false,
-            },
+            AbilitySpec::new(ability_id.to_string(), 1),
             AbilityOwner(owner),
         ));
     }
@@ -482,12 +477,7 @@ fn grant_enemy_abilities(commands: &mut Commands, owner: Entity) {
 
     for ability_id in abilities {
         commands.spawn((
-            AbilitySpec {
-                definition_id: ability_id.to_string(),
-                level: 1,
-                input_id: None,
-                is_active: false,
-            },
+            AbilitySpec::new(ability_id.to_string(), 1),
             AbilityOwner(owner),
         ));
     }
@@ -515,28 +505,28 @@ fn simulate_combat(
         if ai.next_action_timer <= 0.0 {
             ai.next_action_timer = ai.action_delay;
 
-            if let Ok(enemy) = enemy_query.single() {
-                if let Ok(player) = player_query.single() {
-                    // Check if enemy has enough stamina
-                    let has_stamina = attributes_query.iter().any(|(data, name, owner)| {
-                        owner.0 == enemy && name.0 == "Stamina" && data.current_value >= 15.0
-                    });
+            if let Ok(enemy) = enemy_query.single()
+                && let Ok(player) = player_query.single()
+            {
+                // Check if enemy has enough stamina
+                let has_stamina = attributes_query.iter().any(|(data, name, owner)| {
+                    owner.0 == enemy && name.0 == "Stamina" && data.current_value >= 15.0
+                });
 
-                    if has_stamina {
-                        // Enemy attacks player
-                        let damage_effect = effect_registry
-                            .definitions
-                            .iter()
-                            .find(|def| def.id == "effect.damage.physical")
-                            .unwrap()
-                            .clone();
+                if has_stamina {
+                    // Enemy attacks player
+                    let damage_effect = effect_registry
+                        .definitions
+                        .iter()
+                        .find(|def| def.id == "effect.damage.physical")
+                        .unwrap()
+                        .clone();
 
-                        apply_effect_to_target(&mut commands, player, damage_effect);
+                    apply_effect_to_target(&mut commands, player, damage_effect);
 
-                        combat_log
-                            .messages
-                            .push(format!("Goblin attacks Hero for 15 damage!"));
-                    }
+                    combat_log
+                        .messages
+                        .push("Goblin attacks Hero for 15 damage!".to_owned());
                 }
             }
         }

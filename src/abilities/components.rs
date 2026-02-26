@@ -17,6 +17,8 @@ pub struct AbilitySpec {
     pub input_id: Option<i32>,
     /// Whether this ability is currently active.
     pub is_active: bool,
+    /// Number of active instances.
+    pub active_count: u8,
 }
 
 impl AbilitySpec {
@@ -27,6 +29,7 @@ impl AbilitySpec {
             level,
             input_id: None,
             is_active: false,
+            active_count: 0,
         }
     }
 

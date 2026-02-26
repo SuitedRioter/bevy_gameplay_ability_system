@@ -177,12 +177,7 @@ fn setup(mut commands: Commands, tags_manager: Res<GameplayTagsManager>) {
     // Grant abilities to the character
     let fireball_spec = commands
         .spawn((
-            AbilitySpec {
-                definition_id: "ability.fireball".to_string(),
-                level: 1,
-                input_id: Some(1),
-                is_active: false,
-            },
+            AbilitySpec::new("ability.fireball".to_string(), 1).with_input_id(1),
             AbilityOwner(character),
             AbilityState::Ready,
         ))
@@ -190,12 +185,7 @@ fn setup(mut commands: Commands, tags_manager: Res<GameplayTagsManager>) {
 
     let melee_spec = commands
         .spawn((
-            AbilitySpec {
-                definition_id: "ability.melee".to_string(),
-                level: 1,
-                input_id: Some(2),
-                is_active: false,
-            },
+            AbilitySpec::new("ability.melee".to_string(), 1).with_input_id(2),
             AbilityOwner(character),
             AbilityState::Ready,
         ))
@@ -203,12 +193,7 @@ fn setup(mut commands: Commands, tags_manager: Res<GameplayTagsManager>) {
 
     let block_spec = commands
         .spawn((
-            AbilitySpec {
-                definition_id: "ability.block".to_string(),
-                level: 1,
-                input_id: Some(3),
-                is_active: false,
-            },
+            AbilitySpec::new("ability.block".to_string(), 1).with_input_id(3),
             AbilityOwner(character),
             AbilityState::Ready,
         ))

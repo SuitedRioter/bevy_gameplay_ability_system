@@ -143,6 +143,8 @@ fn bench_ability_spec_creation(c: &mut Criterion) {
                             activation_blocked_tags: GameplayTagContainer::default(),
                             cancel_abilities_with_tags: GameplayTagContainer::default(),
                             cancel_on_tags_added: GameplayTagContainer::default(),
+                            ability_tags: GameplayTagContainer::default(),
+                            block_abilities_with_tags: GameplayTagContainer::default(),
                         });
                     }
                 }
@@ -157,6 +159,7 @@ fn bench_ability_spec_creation(c: &mut Criterion) {
                                 level: 1,
                                 input_id: Some(i as i32),
                                 is_active: false,
+                                active_count: 0,
                             },
                             AbilityOwner(owner),
                             AbilityState::Ready,

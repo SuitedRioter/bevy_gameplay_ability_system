@@ -48,12 +48,16 @@ pub struct AbilityDefinition {
     pub cost_effect: Option<String>,
     /// Effect ID to apply as cooldown when the ability is committed.
     pub cooldown_effect: Option<String>,
+    /// Tags describing this ability (used for cancel matching).
+    pub ability_tags: GameplayTagContainer,
     /// Tags granted to the owner while this ability is active.
     pub activation_owned_tags: GameplayTagContainer,
     /// Tags required on the owner to activate this ability.
     pub activation_required_tags: GameplayTagContainer,
     /// Tags that block activation if present on the owner.
     pub activation_blocked_tags: GameplayTagContainer,
+    /// Tags added to owner to block other abilities while active.
+    pub block_abilities_with_tags: GameplayTagContainer,
     /// Tags to cancel when this ability activates.
     pub cancel_abilities_with_tags: GameplayTagContainer,
     /// Tags that, if added to the owner, will cancel this ability.
@@ -69,9 +73,11 @@ impl AbilityDefinition {
             net_execution_policy: NetExecutionPolicy::LocalOnly,
             cost_effect: None,
             cooldown_effect: None,
+            ability_tags: GameplayTagContainer::default(),
             activation_owned_tags: GameplayTagContainer::default(),
             activation_required_tags: GameplayTagContainer::default(),
             activation_blocked_tags: GameplayTagContainer::default(),
+            block_abilities_with_tags: GameplayTagContainer::default(),
             cancel_abilities_with_tags: GameplayTagContainer::default(),
             cancel_on_tags_added: GameplayTagContainer::default(),
         }
@@ -98,6 +104,16 @@ impl AbilityDefinition {
     /// Sets the cooldown effect.
     pub fn with_cooldown_effect(mut self, effect_id: impl Into<String>) -> Self {
         self.cooldown_effect = Some(effect_id.into());
+        self
+    }
+
+    /// Adds a tag describing this ability.
+    pub fn add_ability_tag(
+        mut self,
+        tag: GameplayTag,
+        tags_manager: &Res<GameplayTagsManager>,
+    ) -> Self {
+        self.ability_tags.add_tag(tag, tags_manager);
         self
     }
 
@@ -128,6 +144,16 @@ impl AbilityDefinition {
         tags_manager: &Res<GameplayTagsManager>,
     ) -> Self {
         self.activation_blocked_tags.add_tag(tag, tags_manager);
+        self
+    }
+
+    /// Adds a tag that blocks other abilities while this one is active.
+    pub fn add_block_abilities_with_tag(
+        mut self,
+        tag: GameplayTag,
+        tags_manager: &Res<GameplayTagsManager>,
+    ) -> Self {
+        self.block_abilities_with_tags.add_tag(tag, tags_manager);
         self
     }
 
@@ -197,11 +223,18 @@ mod tests {
                     .with_cost_effect("mana_cost")
                     .with_cooldown_effect("cooldown_5s")
                     .add_activation_required_tag(GameplayTag::new("State.Alive"), &tags_manager)
-                    .add_activation_blocked_tag(GameplayTag::new("State.Stunned"), &tags_manager);
+                    .add_activation_blocked_tag(GameplayTag::new("State.Stunned"), &tags_manager)
+                    .add_ability_tag(GameplayTag::new("Ability.Casting"), &tags_manager)
+                    .add_block_abilities_with_tag(
+                        GameplayTag::new("Ability.Casting"),
+                        &tags_manager,
+                    );
 
                 assert_eq!(ability.id, "test_ability");
                 assert_eq!(ability.activation_required_tags.gameplay_tags.len(), 1);
                 assert_eq!(ability.activation_blocked_tags.gameplay_tags.len(), 1);
+                assert_eq!(ability.ability_tags.gameplay_tags.len(), 1);
+                assert_eq!(ability.block_abilities_with_tags.gameplay_tags.len(), 1);
             })
             .expect("System should run successfully");
     }

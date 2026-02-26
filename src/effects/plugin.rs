@@ -4,23 +4,10 @@
 
 use super::definition::GameplayEffectRegistry;
 use super::systems::*;
+use crate::core::system_sets::{EffectSystemSet, GasSystemSet};
 use bevy::prelude::*;
 
 /// Plugin that adds gameplay effect system functionality.
-///
-/// This plugin registers:
-/// - Effect registry resource
-/// - Effect application events
-/// - Effect systems for applying, updating, and removing effects
-/// - Modifier aggregation system
-///
-/// # Example
-/// ```
-/// # use bevy::prelude::*;
-/// # use bevy_gameplay_ability_system::effects::EffectPlugin;
-/// App::new()
-///     .add_plugins(EffectPlugin);
-/// ```
 pub struct EffectPlugin;
 
 impl Plugin for EffectPlugin {
@@ -28,27 +15,38 @@ impl Plugin for EffectPlugin {
         app
             // Register resources
             .init_resource::<GameplayEffectRegistry>()
-            // Register systems
-            .add_systems(Update, apply_gameplay_effect_system)
+            // Register observer for effect application
+            .add_observer(on_apply_gameplay_effect)
+            // Register kept systems with proper system sets
             .add_systems(
                 Update,
-                create_effect_modifiers_system.after(apply_gameplay_effect_system),
+                create_effect_modifiers_system
+                    .in_set(GasSystemSet::Effects)
+                    .in_set(EffectSystemSet::CreateModifiers),
             )
             .add_systems(
                 Update,
-                update_effect_durations_system.after(create_effect_modifiers_system),
+                update_effect_durations_system
+                    .in_set(GasSystemSet::Effects)
+                    .in_set(EffectSystemSet::UpdateDurations),
             )
             .add_systems(
                 Update,
-                execute_periodic_effects_system.after(update_effect_durations_system),
+                execute_periodic_effects_system
+                    .in_set(GasSystemSet::Effects)
+                    .in_set(EffectSystemSet::ExecutePeriodic),
             )
             .add_systems(
                 Update,
-                remove_expired_effects_system.after(execute_periodic_effects_system),
+                remove_expired_effects_system
+                    .in_set(GasSystemSet::Effects)
+                    .in_set(EffectSystemSet::RemoveExpired),
             )
             .add_systems(
                 Update,
-                remove_instant_effects_system.after(remove_expired_effects_system),
+                remove_instant_effects_system
+                    .in_set(GasSystemSet::Effects)
+                    .in_set(EffectSystemSet::RemoveInstant),
             )
             .add_systems(PostUpdate, aggregate_attribute_modifiers_system);
     }

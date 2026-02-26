@@ -13,25 +13,23 @@ pub use crate::effects::systems::{
 
 // Re-export ability events
 pub use crate::abilities::systems::{
-    AbilityActivatedEvent, AbilityEndedEvent, CancelAbilityEvent, CommitAbilityEvent,
-    TryActivateAbilityEvent,
+    AbilityActivatedEvent, AbilityActivationFailedEvent, AbilityEndedEvent, CancelAbilityEvent,
+    CommitAbilityEvent, CommitAbilityResultEvent, EndAbilityEvent, TryActivateAbilityEvent,
 };
+
+// Re-export ability enums
+pub use crate::abilities::systems::ActivationFailureReason;
 
 // Re-export cue events
 pub use crate::cues::systems::TriggerGameplayCueEvent;
 
 /// Trait for events that can be batched for performance.
-///
-/// This allows multiple events of the same type to be processed together
-/// in a single frame, reducing overhead.
 pub trait BatchableEvent: Send + Sync + 'static {
-    /// Returns true if this event can be batched with others of the same type.
     fn can_batch(&self) -> bool {
         true
     }
 }
 
-// Implement BatchableEvent for effect events (they benefit most from batching)
 impl BatchableEvent for ApplyGameplayEffectEvent {}
 impl BatchableEvent for GameplayEffectAppliedEvent {}
 impl BatchableEvent for GameplayEffectRemovedEvent {}

@@ -6,7 +6,6 @@
 use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 use bevy::prelude::*;
 use bevy_gameplay_ability_system::prelude::*;
-use bevy_gameplay_tag::gameplay_tag::GameplayTag;
 use bevy_gameplay_tag::{GameplayTagContainer, GameplayTagRequirements};
 const NUM_ENTITIES: usize = 100;
 const EFFECTS_PER_ENTITY: usize = 10;
@@ -106,9 +105,11 @@ fn setup(
             net_execution_policy: NetExecutionPolicy::LocalOnly,
             cost_effect: None,
             cooldown_effect: None,
+            ability_tags: GameplayTagContainer::default(),
             activation_owned_tags: GameplayTagContainer::default(),
             activation_required_tags: GameplayTagContainer::default(),
             activation_blocked_tags: GameplayTagContainer::default(),
+            block_abilities_with_tags: GameplayTagContainer::default(),
             cancel_abilities_with_tags: GameplayTagContainer::default(),
             cancel_on_tags_added: GameplayTagContainer::default(),
         });
@@ -152,19 +153,14 @@ fn stress_test_system(
         // Grant abilities
         for i in 0..ABILITIES_PER_ENTITY {
             commands.spawn((
-                AbilitySpec {
-                    definition_id: format!("TestAbility{}", i),
-                    level: 1,
-                    input_id: Some(i as i32),
-                    is_active: false,
-                },
+                AbilitySpec::new(format!("TestAbility{}", i), 1).with_input_id(i as i32),
                 AbilityOwner(entity),
             ));
         }
 
         config.entities_spawned += 1;
 
-        if config.entities_spawned % 10 == 0 {
+        if config.entities_spawned.is_multiple_of(10) {
             info!(
                 "Spawned {} / {} entities",
                 config.entities_spawned, NUM_ENTITIES

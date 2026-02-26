@@ -4,22 +4,11 @@
 
 use super::definition::AbilityRegistry;
 use super::systems::*;
+use crate::core::system_sets::{AbilitySystemSet, GasSystemSet};
+use crate::effects::definition::GameplayEffectRegistry;
 use bevy::prelude::*;
 
 /// Plugin that adds gameplay ability system functionality.
-///
-/// This plugin registers:
-/// - Ability registry resource
-/// - Ability activation events
-/// - Ability systems for activation, commitment, cancellation, and state management
-///
-/// # Example
-/// ```
-/// # use bevy::prelude::*;
-/// # use bevy_gameplay_ability_system::abilities::AbilityPlugin;
-/// App::new()
-///     .add_plugins(AbilityPlugin);
-/// ```
 pub struct AbilityPlugin;
 
 impl Plugin for AbilityPlugin {
@@ -27,17 +16,30 @@ impl Plugin for AbilityPlugin {
         app
             // Register resources
             .init_resource::<AbilityRegistry>()
-            // Register systems
+            .init_resource::<GameplayEffectRegistry>()
+            // Register observers
+            .add_observer(on_try_activate_ability)
+            .add_observer(on_commit_ability)
+            .add_observer(on_end_ability)
+            .add_observer(on_cancel_ability)
+            // Register kept systems with proper system sets
             .add_systems(
                 Update,
-                (
-                    try_activate_ability_system,
-                    commit_ability_system,
-                    end_ability_system,
-                    cancel_abilities_by_tags_system,
-                    update_ability_states_system,
-                    update_ability_cooldowns_system,
-                ),
+                cancel_abilities_by_tags_system
+                    .in_set(GasSystemSet::Abilities)
+                    .in_set(AbilitySystemSet::Cancel),
+            )
+            .add_systems(
+                Update,
+                update_ability_states_system
+                    .in_set(GasSystemSet::Abilities)
+                    .in_set(AbilitySystemSet::UpdateStates),
+            )
+            .add_systems(
+                Update,
+                update_ability_cooldowns_system
+                    .in_set(GasSystemSet::Abilities)
+                    .in_set(AbilitySystemSet::UpdateCooldowns),
             );
     }
 }
