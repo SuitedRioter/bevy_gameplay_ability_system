@@ -5,9 +5,35 @@
 use super::components::*;
 use super::definition::*;
 use crate::attributes::{AttributeData, AttributeName, AttributeOwner};
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy_gameplay_tag::GameplayTagsManager;
 use bevy_gameplay_tag::gameplay_tag_count_container::GameplayTagCountContainer;
+
+/// Bundled query parameters for applying gameplay effects.
+#[derive(SystemParam)]
+pub struct ApplyEffectParams<'w, 's> {
+    pub tag_containers: Query<'w, 's, &'static mut GameplayTagCountContainer>,
+    pub attributes: Query<
+        'w,
+        's,
+        (
+            &'static mut AttributeData,
+            &'static AttributeName,
+            &'static AttributeOwner,
+        ),
+    >,
+    pub existing_effects: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static ActiveGameplayEffect,
+            &'static EffectTarget,
+            Option<&'static mut EffectDuration>,
+        ),
+    >,
+}
 
 /// Event for applying a gameplay effect.
 #[derive(Event, Debug, Clone)]
@@ -51,14 +77,7 @@ pub fn on_apply_gameplay_effect(
     registry: Res<GameplayEffectRegistry>,
     tags_manager: Res<GameplayTagsManager>,
     time: Res<Time>,
-    mut tag_containers: Query<&mut GameplayTagCountContainer>,
-    mut attributes: Query<(&mut AttributeData, &AttributeName, &AttributeOwner)>,
-    mut existing_effects: Query<(
-        Entity,
-        &ActiveGameplayEffect,
-        &EffectTarget,
-        Option<&mut EffectDuration>,
-    )>,
+    mut params: ApplyEffectParams,
 ) {
     let event = ev.event();
     let target = event.target;
@@ -71,7 +90,7 @@ pub fn on_apply_gameplay_effect(
     };
 
     // Check application_tag_requirements
-    if let Ok(owner_tags) = tag_containers.get(target)
+    if let Ok(owner_tags) = params.tag_containers.get(target)
         && !definition
             .application_tag_requirements
             .requirements_met(&owner_tags.explicit_tags)
@@ -84,7 +103,7 @@ pub fn on_apply_gameplay_effect(
         StackingPolicy::RefreshDuration => {
             // Find existing effect and refresh its duration
             for (effect_entity, active_effect, effect_target, duration) in
-                existing_effects.iter_mut()
+                params.existing_effects.iter_mut()
             {
                 if effect_target.0 == target && active_effect.definition_id == *effect_id {
                     if let Some(mut dur) = duration {
@@ -103,7 +122,7 @@ pub fn on_apply_gameplay_effect(
         }
         StackingPolicy::StackCount { max_stacks } => {
             // Find existing effect and increment stack count
-            for (effect_entity, active_effect, effect_target, _) in existing_effects.iter() {
+            for (effect_entity, active_effect, effect_target, _) in params.existing_effects.iter() {
                 if effect_target.0 == target && active_effect.definition_id == *effect_id {
                     if active_effect.stack_count < max_stacks {
                         // Need to increment stack count - we'll spawn a new modifier set
@@ -135,7 +154,7 @@ pub fn on_apply_gameplay_effect(
             // Directly modify attribute base_value, no entity spawn
             for modifier in &definition.modifiers {
                 let magnitude = modifier.magnitude.evaluate(level, None);
-                for (mut attr_data, attr_name, attr_owner) in attributes.iter_mut() {
+                for (mut attr_data, attr_name, attr_owner) in params.attributes.iter_mut() {
                     if attr_owner.0 == target && attr_name.as_str() == modifier.attribute_name {
                         match modifier.operation {
                             ModifierOperation::AddBase => {
@@ -163,7 +182,7 @@ pub fn on_apply_gameplay_effect(
             // Add granted_tags to target (even for instant, they'll be removed when the "instant" is done)
             // For instant effects, granted_tags are typically not used, but we support it
             if !definition.granted_tags.is_empty()
-                && let Ok(mut target_tags) = tag_containers.get_mut(target)
+                && let Ok(mut target_tags) = params.tag_containers.get_mut(target)
             {
                 target_tags.update_tag_container_count(
                     &definition.granted_tags,
@@ -210,7 +229,7 @@ pub fn on_apply_gameplay_effect(
 
             // Add granted_tags to target's GameplayTagCountContainer
             if !definition.granted_tags.is_empty()
-                && let Ok(mut target_tags) = tag_containers.get_mut(target)
+                && let Ok(mut target_tags) = params.tag_containers.get_mut(target)
             {
                 target_tags.update_tag_container_count(
                     &definition.granted_tags,

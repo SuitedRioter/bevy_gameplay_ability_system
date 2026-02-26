@@ -10,11 +10,28 @@
 //!
 //! This example simulates a turn-based combat between a player and an enemy.
 
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy_gameplay_ability_system::prelude::*;
 use bevy_gameplay_tag::gameplay_tag::GameplayTag;
 use bevy_gameplay_tag::gameplay_tag_count_container::GameplayTagCountContainer;
 use bevy_gameplay_tag::{GameplayTagsManager, GameplayTagsPlugin};
+
+#[derive(SystemParam)]
+struct CombatParams<'w, 's> {
+    effect_registry: Res<'w, EffectRegistry>,
+    player_query: Query<'w, 's, Entity, With<Player>>,
+    enemy_query: Query<'w, 's, Entity, With<Enemy>>,
+    attributes_query: Query<
+        'w,
+        's,
+        (
+            &'static AttributeData,
+            &'static AttributeName,
+            &'static AttributeOwner,
+        ),
+    >,
+}
 
 fn main() {
     App::new()
@@ -491,12 +508,8 @@ fn simulate_combat(
     time: Res<Time>,
     mut commands: Commands,
     mut combat_log: ResMut<CombatLog>,
-    effect_registry: Res<EffectRegistry>,
-    ability_registry: Res<AbilityRegistry>,
-    player_query: Query<Entity, With<Player>>,
-    enemy_query: Query<Entity, With<Enemy>>,
+    combat: CombatParams,
     mut ai_query: Query<&mut CombatAI, With<Enemy>>,
-    attributes_query: Query<(&AttributeData, &AttributeName, &AttributeOwner)>,
 ) {
     // Enemy AI
     for mut ai in ai_query.iter_mut() {
@@ -505,17 +518,18 @@ fn simulate_combat(
         if ai.next_action_timer <= 0.0 {
             ai.next_action_timer = ai.action_delay;
 
-            if let Ok(enemy) = enemy_query.single()
-                && let Ok(player) = player_query.single()
+            if let Ok(enemy) = combat.enemy_query.single()
+                && let Ok(player) = combat.player_query.single()
             {
                 // Check if enemy has enough stamina
-                let has_stamina = attributes_query.iter().any(|(data, name, owner)| {
+                let has_stamina = combat.attributes_query.iter().any(|(data, name, owner)| {
                     owner.0 == enemy && name.0 == "Stamina" && data.current_value >= 15.0
                 });
 
                 if has_stamina {
                     // Enemy attacks player
-                    let damage_effect = effect_registry
+                    let damage_effect = combat
+                        .effect_registry
                         .definitions
                         .iter()
                         .find(|def| def.id == "effect.damage.physical")
@@ -581,16 +595,11 @@ fn display_combat_log(mut combat_log: ResMut<CombatLog>) {
 // DEATH HANDLING
 // ============================================================================
 
-fn handle_death(
-    mut commands: Commands,
-    mut combat_log: ResMut<CombatLog>,
-    player_query: Query<Entity, With<Player>>,
-    enemy_query: Query<Entity, With<Enemy>>,
-    attributes_query: Query<(&AttributeData, &AttributeName, &AttributeOwner)>,
-) {
+fn handle_death(mut commands: Commands, mut combat_log: ResMut<CombatLog>, combat: CombatParams) {
     // Check player death
-    if let Ok(player) = player_query.single() {
-        let health = attributes_query
+    if let Ok(player) = combat.player_query.single() {
+        let health = combat
+            .attributes_query
             .iter()
             .find(|(_, name, owner)| owner.0 == player && name.0 == "Health")
             .map(|(data, _, _)| data.current_value)
@@ -606,8 +615,9 @@ fn handle_death(
     }
 
     // Check enemy death
-    if let Ok(enemy) = enemy_query.single() {
-        let health = attributes_query
+    if let Ok(enemy) = combat.enemy_query.single() {
+        let health = combat
+            .attributes_query
             .iter()
             .find(|(_, name, owner)| owner.0 == enemy && name.0 == "Health")
             .map(|(data, _, _)| data.current_value)
