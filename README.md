@@ -21,15 +21,6 @@ A comprehensive gameplay ability system for Bevy, inspired by Unreal Engine's Ga
 ## Documentation
 
 - [API Documentation](https://docs.rs/bevy_gameplay_ability_system)
-- [Performance Guide](PERFORMANCE.md) - Optimization strategies and best practices
-- [Complete RPG Example](examples/complete_rpg.rs) - Full combat system demonstration
-- [Stress Test Example](examples/stress_test.rs) - Performance testing tool
-- **Performance Optimized**: Benchmarked and optimized for 1000+ entities with abilities
-
-## Documentation
-
-- [API Documentation](https://docs.rs/bevy_gameplay_ability_system)
-- [Performance Guide](PERFORMANCE.md) - Optimization strategies and best practices
 - [Complete RPG Example](examples/complete_rpg.rs) - Full combat system demonstration
 - [Stress Test Example](examples/stress_test.rs) - Performance testing tool
 
@@ -179,13 +170,13 @@ commands.spawn((
 Abilities are player-activated actions with costs, cooldowns, and requirements.
 
 ```rust
-// Define an ability
+// Define an ability (tag methods require &Res<GameplayTagsManager>)
 let fireball = AbilityDefinition::new("ability.fireball")
     .with_instancing_policy(InstancingPolicy::InstancedPerExecution)
-    .add_activation_required_tag(GameplayTag::new("State.Alive"))
-    .add_activation_blocked_tag(GameplayTag::new("State.Stunned"))
-    .add_cost_effect("effect.cost.mana".to_string())
-    .with_cooldown_effect("effect.cooldown.fireball".to_string());
+    .add_activation_required_tag(GameplayTag::new("State.Alive"), &tags_manager)
+    .add_activation_blocked_tag(GameplayTag::new("State.Stunned"), &tags_manager)
+    .with_cost_effect("effect.cost.mana")
+    .with_cooldown_effect("effect.cooldown.fireball");
 
 // Grant the ability to an entity
 commands.spawn((
@@ -214,15 +205,12 @@ Cues provide visual and audio feedback for gameplay events.
 ```rust
 // Register a static cue
 let mut cue_manager = world.resource_mut::<GameplayCueManager>();
-cue_manager.register_static_cue(
-    GameplayTag::new("GameplayCue.Damage.Fire"),
-    Box::new(FireDamageCue),
-);
+cue_manager.register_static_cue(GameplayTag::new("GameplayCue.Damage.Fire"));
 
 // Trigger a cue
 commands.trigger(TriggerGameplayCueEvent {
     cue_tag: GameplayTag::new("GameplayCue.Damage.Fire"),
-    target: target_entity,
+    event_type: GameplayCueEvent::Executed,
     parameters: GameplayCueParameters::default(),
 });
 ```
@@ -425,20 +413,18 @@ if let Some((entity, spec)) = find_ability_by_definition(owner, "ability.firebal
 
 ## Best Practices
 
-### 1. Define Effect and Ability Registries
+### 1. Use the Built-in Registries
 
-Store your definitions in resources for easy access:
+The library provides `GameplayEffectRegistry` and `AbilityRegistry` for storing definitions:
 
 ```rust
-#[derive(Resource)]
-struct EffectRegistry {
-    definitions: HashMap<String, GameplayEffectDefinition>,
-}
+// Register effect definitions
+let mut effect_registry = world.resource_mut::<GameplayEffectRegistry>();
+effect_registry.register(damage_effect);
 
-#[derive(Resource)]
-struct AbilityRegistry {
-    definitions: HashMap<String, AbilityDefinition>,
-}
+// Register ability definitions
+let mut ability_registry = world.resource_mut::<AbilityRegistry>();
+ability_registry.register(fireball_ability);
 ```
 
 ### 2. Use Tag Hierarchies
@@ -464,11 +450,11 @@ let mana_cost = GameplayEffectDefinition::new("effect.cost.mana")
     .with_duration_policy(DurationPolicy::Instant)
     .add_modifier(/* subtract mana */);
 
-// Cooldown effects
+// Cooldown effects (grant_tag requires &tags_manager)
 let spell_cooldown = GameplayEffectDefinition::new("effect.cooldown.spell")
     .with_duration_policy(DurationPolicy::HasDuration)
     .with_duration(3.0)
-    .grant_tag(GameplayTag::new("Cooldown.Spell"));
+    .grant_tag(GameplayTag::new("Cooldown.Spell"), &tags_manager);
 ```
 
 ### 4. Use Handles for External References
