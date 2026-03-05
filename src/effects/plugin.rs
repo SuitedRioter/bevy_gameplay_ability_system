@@ -48,6 +48,11 @@ impl Plugin for EffectPlugin {
                     .in_set(GasSystemSet::Effects)
                     .in_set(EffectSystemSet::RemoveInstant),
             )
-            .add_systems(PostUpdate, aggregate_attribute_modifiers_system);
+            .add_systems(
+                Update,
+                aggregate_attribute_modifiers_system
+                    .in_set(GasSystemSet::Effects)
+                    .in_set(EffectSystemSet::Aggregate),
+            );
     }
 }

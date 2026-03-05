@@ -78,7 +78,7 @@ impl AttributeSetDefinition for CharacterAttributes {
                         base_value: default_value,
                         current_value: default_value,
                     },
-                    AttributeName(name.to_string()),
+                    AttributeName(name.to_string().into()),
                     AttributeOwner(owner),
                     AttributeMetadataComponent(metadata),
                 ))
@@ -148,7 +148,7 @@ fn setup(mut commands: Commands, tags_manager: Res<GameplayTagsManager>) {
     let mana_cost = GameplayEffectDefinition::new("effect.cost.mana")
         .with_duration_policy(DurationPolicy::Instant)
         .add_modifier(ModifierInfo {
-            attribute_name: "Mana".to_string(),
+            attribute_name: "Mana".into(),
             operation: ModifierOperation::AddBase,
             magnitude: MagnitudeCalculation::ScalableFloat { base_value: -25.0 },
         });
@@ -157,7 +157,7 @@ fn setup(mut commands: Commands, tags_manager: Res<GameplayTagsManager>) {
     let stamina_cost = GameplayEffectDefinition::new("effect.cost.stamina")
         .with_duration_policy(DurationPolicy::Instant)
         .add_modifier(ModifierInfo {
-            attribute_name: "Stamina".to_string(),
+            attribute_name: "Stamina".into(),
             operation: ModifierOperation::AddBase,
             magnitude: MagnitudeCalculation::ScalableFloat { base_value: -15.0 },
         });
@@ -217,7 +217,7 @@ fn try_activate_abilities(
     if (elapsed - 2.0).abs() < time.delta_secs() {
         info!("\n[t=2s] Trying to activate Fireball...");
         for (spec_entity, spec, owner) in ability_specs.iter() {
-            if spec.definition_id == "ability.fireball" {
+            if spec.definition_id.as_ref() == "ability.fireball" {
                 commands.trigger(TryActivateAbilityEvent {
                     ability_spec: spec_entity,
                     owner: owner.0,
@@ -230,7 +230,7 @@ fn try_activate_abilities(
     if (elapsed - 4.0).abs() < time.delta_secs() {
         info!("\n[t=4s] Trying to activate Melee Attack...");
         for (spec_entity, spec, owner) in ability_specs.iter() {
-            if spec.definition_id == "ability.melee" {
+            if spec.definition_id.as_ref() == "ability.melee" {
                 commands.trigger(TryActivateAbilityEvent {
                     ability_spec: spec_entity,
                     owner: owner.0,
@@ -243,7 +243,7 @@ fn try_activate_abilities(
     if (elapsed - 6.0).abs() < time.delta_secs() {
         info!("\n[t=6s] Trying to activate Block...");
         for (spec_entity, spec, owner) in ability_specs.iter() {
-            if spec.definition_id == "ability.block" {
+            if spec.definition_id.as_ref() == "ability.block" {
                 commands.trigger(TryActivateAbilityEvent {
                     ability_spec: spec_entity,
                     owner: owner.0,
@@ -270,7 +270,7 @@ fn print_ability_states(
 
         info!("Resources:");
         for (attr, name) in attributes.iter() {
-            if name.0 == "Mana" || name.0 == "Stamina" {
+            if name.0.as_ref() == "Mana" || name.0.as_ref() == "Stamina" {
                 info!("  {}: {:.1}", name.0, attr.current_value);
             }
         }

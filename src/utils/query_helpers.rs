@@ -16,7 +16,7 @@ pub fn find_attribute_by_name(
 ) -> Option<(Entity, AttributeData)> {
     query
         .iter()
-        .find(|(_, _, attr_owner, name)| attr_owner.0 == owner && name.0 == attribute_name)
+        .find(|(_, _, attr_owner, name)| attr_owner.0 == owner && name.as_str() == attribute_name)
         .map(|(entity, data, _, _)| (entity, *data))
 }
 
@@ -28,7 +28,7 @@ pub fn get_owner_attributes(
     query
         .iter()
         .filter(|(_, _, attr_owner, _)| attr_owner.0 == owner)
-        .map(|(entity, data, _, name)| (entity, name.0.clone(), *data))
+        .map(|(entity, data, _, name)| (entity, name.as_str().to_string(), *data))
         .collect()
 }
 
@@ -53,7 +53,7 @@ pub fn find_effects_by_definition(
     query
         .iter()
         .filter(|(_, effect, effect_target)| {
-            effect_target.0 == target && effect.definition_id == definition_id
+            effect_target.0 == target && effect.definition_id.as_ref() == definition_id
         })
         .map(|(entity, effect, _)| (entity, effect.clone()))
         .collect()
@@ -80,7 +80,7 @@ pub fn find_ability_by_definition(
     query
         .iter()
         .find(|(_, spec, ability_owner)| {
-            ability_owner.0 == owner && spec.definition_id == definition_id
+            ability_owner.0 == owner && spec.definition_id.as_ref() == definition_id
         })
         .map(|(entity, spec, _)| (entity, spec.clone()))
 }
@@ -93,7 +93,7 @@ pub fn has_attribute(
 ) -> bool {
     query
         .iter()
-        .any(|(attr_owner, name)| attr_owner.0 == owner && name.0 == attribute_name)
+        .any(|(attr_owner, name)| attr_owner.0 == owner && name.as_str() == attribute_name)
 }
 
 /// Helper for checking if an entity has any active effects.
@@ -131,18 +131,18 @@ mod tests {
         let mut world = World::new();
         let owner = world.spawn_empty().id();
 
-        world.spawn((AttributeOwner(owner), AttributeName("Health".to_string())));
+        world.spawn((AttributeOwner(owner), AttributeName::new("Health")));
 
         // Use QueryState for direct world access
         let mut query_state = world.query::<(&AttributeOwner, &AttributeName)>();
         let query_result = query_state
             .iter(&world)
-            .any(|(attr_owner, attr_name)| attr_owner.0 == owner && attr_name.0 == "Health");
+            .any(|(attr_owner, attr_name)| attr_owner.0 == owner && attr_name.as_str() == "Health");
         assert!(query_result);
 
         let query_result = query_state
             .iter(&world)
-            .any(|(attr_owner, attr_name)| attr_owner.0 == owner && attr_name.0 == "Mana");
+            .any(|(attr_owner, attr_name)| attr_owner.0 == owner && attr_name.as_str() == "Mana");
         assert!(!query_result);
     }
 

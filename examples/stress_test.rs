@@ -7,9 +7,11 @@ use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 use bevy::prelude::*;
 use bevy_gameplay_ability_system::prelude::*;
 use bevy_gameplay_tag::{GameplayTagContainer, GameplayTagRequirements};
+use string_cache::DefaultAtom as Atom;
+
 const NUM_ENTITIES: usize = 100;
-const EFFECTS_PER_ENTITY: usize = 10;
-const ABILITIES_PER_ENTITY: usize = 5;
+const EFFECTS_PER_ENTITY: usize = 5;
+const ABILITIES_PER_ENTITY: usize = 3;
 
 fn main() {
     App::new()
@@ -62,7 +64,7 @@ fn setup(
     // Register test effects
     for i in 0..EFFECTS_PER_ENTITY {
         effect_registry.register(GameplayEffectDefinition {
-            id: format!("TestEffect{}", i),
+            id: Atom::from(format!("TestEffect{}", i).as_str()),
             duration_policy: if i % 3 == 0 {
                 DurationPolicy::Instant
             } else if i % 3 == 1 {
@@ -73,7 +75,7 @@ fn setup(
             duration_magnitude: 5.0,
             period: if i % 2 == 0 { 1.0 } else { 0.0 },
             modifiers: vec![ModifierInfo {
-                attribute_name: "Health".to_string(),
+                attribute_name: Atom::from("Health"),
                 operation: match i % 5 {
                     0 => ModifierOperation::AddBase,
                     1 => ModifierOperation::AddCurrent,
@@ -96,7 +98,7 @@ fn setup(
     // Register test abilities
     for i in 0..ABILITIES_PER_ENTITY {
         ability_registry.register(AbilityDefinition {
-            id: format!("TestAbility{}", i),
+            id: Atom::from(format!("TestAbility{}", i).as_str()),
             instancing_policy: if i % 2 == 0 {
                 InstancingPolicy::NonInstanced
             } else {
@@ -141,13 +143,13 @@ fn stress_test_system(
         commands.spawn((
             AttributeData::new(100.0),
             AttributeOwner(entity),
-            AttributeName("Health".to_string()),
+            AttributeName::new("Health"),
         ));
 
         commands.spawn((
             AttributeData::new(50.0),
             AttributeOwner(entity),
-            AttributeName("Mana".to_string()),
+            AttributeName::new("Mana"),
         ));
 
         // Grant abilities

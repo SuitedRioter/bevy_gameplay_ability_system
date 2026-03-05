@@ -41,9 +41,10 @@ mod tests {
 
     #[test]
     fn test_batchable_event_trait() {
+        use string_cache::DefaultAtom as Atom;
         let event = ApplyGameplayEffectEvent {
             target: Entity::PLACEHOLDER,
-            effect_id: "test".to_string(),
+            effect_id: Atom::from("test"),
             level: 1,
             instigator: None,
         };

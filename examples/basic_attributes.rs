@@ -94,7 +94,7 @@ impl AttributeSetDefinition for CharacterAttributes {
                         base_value: default_value,
                         current_value: default_value,
                     },
-                    AttributeName(name.to_string()),
+                    AttributeName::new(*name),
                     AttributeOwner(owner),
                     AttributeMetadataComponent(metadata),
                 ))
@@ -130,7 +130,7 @@ fn modify_attributes(
     // Only modify once per second
     if time.elapsed_secs() % 2.0 < time.delta_secs() {
         for (mut attr, name, _owner) in attributes.iter_mut() {
-            match name.0.as_str() {
+            match name.as_str() {
                 "Health" => {
                     // Simulate damage
                     attr.current_value = (attr.current_value - 10.0).max(0.0);
@@ -174,7 +174,7 @@ fn print_attribute_changes(
         commands.trigger(AttributeChangedEvent {
             owner: owner.0,
             attribute: attr_entity,
-            attribute_name: name.0.clone(),
+            attribute_name: name.as_str().to_string(),
             old_value: attr.base_value,
             new_value: attr.current_value,
         });

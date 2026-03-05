@@ -197,7 +197,7 @@ fn can_afford_cost(
         let magnitude = modifier.magnitude.evaluate(1, None);
         for (attr_data, attr_name, attr_owner) in attributes.iter() {
             if attr_owner.0 == owner
-                && attr_name.as_str() == modifier.attribute_name
+                && attr_name.0 == modifier.attribute_name
                 && attr_data.current_value + magnitude < 0.0
             {
                 return false;
@@ -687,6 +687,7 @@ pub fn update_ability_cooldowns_system(
 mod tests {
     use super::*;
     use bevy::ecs::system::RunSystemOnce;
+    use string_cache::DefaultAtom as Atom;
     use bevy_gameplay_tag::gameplay_tag::GameplayTag;
     use bevy_gameplay_tag::{GameplayTagsManager, GameplayTagsPlugin};
 
@@ -704,7 +705,7 @@ mod tests {
                     .add_activation_required_tag(GameplayTag::new("State.Alive"), &tags_manager)
                     .add_activation_blocked_tag(GameplayTag::new("State.Stunned"), &tags_manager);
 
-                assert_eq!(ability.id, "test");
+                assert_eq!(ability.id, Atom::from("test"));
                 assert_eq!(ability.activation_required_tags.gameplay_tags.len(), 1);
                 assert_eq!(ability.activation_blocked_tags.gameplay_tags.len(), 1);
             })

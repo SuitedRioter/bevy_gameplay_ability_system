@@ -110,19 +110,19 @@ pub struct AttributeOwner(pub Entity);
 
 /// Component that identifies which attribute this entity represents.
 ///
-/// This stores the name/identifier of the attribute for lookups.
+/// Uses interned strings (Atom) for O(1) comparison performance.
 #[derive(Component, Debug, Clone, PartialEq, Eq, Hash)]
-pub struct AttributeName(pub String);
+pub struct AttributeName(pub string_cache::DefaultAtom);
 
 impl AttributeName {
     /// Creates a new attribute name.
-    pub fn new(name: impl Into<String>) -> Self {
+    pub fn new(name: impl Into<string_cache::DefaultAtom>) -> Self {
         Self(name.into())
     }
 
     /// Gets the attribute name as a string slice.
     pub fn as_str(&self) -> &str {
-        &self.0
+        self.0.as_ref()
     }
 }
 

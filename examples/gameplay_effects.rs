@@ -79,7 +79,7 @@ impl AttributeSetDefinition for CharacterAttributes {
                         base_value: default_value,
                         current_value: default_value,
                     },
-                    AttributeName(name.to_string()),
+                    AttributeName(name.to_string().into()),
                     AttributeOwner(owner),
                     AttributeMetadataComponent(metadata),
                 ))
@@ -109,7 +109,7 @@ fn setup(mut commands: Commands, tags_manager: Res<GameplayTagsManager>) {
     let damage_effect = GameplayEffectDefinition::new("effect.damage.instant")
         .with_duration_policy(DurationPolicy::Instant)
         .add_modifier(ModifierInfo {
-            attribute_name: "Health".to_string(),
+            attribute_name: "Health".into(),
             operation: ModifierOperation::AddBase,
             magnitude: MagnitudeCalculation::ScalableFloat { base_value: -20.0 },
         });
@@ -119,7 +119,7 @@ fn setup(mut commands: Commands, tags_manager: Res<GameplayTagsManager>) {
         .with_duration_policy(DurationPolicy::HasDuration)
         .with_duration(5.0)
         .add_modifier(ModifierInfo {
-            attribute_name: "Damage".to_string(),
+            attribute_name: "Damage".into(),
             operation: ModifierOperation::AddCurrent,
             magnitude: MagnitudeCalculation::ScalableFloat { base_value: 15.0 },
         })
@@ -129,7 +129,7 @@ fn setup(mut commands: Commands, tags_manager: Res<GameplayTagsManager>) {
     let permanent_health_boost = GameplayEffectDefinition::new("effect.permanent.health")
         .with_duration_policy(DurationPolicy::Infinite)
         .add_modifier(ModifierInfo {
-            attribute_name: "MaxHealth".to_string(),
+            attribute_name: "MaxHealth".into(),
             operation: ModifierOperation::AddBase,
             magnitude: MagnitudeCalculation::ScalableFloat { base_value: 50.0 },
         });
@@ -139,7 +139,7 @@ fn setup(mut commands: Commands, tags_manager: Res<GameplayTagsManager>) {
         .with_duration_policy(DurationPolicy::HasDuration)
         .with_duration(3.0)
         .add_modifier(ModifierInfo {
-            attribute_name: "AttackSpeed".to_string(),
+            attribute_name: "AttackSpeed".into(),
             operation: ModifierOperation::MultiplyAdditive,
             magnitude: MagnitudeCalculation::ScalableFloat {
                 base_value: 0.5, // 50% increase

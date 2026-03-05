@@ -3,6 +3,7 @@
 //! This module defines the core components for the gameplay ability system.
 
 use bevy::prelude::*;
+use string_cache::DefaultAtom as Atom;
 
 /// Ability specification component.
 ///
@@ -10,7 +11,7 @@ use bevy::prelude::*;
 #[derive(Component, Debug, Clone)]
 pub struct AbilitySpec {
     /// The ID of the ability definition.
-    pub definition_id: String,
+    pub definition_id: Atom,
     /// The level at which this ability was granted.
     pub level: i32,
     /// Optional input ID for binding to input actions.
@@ -23,9 +24,9 @@ pub struct AbilitySpec {
 
 impl AbilitySpec {
     /// Creates a new ability spec.
-    pub fn new(definition_id: String, level: i32) -> Self {
+    pub fn new(definition_id: impl Into<Atom>, level: i32) -> Self {
         Self {
-            definition_id,
+            definition_id: definition_id.into(),
             level,
             input_id: None,
             is_active: false,
@@ -128,8 +129,8 @@ mod tests {
 
     #[test]
     fn test_ability_spec_creation() {
-        let spec = AbilitySpec::new("test_ability".to_string(), 1);
-        assert_eq!(spec.definition_id, "test_ability");
+        let spec = AbilitySpec::new("test_ability", 1);
+        assert_eq!(spec.definition_id, Atom::from("test_ability"));
         assert_eq!(spec.level, 1);
         assert_eq!(spec.input_id, None);
         assert!(!spec.is_active);
@@ -137,7 +138,7 @@ mod tests {
 
     #[test]
     fn test_ability_spec_with_input() {
-        let spec = AbilitySpec::new("test_ability".to_string(), 1).with_input_id(42);
+        let spec = AbilitySpec::new("test_ability", 1).with_input_id(42);
         assert_eq!(spec.input_id, Some(42));
     }
 

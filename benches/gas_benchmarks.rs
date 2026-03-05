@@ -29,13 +29,13 @@ fn create_entity_with_attributes(app: &mut App) -> Entity {
     app.world_mut().spawn((
         AttributeData::new(100.0),
         AttributeOwner(entity),
-        AttributeName("Health".to_string()),
+        AttributeName("Health".to_string().into()),
     ));
 
     app.world_mut().spawn((
         AttributeData::new(50.0),
         AttributeOwner(entity),
-        AttributeName("Mana".to_string()),
+        AttributeName("Mana".to_string().into()),
     ));
 
     app.world_mut().spawn(GameplayTagCountContainer::default());
@@ -91,7 +91,7 @@ fn bench_duration_effect_updates(c: &mut Criterion) {
                 for _ in 0..num_effects {
                     app.world_mut().spawn((
                         ActiveGameplayEffect {
-                            definition_id: "TestEffect".to_string(),
+                            definition_id: "TestEffect".to_string().into(),
                             level: 1,
                             start_time: 0.0,
                             stack_count: 1,
@@ -133,7 +133,7 @@ fn bench_ability_spec_creation(c: &mut Criterion) {
                     for i in 0..num_abilities {
                         let ability_id = format!("Ability{}", i);
                         registry.register(AbilityDefinition {
-                            id: ability_id.clone(),
+                            id: ability_id.clone().into(),
                             instancing_policy: InstancingPolicy::NonInstanced,
                             net_execution_policy: NetExecutionPolicy::LocalOnly,
                             cost_effect: None,
@@ -155,7 +155,7 @@ fn bench_ability_spec_creation(c: &mut Criterion) {
                         let ability_id = format!("Ability{}", i);
                         app.world_mut().spawn((
                             AbilitySpec {
-                                definition_id: ability_id,
+                                definition_id: ability_id.into(),
                                 level: 1,
                                 input_id: Some(i as i32),
                                 is_active: false,
@@ -192,7 +192,7 @@ fn bench_attribute_aggregation(c: &mut Criterion) {
                         .world_mut()
                         .spawn((
                             ActiveGameplayEffect {
-                                definition_id: format!("Effect{}", i),
+                                definition_id: format!("Effect{}", i).into(),
                                 level: 1,
                                 start_time: 0.0,
                                 stack_count: 1,
@@ -204,7 +204,7 @@ fn bench_attribute_aggregation(c: &mut Criterion) {
                     app.world_mut().spawn((
                         AttributeModifier {
                             target_entity: target,
-                            target_attribute: "Health".to_string(),
+                            target_attribute: "Health".to_string().into(),
                             operation: ModifierOperation::AddCurrent,
                             magnitude: 10.0,
                         },

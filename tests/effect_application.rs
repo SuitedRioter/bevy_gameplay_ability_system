@@ -9,6 +9,7 @@ use bevy_gameplay_tag::gameplay_tag::GameplayTag;
 use bevy_gameplay_tag::gameplay_tag_count_container::GameplayTagCountContainer;
 use bevy_gameplay_tag::{GameplayTagsManager, GameplayTagsPlugin};
 use std::sync::{Arc, Mutex};
+use string_cache::DefaultAtom as Atom;
 
 #[derive(Resource, Clone, Default)]
 struct EffectTestEvents {
@@ -57,7 +58,7 @@ fn test_duration_effect_spawns_entity() {
         .id();
 
     app.world_mut().trigger(ApplyGameplayEffectEvent {
-        effect_id: "effect.test.duration".to_string(),
+        effect_id: Atom::from("effect.test.duration"),
         target,
         instigator: None,
         level: 1,
@@ -71,7 +72,7 @@ fn test_duration_effect_spawns_entity() {
         .query::<(&ActiveGameplayEffect, &EffectTarget)>()
         .iter(app.world())
     {
-        if effect_target.0 == target && active_effect.definition_id == "effect.test.duration" {
+        if effect_target.0 == target && active_effect.definition_id.as_ref() == "effect.test.duration" {
             found = true;
         }
     }
@@ -103,7 +104,7 @@ fn test_effect_adds_granted_tags() {
         .id();
 
     app.world_mut().trigger(ApplyGameplayEffectEvent {
-        effect_id: "effect.test.buff".to_string(),
+        effect_id: Atom::from("effect.test.buff"),
         target,
         instigator: None,
         level: 1,
@@ -142,7 +143,7 @@ fn test_expired_effect_removes_tags() {
         .id();
 
     app.world_mut().trigger(ApplyGameplayEffectEvent {
-        effect_id: "effect.test.short".to_string(),
+        effect_id: Atom::from("effect.test.short"),
         target,
         instigator: None,
         level: 1,
@@ -191,7 +192,7 @@ fn test_instant_effect_modifies_base_value() {
     let effect = GameplayEffectDefinition::new("effect.test.instant_heal")
         .with_duration_policy(DurationPolicy::Instant)
         .add_modifier(ModifierInfo {
-            attribute_name: "Health".to_string(),
+            attribute_name: Atom::from("Health"),
             operation: ModifierOperation::AddBase,
             magnitude: MagnitudeCalculation::ScalableFloat { base_value: 25.0 },
         });
@@ -209,12 +210,12 @@ fn test_instant_effect_modifies_base_value() {
             base_value: 75.0,
             current_value: 75.0,
         },
-        AttributeName("Health".to_string()),
+        AttributeName::new("Health"),
         AttributeOwner(target),
     ));
 
     app.world_mut().trigger(ApplyGameplayEffectEvent {
-        effect_id: "effect.test.instant_heal".to_string(),
+        effect_id: Atom::from("effect.test.instant_heal"),
         target,
         instigator: None,
         level: 1,
@@ -228,7 +229,7 @@ fn test_instant_effect_modifies_base_value() {
         .query::<(&AttributeData, &AttributeName, &AttributeOwner)>()
         .iter(app.world())
     {
-        if owner.0 == target && name.0 == "Health" {
+        if owner.0 == target && name.as_str() == "Health" {
             assert!(
                 (attr.base_value - 100.0).abs() < f32::EPSILON,
                 "Health should be 100.0, got {}",

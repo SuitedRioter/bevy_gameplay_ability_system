@@ -4,6 +4,7 @@
 
 use bevy::prelude::*;
 use bevy_gameplay_tag::{GameplayTagContainer, GameplayTagsManager, gameplay_tag::GameplayTag};
+use string_cache::DefaultAtom as Atom;
 
 /// Instancing policy for abilities.
 ///
@@ -39,15 +40,15 @@ pub enum NetExecutionPolicy {
 #[derive(Debug, Clone, PartialEq)]
 pub struct AbilityDefinition {
     /// Unique identifier for this ability.
-    pub id: String,
+    pub id: Atom,
     /// Instancing policy.
     pub instancing_policy: InstancingPolicy,
     /// Net execution policy (for future networking support).
     pub net_execution_policy: NetExecutionPolicy,
     /// Effect ID to apply as costs when the ability is committed.
-    pub cost_effect: Option<String>,
+    pub cost_effect: Option<Atom>,
     /// Effect ID to apply as cooldown when the ability is committed.
-    pub cooldown_effect: Option<String>,
+    pub cooldown_effect: Option<Atom>,
     /// Tags describing this ability (used for cancel matching).
     pub ability_tags: GameplayTagContainer,
     /// Tags granted to the owner while this ability is active.
@@ -66,7 +67,7 @@ pub struct AbilityDefinition {
 
 impl AbilityDefinition {
     /// Creates a new ability definition.
-    pub fn new(id: impl Into<String>) -> Self {
+    pub fn new(id: impl Into<Atom>) -> Self {
         Self {
             id: id.into(),
             instancing_policy: InstancingPolicy::InstancedPerExecution,
@@ -96,13 +97,13 @@ impl AbilityDefinition {
     }
 
     /// Adds a cost effect.
-    pub fn with_cost_effect(mut self, effect_id: impl Into<String>) -> Self {
+    pub fn with_cost_effect(mut self, effect_id: impl Into<Atom>) -> Self {
         self.cost_effect = Some(effect_id.into());
         self
     }
 
     /// Sets the cooldown effect.
-    pub fn with_cooldown_effect(mut self, effect_id: impl Into<String>) -> Self {
+    pub fn with_cooldown_effect(mut self, effect_id: impl Into<Atom>) -> Self {
         self.cooldown_effect = Some(effect_id.into());
         self
     }
@@ -181,7 +182,7 @@ impl AbilityDefinition {
 /// Resource that stores all ability definitions.
 #[derive(Resource, Default)]
 pub struct AbilityRegistry {
-    pub definitions: std::collections::HashMap<String, AbilityDefinition>,
+    pub definitions: std::collections::HashMap<Atom, AbilityDefinition>,
 }
 
 impl AbilityRegistry {
@@ -196,8 +197,8 @@ impl AbilityRegistry {
     }
 
     /// Gets an ability definition by ID.
-    pub fn get(&self, id: &str) -> Option<&AbilityDefinition> {
-        self.definitions.get(id)
+    pub fn get(&self, id: impl Into<Atom>) -> Option<&AbilityDefinition> {
+        self.definitions.get(&id.into())
     }
 }
 
@@ -230,7 +231,7 @@ mod tests {
                         &tags_manager,
                     );
 
-                assert_eq!(ability.id, "test_ability");
+                assert_eq!(ability.id, Atom::from("test_ability"));
                 assert_eq!(ability.activation_required_tags.gameplay_tags.len(), 1);
                 assert_eq!(ability.activation_blocked_tags.gameplay_tags.len(), 1);
                 assert_eq!(ability.ability_tags.gameplay_tags.len(), 1);

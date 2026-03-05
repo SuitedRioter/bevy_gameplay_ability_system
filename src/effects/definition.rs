@@ -7,6 +7,7 @@ use bevy::prelude::*;
 use bevy_gameplay_tag::{
     GameplayTagContainer, GameplayTagRequirements, GameplayTagsManager, gameplay_tag::GameplayTag,
 };
+use string_cache::DefaultAtom as Atom;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DurationPolicy {
     /// Effect applies instantly and is removed immediately.
@@ -84,7 +85,7 @@ impl MagnitudeCalculation {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ModifierInfo {
     /// The name of the attribute to modify.
-    pub attribute_name: String,
+    pub attribute_name: Atom,
     /// The operation to perform.
     pub operation: ModifierOperation,
     /// How to calculate the magnitude.
@@ -94,7 +95,7 @@ pub struct ModifierInfo {
 impl ModifierInfo {
     /// Creates a new modifier info.
     pub fn new(
-        attribute_name: impl Into<String>,
+        attribute_name: impl Into<Atom>,
         operation: ModifierOperation,
         magnitude: MagnitudeCalculation,
     ) -> Self {
@@ -113,7 +114,7 @@ impl ModifierInfo {
 #[derive(Debug, Clone, PartialEq)]
 pub struct GameplayEffectDefinition {
     /// Unique identifier for this effect.
-    pub id: String,
+    pub id: Atom,
     /// Duration policy.
     pub duration_policy: DurationPolicy,
     /// Duration in seconds (if HasDuration).
@@ -132,7 +133,7 @@ pub struct GameplayEffectDefinition {
 
 impl GameplayEffectDefinition {
     /// Creates a new gameplay effect definition.
-    pub fn new(id: impl Into<String>) -> Self {
+    pub fn new(id: impl Into<Atom>) -> Self {
         Self {
             id: id.into(),
             duration_policy: DurationPolicy::Instant,
@@ -192,7 +193,7 @@ impl GameplayEffectDefinition {
 /// Resource that stores all gameplay effect definitions.
 #[derive(Resource, Default)]
 pub struct GameplayEffectRegistry {
-    pub definitions: std::collections::HashMap<String, GameplayEffectDefinition>,
+    pub definitions: std::collections::HashMap<Atom, GameplayEffectDefinition>,
 }
 
 impl GameplayEffectRegistry {
@@ -207,8 +208,8 @@ impl GameplayEffectRegistry {
     }
 
     /// Gets an effect definition by ID.
-    pub fn get(&self, id: &str) -> Option<&GameplayEffectDefinition> {
-        self.definitions.get(id)
+    pub fn get(&self, id: impl Into<Atom>) -> Option<&GameplayEffectDefinition> {
+        self.definitions.get(&id.into())
     }
 }
 
@@ -239,7 +240,7 @@ mod tests {
                 MagnitudeCalculation::scalar(10.0),
             ));
 
-        assert_eq!(effect.id, "test_effect");
+        assert_eq!(effect.id, Atom::from("test_effect"));
         assert_eq!(effect.duration_policy, DurationPolicy::HasDuration);
         assert_eq!(effect.duration_magnitude, 5.0);
         assert_eq!(effect.period, 1.0);

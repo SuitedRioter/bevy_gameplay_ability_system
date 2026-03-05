@@ -9,6 +9,7 @@ use bevy_gameplay_tag::gameplay_tag::GameplayTag;
 use bevy_gameplay_tag::gameplay_tag_count_container::GameplayTagCountContainer;
 use bevy_gameplay_tag::{GameplayTagsManager, GameplayTagsPlugin};
 use std::sync::{Arc, Mutex};
+use string_cache::DefaultAtom as Atom;
 
 /// Shared state for capturing events across observers.
 #[derive(Resource, Clone, Default)]
@@ -59,7 +60,7 @@ fn register_cost_and_cooldown(app: &mut App) {
     let cost = GameplayEffectDefinition::new("effect.cost.mana")
         .with_duration_policy(DurationPolicy::Instant)
         .add_modifier(ModifierInfo {
-            attribute_name: "Mana".to_string(),
+            attribute_name: Atom::from("Mana"),
             operation: ModifierOperation::AddBase,
             magnitude: MagnitudeCalculation::ScalableFloat { base_value: -20.0 },
         });
@@ -93,7 +94,7 @@ fn spawn_owner_with_mana(app: &mut App, mana: f32) -> Entity {
             base_value: mana,
             current_value: mana,
         },
-        AttributeName("Mana".to_string()),
+        AttributeName::new("Mana"),
         AttributeOwner(owner),
     ));
 
@@ -245,7 +246,7 @@ fn test_activation_flow_with_cost_and_cooldown() {
         .query::<(&AttributeData, &AttributeName, &AttributeOwner)>()
         .iter(app.world())
     {
-        if attr_owner.0 == owner && name.0 == "Mana" {
+        if attr_owner.0 == owner && name.as_str() == "Mana" {
             assert!(
                 (attr.base_value - 80.0).abs() < f32::EPSILON,
                 "Mana should be 80.0 after cost, got {}",
@@ -280,7 +281,7 @@ fn test_activation_fails_on_cooldown() {
         .id();
 
     app.world_mut().trigger(ApplyGameplayEffectEvent {
-        effect_id: "effect.cooldown.fireball".to_string(),
+        effect_id: Atom::from("effect.cooldown.fireball"),
         target: owner,
         instigator: None,
         level: 1,
@@ -309,7 +310,7 @@ fn test_activation_fails_insufficient_cost() {
     let cost = GameplayEffectDefinition::new("effect.cost.expensive")
         .with_duration_policy(DurationPolicy::Instant)
         .add_modifier(ModifierInfo {
-            attribute_name: "Mana".to_string(),
+            attribute_name: Atom::from("Mana"),
             operation: ModifierOperation::AddBase,
             magnitude: MagnitudeCalculation::ScalableFloat { base_value: -50.0 },
         });

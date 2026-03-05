@@ -73,7 +73,6 @@ pub mod prelude {
     pub use crate::cues::systems::TriggerGameplayCueEvent;
 
     pub use crate::core::events::*;
-    pub use crate::core::handles::*;
     pub use crate::core::system_sets::*;
 
     pub use crate::utils::*;

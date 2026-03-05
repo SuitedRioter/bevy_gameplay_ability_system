@@ -9,13 +9,13 @@
 //! - GameplayCues for visual feedback
 //!
 //! This example simulates a turn-based combat between a player and an enemy.
-
-use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
+use bevy::ecs::system::SystemParam;
 use bevy_gameplay_ability_system::prelude::*;
 use bevy_gameplay_tag::gameplay_tag::GameplayTag;
 use bevy_gameplay_tag::gameplay_tag_count_container::GameplayTagCountContainer;
 use bevy_gameplay_tag::{GameplayTagsManager, GameplayTagsPlugin};
+use string_cache::DefaultAtom as Atom;
 
 #[derive(SystemParam)]
 struct CombatParams<'w, 's> {
@@ -43,7 +43,7 @@ fn main() {
         .add_systems(Startup, setup_game)
         .add_systems(
             Update,
-            (simulate_combat, display_combat_log, handle_death).chain(),
+            (simulate_combat, display_combat_log, handle_death),
         )
         .run();
 }
@@ -163,7 +163,7 @@ impl AttributeSetDefinition for CharacterAttributes {
                         base_value: value,
                         current_value: value,
                     },
-                    AttributeName(name.to_string()),
+                    AttributeName::new(*name),
                     AttributeOwner(owner),
                     AttributeMetadataComponent(metadata),
                 ))
@@ -311,7 +311,7 @@ fn create_enemy_attributes(commands: &mut Commands, owner: Entity) {
                 base_value: value,
                 current_value: value,
             },
-            AttributeName(name.to_string()),
+            AttributeName::new(name),
             AttributeOwner(owner),
             AttributeMetadataComponent(metadata),
         ));
@@ -328,14 +328,14 @@ fn create_effect_registry(tags_manager: &Res<GameplayTagsManager>) -> EffectRegi
         GameplayEffectDefinition::new("effect.damage.physical")
             .with_duration_policy(DurationPolicy::Instant)
             .add_modifier(ModifierInfo {
-                attribute_name: "Health".to_string(),
+                attribute_name: Atom::from("Health"),
                 operation: ModifierOperation::AddBase,
                 magnitude: MagnitudeCalculation::ScalableFloat { base_value: -15.0 },
             }),
         GameplayEffectDefinition::new("effect.damage.magic")
             .with_duration_policy(DurationPolicy::Instant)
             .add_modifier(ModifierInfo {
-                attribute_name: "Health".to_string(),
+                attribute_name: Atom::from("Health"),
                 operation: ModifierOperation::AddBase,
                 magnitude: MagnitudeCalculation::ScalableFloat { base_value: -20.0 },
             }),
@@ -343,7 +343,7 @@ fn create_effect_registry(tags_manager: &Res<GameplayTagsManager>) -> EffectRegi
         GameplayEffectDefinition::new("effect.heal.instant")
             .with_duration_policy(DurationPolicy::Instant)
             .add_modifier(ModifierInfo {
-                attribute_name: "Health".to_string(),
+                attribute_name: Atom::from("Health"),
                 operation: ModifierOperation::AddBase,
                 magnitude: MagnitudeCalculation::ScalableFloat { base_value: 25.0 },
             }),
@@ -352,7 +352,7 @@ fn create_effect_registry(tags_manager: &Res<GameplayTagsManager>) -> EffectRegi
             .with_duration(6.0)
             .with_period(2.0)
             .add_modifier(ModifierInfo {
-                attribute_name: "Health".to_string(),
+                attribute_name: Atom::from("Health"),
                 operation: ModifierOperation::AddBase,
                 magnitude: MagnitudeCalculation::ScalableFloat { base_value: 5.0 },
             })
@@ -362,7 +362,7 @@ fn create_effect_registry(tags_manager: &Res<GameplayTagsManager>) -> EffectRegi
             .with_duration_policy(DurationPolicy::HasDuration)
             .with_duration(10.0)
             .add_modifier(ModifierInfo {
-                attribute_name: "Attack".to_string(),
+                attribute_name: Atom::from("Attack"),
                 operation: ModifierOperation::MultiplyAdditive,
                 magnitude: MagnitudeCalculation::ScalableFloat { base_value: 0.5 },
             })
@@ -371,7 +371,7 @@ fn create_effect_registry(tags_manager: &Res<GameplayTagsManager>) -> EffectRegi
             .with_duration_policy(DurationPolicy::HasDuration)
             .with_duration(8.0)
             .add_modifier(ModifierInfo {
-                attribute_name: "Defense".to_string(),
+                attribute_name: Atom::from("Defense"),
                 operation: ModifierOperation::MultiplyAdditive,
                 magnitude: MagnitudeCalculation::ScalableFloat { base_value: 0.3 },
             })
@@ -386,7 +386,7 @@ fn create_effect_registry(tags_manager: &Res<GameplayTagsManager>) -> EffectRegi
             .with_duration(10.0)
             .with_period(2.0)
             .add_modifier(ModifierInfo {
-                attribute_name: "Health".to_string(),
+                attribute_name: Atom::from("Health"),
                 operation: ModifierOperation::AddBase,
                 magnitude: MagnitudeCalculation::ScalableFloat { base_value: -3.0 },
             })
@@ -395,21 +395,21 @@ fn create_effect_registry(tags_manager: &Res<GameplayTagsManager>) -> EffectRegi
         GameplayEffectDefinition::new("effect.cost.mana.small")
             .with_duration_policy(DurationPolicy::Instant)
             .add_modifier(ModifierInfo {
-                attribute_name: "Mana".to_string(),
+                attribute_name: Atom::from("Mana"),
                 operation: ModifierOperation::AddBase,
                 magnitude: MagnitudeCalculation::ScalableFloat { base_value: -10.0 },
             }),
         GameplayEffectDefinition::new("effect.cost.mana.medium")
             .with_duration_policy(DurationPolicy::Instant)
             .add_modifier(ModifierInfo {
-                attribute_name: "Mana".to_string(),
+                attribute_name: Atom::from("Mana"),
                 operation: ModifierOperation::AddBase,
                 magnitude: MagnitudeCalculation::ScalableFloat { base_value: -20.0 },
             }),
         GameplayEffectDefinition::new("effect.cost.stamina")
             .with_duration_policy(DurationPolicy::Instant)
             .add_modifier(ModifierInfo {
-                attribute_name: "Stamina".to_string(),
+                attribute_name: Atom::from("Stamina"),
                 operation: ModifierOperation::AddBase,
                 magnitude: MagnitudeCalculation::ScalableFloat { base_value: -15.0 },
             }),
@@ -523,7 +523,7 @@ fn simulate_combat(
             {
                 // Check if enemy has enough stamina
                 let has_stamina = combat.attributes_query.iter().any(|(data, name, owner)| {
-                    owner.0 == enemy && name.0 == "Stamina" && data.current_value >= 15.0
+                    owner.0 == enemy && name.as_str() == "Stamina" && data.current_value >= 15.0
                 });
 
                 if has_stamina {
@@ -532,9 +532,8 @@ fn simulate_combat(
                         .effect_registry
                         .definitions
                         .iter()
-                        .find(|def| def.id == "effect.damage.physical")
-                        .unwrap()
-                        .clone();
+                        .find(|def| def.id.as_ref() == "effect.damage.physical")
+                        .unwrap();
 
                     apply_effect_to_target(&mut commands, player, damage_effect);
 
@@ -550,7 +549,7 @@ fn simulate_combat(
 fn apply_effect_to_target(
     commands: &mut Commands,
     target: Entity,
-    effect_def: GameplayEffectDefinition,
+    effect_def: &GameplayEffectDefinition,
 ) {
     let effect_entity = commands
         .spawn((
@@ -601,7 +600,7 @@ fn handle_death(mut commands: Commands, mut combat_log: ResMut<CombatLog>, comba
         let health = combat
             .attributes_query
             .iter()
-            .find(|(_, name, owner)| owner.0 == player && name.0 == "Health")
+            .find(|(_, name, owner)| owner.0 == player && name.as_str() == "Health")
             .map(|(data, _, _)| data.current_value)
             .unwrap_or(0.0);
 
@@ -619,7 +618,7 @@ fn handle_death(mut commands: Commands, mut combat_log: ResMut<CombatLog>, comba
         let health = combat
             .attributes_query
             .iter()
-            .find(|(_, name, owner)| owner.0 == enemy && name.0 == "Health")
+            .find(|(_, name, owner)| owner.0 == enemy && name.as_str() == "Health")
             .map(|(data, _, _)| data.current_value)
             .unwrap_or(0.0);
 

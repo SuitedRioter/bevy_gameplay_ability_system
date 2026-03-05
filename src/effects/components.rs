@@ -4,6 +4,7 @@
 
 use bevy::prelude::*;
 use bevy_gameplay_tag::GameplayTagContainer;
+use string_cache::DefaultAtom as Atom;
 
 /// Active gameplay effect instance component.
 ///
@@ -12,7 +13,7 @@ use bevy_gameplay_tag::GameplayTagContainer;
 #[derive(Component, Debug, Clone)]
 pub struct ActiveGameplayEffect {
     /// The ID of the effect definition.
-    pub definition_id: String,
+    pub definition_id: Atom,
     /// The level at which this effect was applied.
     pub level: i32,
     /// The time when this effect was applied (in seconds).
@@ -23,9 +24,9 @@ pub struct ActiveGameplayEffect {
 
 impl ActiveGameplayEffect {
     /// Creates a new active gameplay effect.
-    pub fn new(definition_id: String, level: i32, start_time: f32) -> Self {
+    pub fn new(definition_id: impl Into<Atom>, level: i32, start_time: f32) -> Self {
         Self {
-            definition_id,
+            definition_id: definition_id.into(),
             level,
             start_time,
             stack_count: 1,
@@ -99,15 +100,15 @@ impl PeriodicEffect {
         self.time_until_next <= 0.0
     }
 
-    /// Updates the timer and returns true if execution should happen.
-    pub fn tick(&mut self, delta: f32) -> bool {
+    /// Updates the timer and returns the number of times the effect should execute.
+    pub fn tick(&mut self, delta: f32) -> u32 {
         self.time_until_next -= delta;
-        if self.should_execute() {
+        let mut executions = 0;
+        while self.time_until_next <= 0.0 {
+            executions += 1;
             self.time_until_next += self.period;
-            true
-        } else {
-            false
         }
+        executions
     }
 }
 
@@ -120,7 +121,7 @@ pub struct AttributeModifier {
     /// The entity that owns the attribute being modified.
     pub target_entity: Entity,
     /// The name of the attribute being modified.
-    pub target_attribute: String,
+    pub target_attribute: Atom,
     /// The operation to perform.
     pub operation: ModifierOperation,
     /// The magnitude of the modification.
@@ -149,14 +150,15 @@ pub enum ModifierOperation {
 impl ModifierOperation {
     /// Returns the priority order for applying modifiers.
     ///
-    /// Lower values are applied first.
+    /// Override has highest priority (checked first, short-circuits).
+    /// Lower values are applied first for other operations.
     pub fn priority(&self) -> i32 {
         match self {
-            ModifierOperation::AddBase => 0,
-            ModifierOperation::AddCurrent => 1,
-            ModifierOperation::MultiplyAdditive => 2,
-            ModifierOperation::MultiplyMultiplicative => 3,
-            ModifierOperation::Override => 4,
+            ModifierOperation::Override => 0,
+            ModifierOperation::AddBase => 1,
+            ModifierOperation::AddCurrent => 2,
+            ModifierOperation::MultiplyAdditive => 3,
+            ModifierOperation::MultiplyMultiplicative => 4,
         }
     }
 }
@@ -194,15 +196,25 @@ mod tests {
         assert_eq!(periodic.time_until_next, 1.0);
         assert!(!periodic.should_execute());
 
-        assert!(!periodic.tick(0.5));
+        assert_eq!(periodic.tick(0.5), 0);
         assert_eq!(periodic.time_until_next, 0.5);
 
-        assert!(periodic.tick(0.6));
+        assert_eq!(periodic.tick(0.6), 1);
         assert_eq!(periodic.time_until_next, 0.9);
     }
 
     #[test]
+    fn test_periodic_effect_large_delta() {
+        let mut periodic = PeriodicEffect::new(1.0);
+
+        // Large delta should trigger multiple executions
+        assert_eq!(periodic.tick(2.5), 2);
+        assert_eq!(periodic.time_until_next, 0.5);
+    }
+
+    #[test]
     fn test_modifier_operation_priority() {
+        assert!(ModifierOperation::Override.priority() < ModifierOperation::AddBase.priority());
         assert!(ModifierOperation::AddBase.priority() < ModifierOperation::AddCurrent.priority());
         assert!(
             ModifierOperation::AddCurrent.priority()
@@ -211,10 +223,6 @@ mod tests {
         assert!(
             ModifierOperation::MultiplyAdditive.priority()
                 < ModifierOperation::MultiplyMultiplicative.priority()
-        );
-        assert!(
-            ModifierOperation::MultiplyMultiplicative.priority()
-                < ModifierOperation::Override.priority()
         );
     }
 }
