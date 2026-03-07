@@ -2,7 +2,10 @@
 //!
 //! This module contains the systems that manage attributes and their modifiers.
 
-use super::components::{AttributeData, AttributeMetadataComponent, AttributeName, AttributeOwner};
+use super::components::{
+    AttributeData, AttributeMetadataComponent, AttributeName, AttributeOwner,
+    PreviousAttributeValue,
+};
 use bevy::prelude::*;
 
 /// Event triggered when an attribute value changes.
@@ -52,12 +55,20 @@ pub fn clamp_attributes_system(
 pub fn trigger_attribute_change_events_system(
     mut commands: Commands,
     attributes: Query<
-        (Entity, &AttributeData, &AttributeName, &AttributeOwner, Option<&PreviousAttributeValue>),
+        (
+            Entity,
+            &AttributeData,
+            &AttributeName,
+            &AttributeOwner,
+            Option<&PreviousAttributeValue>,
+        ),
         Changed<AttributeData>,
     >,
 ) {
     for (entity, attr, name, owner, prev) in attributes.iter() {
-        let old_value = prev.map(|p| p.previous_current).unwrap_or(attr.current_value);
+        let old_value = prev
+            .map(|p| p.previous_current)
+            .unwrap_or(attr.current_value);
 
         commands.trigger(AttributeChangedEvent {
             owner: owner.0,
