@@ -52,21 +52,24 @@ pub fn clamp_attributes_system(
 pub fn trigger_attribute_change_events_system(
     mut commands: Commands,
     attributes: Query<
-        (Entity, &AttributeData, &AttributeName, &AttributeOwner),
+        (Entity, &AttributeData, &AttributeName, &AttributeOwner, Option<&PreviousAttributeValue>),
         Changed<AttributeData>,
     >,
 ) {
-    for (entity, attr, name, owner) in attributes.iter() {
-        // Note: We can't easily get the old value here without storing it.
-        // For now, we'll emit the event with the same value for old and new.
-        // A more sophisticated implementation would use a separate component
-        // to track previous values.
+    for (entity, attr, name, owner, prev) in attributes.iter() {
+        let old_value = prev.map(|p| p.previous_current).unwrap_or(attr.current_value);
+
         commands.trigger(AttributeChangedEvent {
             owner: owner.0,
             attribute: entity,
             attribute_name: name.as_str().to_string(),
-            old_value: attr.current_value,
+            old_value,
             new_value: attr.current_value,
+        });
+
+        commands.entity(entity).insert(PreviousAttributeValue {
+            previous_current: attr.current_value,
+            previous_base: attr.base_value,
         });
     }
 }
