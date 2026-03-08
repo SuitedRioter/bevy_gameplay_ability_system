@@ -11,7 +11,3 @@ string_cache = "0.9"
 [dev-dependencies]
 bevy-inspector-egui = "0.36.0"
 criterion = { version = "0.5", features = ["html_reports"] }
-
-[[bench]]
-name = "gas_benchmarks"
-harness = false
