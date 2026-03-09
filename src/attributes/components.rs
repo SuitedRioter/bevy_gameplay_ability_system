@@ -126,6 +126,16 @@ impl AttributeName {
     }
 }
 
+/// Component that stores the previous values of an attribute.
+///
+/// This is used to track attribute changes and emit accurate change events.
+/// Only added to attributes when change tracking is needed.
+#[derive(Component, Debug, Clone, Copy)]
+pub struct PreviousAttributeValue {
+    pub previous_current: f32,
+    pub previous_base: f32,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
