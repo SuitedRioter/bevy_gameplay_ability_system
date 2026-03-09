@@ -7,9 +7,9 @@ use super::definition::*;
 use crate::attributes::{AttributeData, AttributeName};
 use crate::effects::definition::GameplayEffectRegistry;
 use crate::effects::systems::ApplyGameplayEffectEvent;
+use bevy::ecs::relationship::Relationship;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
-use bevy::ecs::relationship::Relationship;
 use bevy_gameplay_tag::gameplay_tag_count_container::GameplayTagCountContainer;
 
 /// Mutable ability spec query (for activation writes).
@@ -621,7 +621,7 @@ pub fn cancel_abilities_by_tags_system(
             continue;
         };
 
-        if tags.has_any_matching_gameplay_tags(&definition.cancel_on_tags_added) {
+        if tags.has_any_matching_gameplay_tags(&definition.cancel_abilities_with_tags) {
             commands.trigger(CancelAbilityEvent {
                 ability_spec: spec_entity,
                 owner: owner.0,
@@ -688,9 +688,9 @@ pub fn update_ability_cooldowns_system(
 mod tests {
     use super::*;
     use bevy::ecs::system::RunSystemOnce;
-    use string_cache::DefaultAtom as Atom;
     use bevy_gameplay_tag::gameplay_tag::GameplayTag;
     use bevy_gameplay_tag::{GameplayTagsManager, GameplayTagsPlugin};
+    use string_cache::DefaultAtom as Atom;
 
     #[test]
     fn test_check_activation_requirements() {

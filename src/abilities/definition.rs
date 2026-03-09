@@ -57,12 +57,18 @@ pub struct AbilityDefinition {
     pub activation_required_tags: GameplayTagContainer,
     /// Tags that block activation if present on the owner.
     pub activation_blocked_tags: GameplayTagContainer,
+    /// Tags required on the source to activate this ability.
+    pub source_required_tags: GameplayTagContainer,
+    /// Tags that block activation if present on the source.
+    pub source_blocked_tags: GameplayTagContainer,
+    /// Tags required on the target to activate this ability.
+    pub target_required_tags: GameplayTagContainer,
+    /// Tags that block activation if present on the target.
+    pub target_blocked_tags: GameplayTagContainer,
     /// Tags added to owner to block other abilities while active.
     pub block_abilities_with_tags: GameplayTagContainer,
     /// Tags to cancel when this ability activates.
     pub cancel_abilities_with_tags: GameplayTagContainer,
-    /// Tags that, if added to the owner, will cancel this ability.
-    pub cancel_on_tags_added: GameplayTagContainer,
 }
 
 impl AbilityDefinition {
@@ -78,9 +84,12 @@ impl AbilityDefinition {
             activation_owned_tags: GameplayTagContainer::default(),
             activation_required_tags: GameplayTagContainer::default(),
             activation_blocked_tags: GameplayTagContainer::default(),
+            source_required_tags: GameplayTagContainer::default(),
+            source_blocked_tags: GameplayTagContainer::default(),
+            target_required_tags: GameplayTagContainer::default(),
+            target_blocked_tags: GameplayTagContainer::default(),
             block_abilities_with_tags: GameplayTagContainer::default(),
             cancel_abilities_with_tags: GameplayTagContainer::default(),
-            cancel_on_tags_added: GameplayTagContainer::default(),
         }
     }
 
@@ -148,6 +157,46 @@ impl AbilityDefinition {
         self
     }
 
+    /// Adds a source required tag.
+    pub fn add_source_required_tag(
+        mut self,
+        tag: GameplayTag,
+        tags_manager: &Res<GameplayTagsManager>,
+    ) -> Self {
+        self.source_required_tags.add_tag(tag, tags_manager);
+        self
+    }
+
+    /// Adds a source blocked tag.
+    pub fn add_source_blocked_tag(
+        mut self,
+        tag: GameplayTag,
+        tags_manager: &Res<GameplayTagsManager>,
+    ) -> Self {
+        self.source_blocked_tags.add_tag(tag, tags_manager);
+        self
+    }
+
+    /// Adds a target required tag.
+    pub fn add_target_required_tag(
+        mut self,
+        tag: GameplayTag,
+        tags_manager: &Res<GameplayTagsManager>,
+    ) -> Self {
+        self.target_required_tags.add_tag(tag, tags_manager);
+        self
+    }
+
+    /// Adds a target blocked tag.
+    pub fn add_target_blocked_tag(
+        mut self,
+        tag: GameplayTag,
+        tags_manager: &Res<GameplayTagsManager>,
+    ) -> Self {
+        self.target_blocked_tags.add_tag(tag, tags_manager);
+        self
+    }
+
     /// Adds a tag that blocks other abilities while this one is active.
     pub fn add_block_abilities_with_tag(
         mut self,
@@ -165,16 +214,6 @@ impl AbilityDefinition {
         tags_manager: &Res<GameplayTagsManager>,
     ) -> Self {
         self.cancel_abilities_with_tags.add_tag(tag, tags_manager);
-        self
-    }
-
-    /// Adds a tag that will cancel this ability if added to the owner.
-    pub fn add_cancel_on_tag_added(
-        mut self,
-        tag: GameplayTag,
-        tags_manager: &Res<GameplayTagsManager>,
-    ) -> Self {
-        self.cancel_on_tags_added.add_tag(tag, tags_manager);
         self
     }
 }
