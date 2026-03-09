@@ -9,7 +9,9 @@ use string_cache::DefaultAtom as Atom;
 /// Instancing policy for abilities.
 ///
 /// Determines how ability instances are created and managed.
+/// ECS no need this.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[warn(dead_code)]
 pub enum InstancingPolicy {
     /// Ability is not instanced. The spec itself is used for activation.
     NonInstanced,
@@ -41,8 +43,6 @@ pub enum NetExecutionPolicy {
 pub struct AbilityDefinition {
     /// Unique identifier for this ability.
     pub id: Atom,
-    /// Instancing policy.
-    pub instancing_policy: InstancingPolicy,
     /// Net execution policy (for future networking support).
     pub net_execution_policy: NetExecutionPolicy,
     /// Effect ID to apply as costs when the ability is committed.
@@ -76,7 +76,6 @@ impl AbilityDefinition {
     pub fn new(id: impl Into<Atom>) -> Self {
         Self {
             id: id.into(),
-            instancing_policy: InstancingPolicy::InstancedPerExecution,
             net_execution_policy: NetExecutionPolicy::LocalOnly,
             cost_effect: None,
             cooldown_effect: None,
@@ -91,12 +90,6 @@ impl AbilityDefinition {
             block_abilities_with_tags: GameplayTagContainer::default(),
             cancel_abilities_with_tags: GameplayTagContainer::default(),
         }
-    }
-
-    /// Sets the instancing policy.
-    pub fn with_instancing_policy(mut self, policy: InstancingPolicy) -> Self {
-        self.instancing_policy = policy;
-        self
     }
 
     /// Sets the net execution policy.
@@ -259,7 +252,6 @@ mod tests {
         app.world_mut()
             .run_system_once(|tags_manager: Res<GameplayTagsManager>| {
                 let ability = AbilityDefinition::new("test_ability")
-                    .with_instancing_policy(InstancingPolicy::NonInstanced)
                     .with_cost_effect("mana_cost")
                     .with_cooldown_effect("cooldown_5s")
                     .add_activation_required_tag(GameplayTag::new("State.Alive"), &tags_manager)

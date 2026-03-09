@@ -223,7 +223,7 @@ pub fn on_try_activate_ability(
     let owner = event.owner;
 
     // Read spec data and definition via p0
-    let (definition_id, is_active, instancing_policy, cancel_tags, owned_tags, block_tags);
+    let (definition_id, is_active, cancel_tags, owned_tags, block_tags);
     {
         let specs = spec_set.p0();
         let Ok((spec, _ability_owner, _state)) = specs.get(spec_entity) else {
@@ -243,13 +243,8 @@ pub fn on_try_activate_ability(
 
     // --- CanActivate checks ---
 
-    // 1. Already active? (NonInstanced/InstancedPerActor)
-    if is_active
-        && matches!(
-            definition.instancing_policy,
-            InstancingPolicy::NonInstanced | InstancingPolicy::InstancedPerActor
-        )
-    {
+    // 1. Already active? (实现有问题，后面再修复)
+    if is_active {
         commands.trigger(AbilityActivationFailedEvent {
             ability_spec: spec_entity,
             owner,
@@ -311,7 +306,6 @@ pub fn on_try_activate_ability(
 
     // --- PreActivate ---
 
-    instancing_policy = definition.instancing_policy;
     owned_tags = definition.activation_owned_tags.clone();
     block_tags = definition.block_abilities_with_tags.clone();
     cancel_tags = definition.cancel_abilities_with_tags.clone();
@@ -366,24 +360,18 @@ pub fn on_try_activate_ability(
     }
 
     // Spawn instance if needed
-    let instance = match instancing_policy {
-        InstancingPolicy::InstancedPerExecution => {
-            let instance_entity = commands
-                .spawn(ActiveAbilityInstance::new(
-                    spec_entity,
-                    params.time.elapsed_secs(),
-                ))
-                .id();
-            Some(instance_entity)
-        }
-        _ => None,
-    };
+    let instance = commands
+        .spawn(ActiveAbilityInstance::new(
+            spec_entity,
+            params.time.elapsed_secs(),
+        ))
+        .id();
 
     // Trigger AbilityActivatedEvent
     commands.trigger(AbilityActivatedEvent {
         ability_spec: spec_entity,
         owner,
-        instance,
+        instance: Some(instance),
     });
 }
 
@@ -530,7 +518,6 @@ fn end_ability_internal(
 
     let owned_tags = definition.activation_owned_tags.clone();
     let block_tags = definition.block_abilities_with_tags.clone();
-    let instancing_policy = definition.instancing_policy;
 
     // 1. Remove activation_owned_tags from owner
     if let Ok(mut owner_tag_container) = params.tag_containers.get_mut(owner) {
@@ -559,12 +546,10 @@ fn end_ability_internal(
     }
     *state = AbilityState::Ready;
 
-    // 4. Despawn ActiveAbilityInstance (if InstancedPerExecution)
-    if instancing_policy == InstancingPolicy::InstancedPerExecution {
-        for (instance_entity, instance) in params.active_instances.iter() {
-            if instance.spec_entity == spec_entity {
-                commands.entity(instance_entity).despawn();
-            }
+    // 4. Despawn ActiveAbilityInstance
+    for (instance_entity, instance) in params.active_instances.iter() {
+        if instance.spec_entity == spec_entity {
+            commands.entity(instance_entity).despawn();
         }
     }
 
