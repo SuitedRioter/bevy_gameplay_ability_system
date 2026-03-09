@@ -3,9 +3,10 @@
 //! This module provides traits for defining custom attribute sets.
 
 use super::components::{
-    AttributeData, AttributeMetadata, AttributeMetadataComponent, AttributeName, AttributeOwner,
+    AttributeData, AttributeMetadata, AttributeMetadataComponent, AttributeName,
 };
 use bevy::prelude::*;
+use bevy::ecs::relationship::Relationship;
 
 /// Trait for defining an attribute set.
 ///
@@ -66,13 +67,13 @@ pub trait AttributeSetDefinition: Send + Sync + 'static {
             let mut entity_commands = commands.spawn((
                 AttributeData::new(default_value),
                 AttributeName::new(name),
-                AttributeOwner(owner),
             ));
 
             if let Some(metadata) = metadata {
                 entity_commands.insert(AttributeMetadataComponent(metadata));
             }
 
+            entity_commands.set_parent_in_place(owner);
             attribute_entities.push(entity_commands.id());
         }
 
@@ -86,11 +87,11 @@ pub trait AttributeSetDefinition: Send + Sync + 'static {
 pub fn find_attribute(
     owner: Entity,
     attribute_name: &str,
-    query: &Query<(Entity, &AttributeName, &AttributeOwner)>,
+    query: &Query<(Entity, &AttributeName, &ChildOf)>,
 ) -> Option<Entity> {
     query
         .iter()
-        .find(|(_, name, attr_owner)| attr_owner.0 == owner && name.as_str() == attribute_name)
+        .find(|(_, name, child_of)| child_of.get() == owner && name.as_str() == attribute_name)
         .map(|(entity, _, _)| entity)
 }
 

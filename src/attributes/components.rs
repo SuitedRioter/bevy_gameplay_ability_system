@@ -39,11 +39,17 @@ impl AttributeData {
         }
     }
 
-    /// Sets the base value and updates the current value.
+    /// Sets the base value.
     ///
     /// This should be used for permanent changes to the attribute.
     pub fn set_base_value(&mut self, value: f32) {
         self.base_value = value;
+    }
+
+    /// Sets the current value.
+    ///
+    /// This should be used for permanent changes to the attribute.
+    pub fn set_current_value(&mut self, value: f32) {
         self.current_value = value;
     }
 }
@@ -101,12 +107,6 @@ impl AttributeMetadata {
 /// This is attached to attribute entities to define their constraints.
 #[derive(Component, Debug, Clone, PartialEq)]
 pub struct AttributeMetadataComponent(pub AttributeMetadata);
-
-/// Component that links an attribute to its owner entity.
-///
-/// This creates a relationship between an attribute entity and the entity that owns it.
-#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
-pub struct AttributeOwner(pub Entity);
 
 /// Component that identifies which attribute this entity represents.
 ///

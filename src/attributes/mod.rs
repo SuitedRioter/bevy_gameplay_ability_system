@@ -7,7 +7,7 @@
 //! # Architecture
 //!
 //! - Each attribute is a separate entity with `AttributeData` component
-//! - Attributes are linked to their owner via `AttributeOwner` component
+//! - Attributes are linked to their owner via Bevy's `Parent` component (ChildOf relationship)
 //! - Attributes can have metadata defining constraints (min/max values)
 //! - Changes to attributes trigger events for other systems to react to
 //!

@@ -3,10 +3,11 @@
 //! This module contains the systems that manage attributes and their modifiers.
 
 use super::components::{
-    AttributeData, AttributeMetadataComponent, AttributeName, AttributeOwner,
+    AttributeData, AttributeMetadataComponent, AttributeName,
     PreviousAttributeValue,
 };
 use bevy::prelude::*;
+use bevy::ecs::relationship::Relationship;
 
 /// Event triggered when an attribute value changes.
 #[derive(Event, Debug, Clone)]
@@ -59,19 +60,19 @@ pub fn trigger_attribute_change_events_system(
             Entity,
             &AttributeData,
             &AttributeName,
-            &AttributeOwner,
+            &ChildOf,
             Option<&PreviousAttributeValue>,
         ),
         Changed<AttributeData>,
     >,
 ) {
-    for (entity, attr, name, owner, prev) in attributes.iter() {
+    for (entity, attr, name, child_of, prev) in attributes.iter() {
         let old_value = prev
             .map(|p| p.previous_current)
             .unwrap_or(attr.current_value);
 
         commands.trigger(AttributeChangedEvent {
-            owner: owner.0,
+            owner: child_of.get(),
             attribute: entity,
             attribute_name: name.as_str().to_string(),
             old_value,
@@ -138,8 +139,8 @@ mod tests {
             .spawn((
                 AttributeData::new(100.0),
                 AttributeName::new("Health"),
-                AttributeOwner(owner),
             ))
+            .set_parent_in_place(owner)
             .id();
 
         app.update();

@@ -4,11 +4,12 @@
 
 use super::components::*;
 use super::definition::*;
-use crate::attributes::{AttributeData, AttributeName, AttributeOwner};
+use crate::attributes::{AttributeData, AttributeName};
 use crate::effects::definition::GameplayEffectRegistry;
 use crate::effects::systems::ApplyGameplayEffectEvent;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
+use bevy::ecs::relationship::Relationship;
 use bevy_gameplay_tag::gameplay_tag_count_container::GameplayTagCountContainer;
 
 /// Mutable ability spec query (for activation writes).
@@ -39,7 +40,7 @@ pub struct ActivationCheckParams<'w, 's> {
         (
             &'static AttributeData,
             &'static AttributeName,
-            &'static AttributeOwner,
+            &'static ChildOf,
         ),
     >,
 }
@@ -185,7 +186,7 @@ fn can_afford_cost(
     cost_effect_id: Option<&str>,
     effect_registry: &GameplayEffectRegistry,
     owner: Entity,
-    attributes: &Query<(&AttributeData, &AttributeName, &AttributeOwner)>,
+    attributes: &Query<(&AttributeData, &AttributeName, &ChildOf)>,
 ) -> bool {
     let Some(cost_id) = cost_effect_id else {
         return true;
@@ -195,8 +196,8 @@ fn can_afford_cost(
     };
     for modifier in &cost_def.modifiers {
         let magnitude = modifier.magnitude.evaluate(1, None);
-        for (attr_data, attr_name, attr_owner) in attributes.iter() {
-            if attr_owner.0 == owner
+        for (attr_data, attr_name, child_of) in attributes.iter() {
+            if child_of.get() == owner
                 && attr_name.0 == modifier.attribute_name
                 && attr_data.current_value + magnitude < 0.0
             {
@@ -394,7 +395,7 @@ pub fn on_commit_ability(
     effect_registry: Res<GameplayEffectRegistry>,
     ability_specs: Query<(&AbilitySpec, &AbilityOwner)>,
     tag_containers: Query<&GameplayTagCountContainer>,
-    attributes: Query<(&AttributeData, &AttributeName, &AttributeOwner)>,
+    attributes: Query<(&AttributeData, &AttributeName, &ChildOf)>,
 ) {
     let event = ev.event();
     let spec_entity = event.ability_spec;

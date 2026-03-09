@@ -4,30 +4,31 @@
 //! used throughout the GAS system.
 
 use crate::abilities::components::{AbilityOwner, AbilitySpec};
-use crate::attributes::components::{AttributeData, AttributeName, AttributeOwner};
+use crate::attributes::components::{AttributeData, AttributeName};
 use crate::effects::components::{ActiveGameplayEffect, EffectTarget};
 use bevy::prelude::*;
+use bevy::ecs::relationship::Relationship;
 
 /// Helper for querying attributes by name for a specific owner.
 pub fn find_attribute_by_name(
     owner: Entity,
     attribute_name: &str,
-    query: &Query<(Entity, &AttributeData, &AttributeOwner, &AttributeName)>,
+    query: &Query<(Entity, &AttributeData, &ChildOf, &AttributeName)>,
 ) -> Option<(Entity, AttributeData)> {
     query
         .iter()
-        .find(|(_, _, attr_owner, name)| attr_owner.0 == owner && name.as_str() == attribute_name)
+        .find(|(_, _, child_of, name)| child_of.get() == owner && name.as_str() == attribute_name)
         .map(|(entity, data, _, _)| (entity, *data))
 }
 
 /// Helper for getting all attributes for a specific owner.
 pub fn get_owner_attributes(
     owner: Entity,
-    query: &Query<(Entity, &AttributeData, &AttributeOwner, &AttributeName)>,
+    query: &Query<(Entity, &AttributeData, &ChildOf, &AttributeName)>,
 ) -> Vec<(Entity, String, AttributeData)> {
     query
         .iter()
-        .filter(|(_, _, attr_owner, _)| attr_owner.0 == owner)
+        .filter(|(_, _, child_of, _)| child_of.get() == owner)
         .map(|(entity, data, _, name)| (entity, name.as_str().to_string(), *data))
         .collect()
 }
@@ -89,11 +90,11 @@ pub fn find_ability_by_definition(
 pub fn has_attribute(
     owner: Entity,
     attribute_name: &str,
-    query: &Query<(&AttributeOwner, &AttributeName)>,
+    query: &Query<(&ChildOf, &AttributeName)>,
 ) -> bool {
     query
         .iter()
-        .any(|(attr_owner, name)| attr_owner.0 == owner && name.as_str() == attribute_name)
+        .any(|(child_of, name)| child_of.get() == owner && name.as_str() == attribute_name)
 }
 
 /// Helper for checking if an entity has any active effects.
@@ -131,18 +132,18 @@ mod tests {
         let mut world = World::new();
         let owner = world.spawn_empty().id();
 
-        world.spawn((AttributeOwner(owner), AttributeName::new("Health")));
+        world.spawn(AttributeName::new("Health")).set_parent_in_place(owner);
 
         // Use QueryState for direct world access
-        let mut query_state = world.query::<(&AttributeOwner, &AttributeName)>();
+        let mut query_state = world.query::<(&ChildOf, &AttributeName)>();
         let query_result = query_state
             .iter(&world)
-            .any(|(attr_owner, attr_name)| attr_owner.0 == owner && attr_name.as_str() == "Health");
+            .any(|(child_of, attr_name)| child_of.get() == owner && attr_name.as_str() == "Health");
         assert!(query_result);
 
         let query_result = query_state
             .iter(&world)
-            .any(|(attr_owner, attr_name)| attr_owner.0 == owner && attr_name.as_str() == "Mana");
+            .any(|(child_of, attr_name)| child_of.get() == owner && attr_name.as_str() == "Mana");
         assert!(!query_result);
     }
 

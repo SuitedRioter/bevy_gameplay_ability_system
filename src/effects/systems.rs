@@ -4,9 +4,10 @@
 
 use super::components::*;
 use super::definition::*;
-use crate::attributes::{AttributeData, AttributeName, AttributeOwner};
+use crate::attributes::{AttributeData, AttributeName};
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
+use bevy::ecs::relationship::Relationship;
 use bevy_gameplay_tag::GameplayTagsManager;
 use bevy_gameplay_tag::gameplay_tag_count_container::GameplayTagCountContainer;
 use string_cache::DefaultAtom as Atom;
@@ -21,7 +22,7 @@ pub struct ApplyEffectParams<'w, 's> {
         (
             &'static mut AttributeData,
             &'static AttributeName,
-            &'static AttributeOwner,
+            &'static ChildOf,
         ),
     >,
     pub existing_effects: Query<
@@ -291,13 +292,14 @@ pub fn create_effect_modifiers_system(
 /// System that aggregates attribute modifiers and applies them to attributes.
 pub fn aggregate_attribute_modifiers_system(
     mut commands: Commands,
-    mut attributes: Query<(Entity, &mut AttributeData, &AttributeName, &AttributeOwner)>,
+    mut attributes: Query<(Entity, &mut AttributeData, &AttributeName, &ChildOf)>,
     modifiers: Query<&AttributeModifier>,
 ) {
-    for (attr_entity, mut attr_data, attr_name, attr_owner) in attributes.iter_mut() {
+    for (attr_entity, mut attr_data, attr_name, child_of) in attributes.iter_mut() {
+        let owner = child_of.get();
         let mut applicable_modifiers: Vec<_> = modifiers
             .iter()
-            .filter(|m| m.target_entity == attr_owner.0 && m.target_attribute == attr_name.0)
+            .filter(|m| m.target_entity == owner && m.target_attribute == attr_name.0)
             .collect();
 
         applicable_modifiers.sort_by_key(|m| m.operation.priority());
@@ -312,7 +314,7 @@ pub fn aggregate_attribute_modifiers_system(
             if (old_value - new_value).abs() > f32::EPSILON {
                 attr_data.current_value = new_value;
                 commands.trigger(crate::attributes::systems::AttributeChangedEvent {
-                    owner: attr_owner.0,
+                    owner,
                     attribute: attr_entity,
                     attribute_name: attr_name.as_str().to_string(),
                     old_value,
@@ -346,7 +348,7 @@ pub fn aggregate_attribute_modifiers_system(
         if (current - old_value).abs() > f32::EPSILON {
             attr_data.current_value = current;
             commands.trigger(crate::attributes::systems::AttributeChangedEvent {
-                owner: attr_owner.0,
+                owner,
                 attribute: attr_entity,
                 attribute_name: attr_name.as_str().to_string(),
                 old_value,

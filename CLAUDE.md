@@ -24,7 +24,7 @@ Examples: `basic_attributes`, `ability_activation`, `gameplay_effects`, `complet
 
 Six modules. Effects, abilities, and cues follow `components.rs`/`definition.rs`/`plugin.rs`/`systems.rs`. Attributes uses `traits.rs` instead of `definition.rs`.
 
-**Attributes** (`src/attributes/`) — Dual-value model (BaseValue/CurrentValue). Each attribute is a separate entity linked to its owner via `AttributeOwner`. Custom attribute sets implement the `AttributeSetDefinition` trait (in `traits.rs`). Modifiers applied in order: Add → Multiply → Override.
+**Attributes** (`src/attributes/`) — Dual-value model (BaseValue/CurrentValue). Each attribute is a separate entity linked to its owner via Bevy's `ChildOf` relationship (using `set_parent_in_place`). Custom attribute sets implement the `AttributeSetDefinition` trait (in `traits.rs`). Modifiers applied in order: Add → Multiply → Override.
 
 **Effects** (`src/effects/`) — Modify attributes via `GameplayEffectDefinition` templates stored in `GameplayEffectRegistry`. Each active effect is its own entity with `ActiveGameplayEffect` + `EffectTarget` components. Supports three duration policies (Instant, HasDuration, Infinite), periodic execution, and stacking (Independent, RefreshDuration, StackCount). Tag requirements gate application.
 
