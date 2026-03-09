@@ -4,10 +4,12 @@
 
 use super::components::*;
 use super::definition::*;
-use crate::attributes::{AttributeData, AttributeName};
+use crate::attributes::{
+    AttributeData, AttributeLifecycleHooks, AttributeModifyContext, AttributeName, AttributeSetId,
+};
+use bevy::ecs::relationship::Relationship;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
-use bevy::ecs::relationship::Relationship;
 use bevy_gameplay_tag::GameplayTagsManager;
 use bevy_gameplay_tag::gameplay_tag_count_container::GameplayTagCountContainer;
 use string_cache::DefaultAtom as Atom;
@@ -291,11 +293,17 @@ pub fn create_effect_modifiers_system(
 
 /// System that aggregates attribute modifiers and applies them to attributes.
 pub fn aggregate_attribute_modifiers_system(
-    mut commands: Commands,
-    mut attributes: Query<(Entity, &mut AttributeData, &AttributeName, &ChildOf)>,
+    mut attributes: Query<(
+        Entity,
+        &mut AttributeData,
+        &AttributeName,
+        &ChildOf,
+        &AttributeSetId,
+    )>,
     modifiers: Query<&AttributeModifier>,
+    hooks: Option<Res<AttributeLifecycleHooks>>,
 ) {
-    for (attr_entity, mut attr_data, attr_name, child_of) in attributes.iter_mut() {
+    for (attr_entity, mut attr_data, attr_name, child_of, set_id) in attributes.iter_mut() {
         let owner = child_of.get();
         let mut applicable_modifiers: Vec<_> = modifiers
             .iter()
@@ -312,14 +320,30 @@ pub fn aggregate_attribute_modifiers_system(
             let old_value = attr_data.current_value;
             let new_value = override_mod.magnitude;
             if (old_value - new_value).abs() > f32::EPSILON {
-                attr_data.current_value = new_value;
-                commands.trigger(crate::attributes::systems::AttributeChangedEvent {
+                let mut context = AttributeModifyContext {
                     owner,
                     attribute: attr_entity,
-                    attribute_name: attr_name.as_str().to_string(),
+                    attribute_name: attr_name.0.clone(),
                     old_value,
                     new_value,
-                });
+                    source_effect: None,
+                };
+
+                // Call pre hook for this AttributeSet
+                if let Some(hooks_res) = &hooks
+                    && let Some(set_hooks) = hooks_res.get(set_id.0)
+                {
+                    (set_hooks.pre_change)(&mut context);
+                }
+
+                attr_data.current_value = context.new_value;
+
+                // Call post hook
+                if let Some(hooks_res) = &hooks
+                    && let Some(set_hooks) = hooks_res.get(set_id.0)
+                {
+                    (set_hooks.post_change)(&context);
+                }
             }
             continue;
         }
@@ -327,7 +351,10 @@ pub fn aggregate_attribute_modifiers_system(
         let mut current = attr_data.base_value;
 
         // AddCurrent
-        for modifier in applicable_modifiers.iter().filter(|m| matches!(m.operation, ModifierOperation::AddCurrent)) {
+        for modifier in applicable_modifiers
+            .iter()
+            .filter(|m| matches!(m.operation, ModifierOperation::AddCurrent))
+        {
             current += modifier.magnitude;
         }
 
@@ -340,20 +367,37 @@ pub fn aggregate_attribute_modifiers_system(
         current *= 1.0 + additive_multiplier;
 
         // MultiplyMultiplicative: prod(1 + m)
-        for modifier in applicable_modifiers.iter().filter(|m| matches!(m.operation, ModifierOperation::MultiplyMultiplicative)) {
+        for modifier in applicable_modifiers
+            .iter()
+            .filter(|m| matches!(m.operation, ModifierOperation::MultiplyMultiplicative))
+        {
             current *= 1.0 + modifier.magnitude;
         }
 
         let old_value = attr_data.current_value;
         if (current - old_value).abs() > f32::EPSILON {
-            attr_data.current_value = current;
-            commands.trigger(crate::attributes::systems::AttributeChangedEvent {
+            let mut context = AttributeModifyContext {
                 owner,
                 attribute: attr_entity,
-                attribute_name: attr_name.as_str().to_string(),
+                attribute_name: attr_name.0.clone(),
                 old_value,
                 new_value: current,
-            });
+                source_effect: None,
+            };
+
+            if let Some(hooks_res) = &hooks
+                && let Some(set_hooks) = hooks_res.get(set_id.0)
+            {
+                (set_hooks.pre_change)(&mut context);
+            }
+
+            attr_data.current_value = context.new_value;
+
+            if let Some(hooks_res) = &hooks
+                && let Some(set_hooks) = hooks_res.get(set_id.0)
+            {
+                (set_hooks.post_change)(&context);
+            }
         }
     }
 }

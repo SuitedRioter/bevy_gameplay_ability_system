@@ -3,9 +3,6 @@
 //! This module re-exports all events from the various GAS subsystems
 //! for convenient access.
 
-// Re-export attribute events
-pub use crate::attributes::systems::AttributeChangedEvent;
-
 // Re-export effect events
 pub use crate::effects::systems::{
     ApplyGameplayEffectEvent, GameplayEffectAppliedEvent, GameplayEffectRemovedEvent,

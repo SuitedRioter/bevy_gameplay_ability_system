@@ -42,13 +42,17 @@ impl AttributeData {
     /// Sets the base value.
     ///
     /// This should be used for permanent changes to the attribute.
+    /// Note: This does NOT trigger lifecycle events. Use the system-level
+    /// functions for event-driven changes.
     pub fn set_base_value(&mut self, value: f32) {
         self.base_value = value;
     }
 
     /// Sets the current value.
     ///
-    /// This should be used for permanent changes to the attribute.
+    /// This should be used for temporary changes to the attribute.
+    /// Note: This does NOT trigger lifecycle events. Use the system-level
+    /// functions for event-driven changes.
     pub fn set_current_value(&mut self, value: f32) {
         self.current_value = value;
     }
@@ -136,6 +140,10 @@ pub struct PreviousAttributeValue {
     pub previous_base: f32,
 }
 
+/// Marker component identifying which AttributeSet this attribute belongs to.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct AttributeSetId(pub std::any::TypeId);
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -152,7 +160,8 @@ mod tests {
         let mut attr = AttributeData::new(100.0);
         attr.set_base_value(150.0);
         assert_eq!(attr.base_value, 150.0);
-        assert_eq!(attr.current_value, 150.0);
+        // current_value is not automatically updated
+        assert_eq!(attr.current_value, 100.0);
     }
 
     #[test]

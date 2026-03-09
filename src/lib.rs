@@ -48,7 +48,6 @@ pub mod utils;
 pub mod prelude {
     pub use crate::attributes::components::*;
     pub use crate::attributes::plugin::AttributePlugin;
-    pub use crate::attributes::systems::AttributeChangedEvent;
     pub use crate::attributes::traits::*;
 
     pub use crate::effects::components::*;
