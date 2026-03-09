@@ -5,6 +5,9 @@
 use bevy::prelude::*;
 use bevy_gameplay_tag::{GameplayTagContainer, GameplayTagsManager, gameplay_tag::GameplayTag};
 use string_cache::DefaultAtom as Atom;
+use std::sync::Arc;
+
+use super::traits::AbilityBehavior;
 
 /// Instancing policy for abilities.
 ///
@@ -39,7 +42,7 @@ pub enum NetExecutionPolicy {
 ///
 /// This is the template for creating ability instances.
 /// Store these in a resource or asset system.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone)]
 pub struct AbilityDefinition {
     /// Unique identifier for this ability.
     pub id: Atom,
@@ -69,7 +72,39 @@ pub struct AbilityDefinition {
     pub block_abilities_with_tags: GameplayTagContainer,
     /// Tags to cancel when this ability activates.
     pub cancel_abilities_with_tags: GameplayTagContainer,
+    /// Custom behavior implementation.
+    pub behavior: Option<Arc<dyn AbilityBehavior>>,
 }
+
+impl std::fmt::Debug for AbilityDefinition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AbilityDefinition")
+            .field("id", &self.id)
+            .field("net_execution_policy", &self.net_execution_policy)
+            .field("cost_effect", &self.cost_effect)
+            .field("cooldown_effect", &self.cooldown_effect)
+            .field("ability_tags", &self.ability_tags)
+            .field("activation_owned_tags", &self.activation_owned_tags)
+            .field("activation_required_tags", &self.activation_required_tags)
+            .field("activation_blocked_tags", &self.activation_blocked_tags)
+            .field("source_required_tags", &self.source_required_tags)
+            .field("source_blocked_tags", &self.source_blocked_tags)
+            .field("target_required_tags", &self.target_required_tags)
+            .field("target_blocked_tags", &self.target_blocked_tags)
+            .field("block_abilities_with_tags", &self.block_abilities_with_tags)
+            .field("cancel_abilities_with_tags", &self.cancel_abilities_with_tags)
+            .field("behavior", &self.behavior.as_ref().map(|_| "<behavior>"))
+            .finish()
+    }
+}
+
+impl PartialEq for AbilityDefinition {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for AbilityDefinition {}
 
 impl AbilityDefinition {
     /// Creates a new ability definition.
@@ -89,7 +124,14 @@ impl AbilityDefinition {
             target_blocked_tags: GameplayTagContainer::default(),
             block_abilities_with_tags: GameplayTagContainer::default(),
             cancel_abilities_with_tags: GameplayTagContainer::default(),
+            behavior: None,
         }
+    }
+
+    /// Sets the behavior implementation.
+    pub fn with_behavior(mut self, behavior: Arc<dyn AbilityBehavior>) -> Self {
+        self.behavior = Some(behavior);
+        self
     }
 
     /// Sets the net execution policy.

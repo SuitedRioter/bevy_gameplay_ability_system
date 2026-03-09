@@ -7,8 +7,10 @@ pub mod components;
 pub mod definition;
 pub mod plugin;
 pub mod systems;
+pub mod traits;
 
 pub use components::*;
 pub use definition::*;
 pub use plugin::AbilityPlugin;
 pub use systems::*;
+pub use traits::*;

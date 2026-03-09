@@ -4,11 +4,14 @@
 
 use bevy::prelude::*;
 use string_cache::DefaultAtom as Atom;
+use std::sync::Arc;
+
+use super::traits::AbilityBehavior;
 
 /// Ability specification component.
 ///
 /// Represents a granted ability instance. Each granted ability is a separate entity.
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Clone)]
 pub struct AbilitySpec {
     /// The ID of the ability definition.
     pub definition_id: Atom,
@@ -20,6 +23,21 @@ pub struct AbilitySpec {
     pub is_active: bool,
     /// Number of active instances.
     pub active_count: u8,
+    /// Custom behavior implementation.
+    pub behavior: Option<Arc<dyn AbilityBehavior>>,
+}
+
+impl std::fmt::Debug for AbilitySpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AbilitySpec")
+            .field("definition_id", &self.definition_id)
+            .field("level", &self.level)
+            .field("input_id", &self.input_id)
+            .field("is_active", &self.is_active)
+            .field("active_count", &self.active_count)
+            .field("behavior", &self.behavior.as_ref().map(|_| "<behavior>"))
+            .finish()
+    }
 }
 
 impl AbilitySpec {
@@ -31,6 +49,7 @@ impl AbilitySpec {
             input_id: None,
             is_active: false,
             active_count: 0,
+            behavior: None,
         }
     }
 
