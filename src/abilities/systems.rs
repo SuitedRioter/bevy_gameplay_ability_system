@@ -7,7 +7,6 @@ use super::definition::*;
 use crate::attributes::{AttributeData, AttributeName};
 use crate::effects::definition::GameplayEffectRegistry;
 use crate::effects::systems::ApplyGameplayEffectEvent;
-use bevy::ecs::relationship::Relationship;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy_gameplay_tag::gameplay_tag_count_container::GameplayTagCountContainer;
@@ -178,51 +177,6 @@ pub enum ActivationFailureReason {
     BlockedByTags,
 }
 
-// --- Helper functions ---
-
-/// Check if the ability is on cooldown by looking at the cooldown effect's granted_tags
-/// on the owner's GameplayTagCountContainer.
-fn is_on_cooldown(
-    cooldown_effect_id: Option<&str>,
-    effect_registry: &GameplayEffectRegistry,
-    owner_tags: &GameplayTagCountContainer,
-) -> bool {
-    let Some(cd_id) = cooldown_effect_id else {
-        return false;
-    };
-    let Some(cd_def) = effect_registry.get(cd_id) else {
-        return false;
-    };
-    owner_tags.has_any_matching_gameplay_tags(&cd_def.granted_tags)
-}
-
-/// Check if the owner can afford the cost effect by pre-evaluating modifiers.
-fn can_afford_cost(
-    cost_effect_id: Option<&str>,
-    effect_registry: &GameplayEffectRegistry,
-    owner: Entity,
-    attributes: &Query<(&AttributeData, &AttributeName, &ChildOf)>,
-) -> bool {
-    let Some(cost_id) = cost_effect_id else {
-        return true;
-    };
-    let Some(cost_def) = effect_registry.get(cost_id) else {
-        return true;
-    };
-    for modifier in &cost_def.modifiers {
-        let magnitude = modifier.magnitude.evaluate(1, None);
-        for (attr_data, attr_name, child_of) in attributes.iter() {
-            if child_of.get() == owner
-                && attr_name.0 == modifier.attribute_name
-                && attr_data.current_value + magnitude < 0.0
-            {
-                return false;
-            }
-        }
-    }
-    true
-}
-
 // --- Observer functions ---
 
 /// Observer for TryActivateAbilityEvent.
@@ -232,100 +186,64 @@ pub fn on_try_activate_ability(
     ability_registry: Res<AbilityRegistry>,
     mut spec_set: ParamSet<(AbilitySpecMutQuery, AbilitySpecReadQuery)>,
     mut params: ActivationCheckParams,
+    world: &World,
 ) {
     let event = ev.event();
     let spec_entity = event.ability_spec;
     let owner = event.owner;
 
-    // Read spec data and definition via p0
-    let (definition_id, is_active, cancel_tags, owned_tags, block_tags);
+    let definition_id;
     {
         let specs = spec_set.p0();
         let Ok((spec, _ability_owner, _state)) = specs.get(spec_entity) else {
             return;
         };
         definition_id = spec.definition_id.clone();
-        is_active = spec.is_active;
     }
 
     let Some(definition) = ability_registry.get(&definition_id) else {
         return;
     };
 
-    let Ok(owner_tags) = params.tag_containers.get(owner) else {
-        return;
-    };
+    // Get behavior (use default if not specified)
+    let behavior = definition
+        .behavior
+        .as_ref()
+        .map(|b| b.as_ref() as &dyn super::traits::AbilityBehavior)
+        .unwrap_or(&super::traits::DefaultAbilityBehavior);
 
-    // --- CanActivate checks ---
-
-    // 1. Already active? (实现有问题，后面再修复)
-    if is_active {
-        commands.trigger(AbilityActivationFailedEvent {
-            ability_spec: spec_entity,
-            owner,
-            reason: ActivationFailureReason::AlreadyActive,
-        });
-        return;
-    }
-
-    // 2. Cooldown?
-    if is_on_cooldown(
-        definition.cooldown_effect.as_deref(),
-        &params.effect_registry,
-        owner_tags,
-    ) {
-        commands.trigger(AbilityActivationFailedEvent {
-            ability_spec: spec_entity,
-            owner,
-            reason: ActivationFailureReason::OnCooldown,
-        });
-        return;
-    }
-
-    // 3. Cost?
-    if !can_afford_cost(
-        definition.cost_effect.as_deref(),
-        &params.effect_registry,
-        owner,
-        &params.attributes,
-    ) {
-        commands.trigger(AbilityActivationFailedEvent {
-            ability_spec: spec_entity,
-            owner,
-            reason: ActivationFailureReason::InsufficientCost,
-        });
-        return;
-    }
-
-    // 4. Required tags?
-    if !definition.activation_required_tags.is_empty()
-        && !owner_tags.has_all_matching_gameplay_tags(&definition.activation_required_tags)
+    // Call behavior.can_activate
+    if let Err(failure) =
+        behavior.can_activate(world, spec_entity, owner, None, &params.tags_manager)
     {
+        use super::traits::ActivationCheckFailure;
+        let reason = match failure {
+            ActivationCheckFailure::OnCooldown(_) => ActivationFailureReason::OnCooldown,
+            ActivationCheckFailure::SourceMissingRequiredTags(_)
+            | ActivationCheckFailure::TargetMissingRequiredTags(_) => {
+                ActivationFailureReason::MissingRequiredTags
+            }
+            ActivationCheckFailure::SourceHasBlockedTags(_)
+            | ActivationCheckFailure::TargetHasBlockedTags(_) => {
+                ActivationFailureReason::BlockedByTags
+            }
+            ActivationCheckFailure::MissingComponents => return,
+        };
         commands.trigger(AbilityActivationFailedEvent {
             ability_spec: spec_entity,
             owner,
-            reason: ActivationFailureReason::MissingRequiredTags,
-        });
-        return;
-    }
-
-    // 5. Blocked tags?
-    if owner_tags.has_any_matching_gameplay_tags(&definition.activation_blocked_tags) {
-        commands.trigger(AbilityActivationFailedEvent {
-            ability_spec: spec_entity,
-            owner,
-            reason: ActivationFailureReason::BlockedByTags,
+            reason,
         });
         return;
     }
 
     // --- PreActivate ---
 
-    owned_tags = definition.activation_owned_tags.clone();
-    block_tags = definition.block_abilities_with_tags.clone();
-    cancel_tags = definition.cancel_abilities_with_tags.clone();
+    let owned_tags = definition.activation_owned_tags.clone();
+    let block_tags = definition.block_abilities_with_tags.clone();
+    let cancel_tags = definition.cancel_abilities_with_tags.clone();
 
-    // 1. Set active state
+    // Set active state
     {
         let mut specs = spec_set.p0();
         let Ok((mut spec, _, mut state)) = specs.get_mut(spec_entity) else {
@@ -336,7 +254,7 @@ pub fn on_try_activate_ability(
         *state = AbilityState::Active;
     }
 
-    // 2. Add activation_owned_tags to owner
+    // Add activation_owned_tags and block_abilities_with_tags to owner
     if let Ok(mut owner_tag_container) = params.tag_containers.get_mut(owner) {
         owner_tag_container.update_tag_container_count(
             &owned_tags,
@@ -345,8 +263,6 @@ pub fn on_try_activate_ability(
             &mut commands,
             owner,
         );
-
-        // 3. Add block_abilities_with_tags to owner
         owner_tag_container.update_tag_container_count(
             &block_tags,
             1,
@@ -356,7 +272,7 @@ pub fn on_try_activate_ability(
         );
     }
 
-    // 4. Cancel other active abilities matching cancel_abilities_with_tags
+    // Cancel other active abilities matching cancel_abilities_with_tags
     if !cancel_tags.is_empty() {
         let all_specs = spec_set.p1();
         for (other_spec_entity, other_spec, other_owner) in all_specs.iter() {
@@ -374,7 +290,7 @@ pub fn on_try_activate_ability(
         }
     }
 
-    // Spawn instance if needed
+    // Spawn instance
     let instance = commands
         .spawn(ActiveAbilityInstance::new(
             spec_entity,
@@ -382,7 +298,6 @@ pub fn on_try_activate_ability(
         ))
         .id();
 
-    // Trigger AbilityActivatedEvent
     commands.trigger(AbilityActivatedEvent {
         ability_spec: spec_entity,
         owner,
@@ -395,10 +310,9 @@ pub fn on_commit_ability(
     ev: On<CommitAbilityEvent>,
     mut commands: Commands,
     ability_registry: Res<AbilityRegistry>,
-    effect_registry: Res<GameplayEffectRegistry>,
     ability_specs: Query<(&AbilitySpec, &AbilityOwner)>,
-    tag_containers: Query<&GameplayTagCountContainer>,
-    attributes: Query<(&AttributeData, &AttributeName, &ChildOf)>,
+    tags_manager: Res<bevy_gameplay_tag::GameplayTagsManager>,
+    world: &World,
 ) {
     let event = ev.event();
     let spec_entity = event.ability_spec;
@@ -412,13 +326,17 @@ pub fn on_commit_ability(
         return;
     };
 
-    // --- CommitCheck ---
-    if let Ok(owner_tags) = tag_containers.get(owner)
-        && is_on_cooldown(
-            definition.cooldown_effect.as_deref(),
-            &effect_registry,
-            owner_tags,
-        )
+    // Get behavior
+    let behavior = definition
+        .behavior
+        .as_ref()
+        .map(|b| b.as_ref() as &dyn super::traits::AbilityBehavior)
+        .unwrap_or(&super::traits::DefaultAbilityBehavior);
+
+    // Call behavior.commit_check
+    if behavior
+        .commit_check(world, spec_entity, owner, &tags_manager)
+        .is_err()
     {
         commands.trigger(CommitAbilityResultEvent {
             ability_spec: spec_entity,
@@ -428,22 +346,7 @@ pub fn on_commit_ability(
         return;
     }
 
-    if !can_afford_cost(
-        definition.cost_effect.as_deref(),
-        &effect_registry,
-        owner,
-        &attributes,
-    ) {
-        commands.trigger(CommitAbilityResultEvent {
-            ability_spec: spec_entity,
-            owner,
-            success: false,
-        });
-        return;
-    }
-
-    // --- CommitExecute ---
-
+    // Apply cost and cooldown effects
     if let Some(cost_id) = &definition.cost_effect {
         commands.trigger(ApplyGameplayEffectEvent {
             effect_id: cost_id.clone(),
@@ -577,7 +480,7 @@ fn end_ability_internal(
     });
 }
 
-// --- Kept systems ---
+// --- Helper functions ---
 
 /// Check if abilities can be activated based on tag requirements.
 pub fn check_ability_activation_requirements(
@@ -599,74 +502,6 @@ pub fn check_ability_activation_requirements(
     }
 
     true
-}
-
-/// System that cancels abilities based on tags.
-pub fn cancel_abilities_by_tags_system(
-    mut commands: Commands,
-    registry: Res<AbilityRegistry>,
-    ability_specs: Query<(Entity, &AbilitySpec, &AbilityOwner)>,
-    tag_containers: Query<&GameplayTagCountContainer>,
-) {
-    for (spec_entity, spec, owner) in ability_specs.iter() {
-        if !spec.is_active {
-            continue;
-        }
-
-        let Some(definition) = registry.get(&spec.definition_id) else {
-            continue;
-        };
-
-        let Ok(tags) = tag_containers.get(owner.0) else {
-            continue;
-        };
-
-        if tags.has_any_matching_gameplay_tags(&definition.cancel_abilities_with_tags) {
-            commands.trigger(CancelAbilityEvent {
-                ability_spec: spec_entity,
-                owner: owner.0,
-            });
-        }
-    }
-}
-
-/// System that updates ability states based on cooldowns and tags.
-pub fn update_ability_states_system(
-    mut ability_specs: Query<(&AbilitySpec, &AbilityOwner, &mut AbilityState)>,
-    tag_containers: Query<&GameplayTagCountContainer>,
-    registry: Res<AbilityRegistry>,
-    effect_registry: Res<GameplayEffectRegistry>,
-) {
-    for (spec, owner, mut state) in ability_specs.iter_mut() {
-        if spec.is_active {
-            *state = AbilityState::Active;
-            continue;
-        }
-
-        let Some(definition) = registry.get(&spec.definition_id) else {
-            continue;
-        };
-
-        let Ok(tags) = tag_containers.get(owner.0) else {
-            continue;
-        };
-
-        if is_on_cooldown(
-            definition.cooldown_effect.as_deref(),
-            &effect_registry,
-            tags,
-        ) {
-            *state = AbilityState::Cooldown;
-            continue;
-        }
-
-        if !check_ability_activation_requirements(definition, tags) {
-            *state = AbilityState::Blocked;
-            continue;
-        }
-
-        *state = AbilityState::Ready;
-    }
 }
 
 /// System that updates ability cooldowns.

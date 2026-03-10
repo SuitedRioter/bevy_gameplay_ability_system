@@ -2,11 +2,11 @@
 //!
 //! Defines the lifecycle hooks for custom ability implementations.
 
+use crate::abilities::OnGameplayAbilityEnded;
 use bevy::prelude::*;
 use bevy_gameplay_tag::gameplay_tag_count_container::GameplayTagCountContainer;
 use bevy_gameplay_tag::{GameplayTagContainer, GameplayTagsManager};
 
-use crate::abilities::OnGameplayAbilityEnded;
 use crate::effects::GameplayEffectRegistry;
 use crate::prelude::{AbilityRegistry, AbilitySpec};
 
@@ -254,3 +254,9 @@ pub trait AbilityBehavior: Send + Sync + 'static {
         });
     }
 }
+
+/// Default behavior (zero-sized type that uses trait defaults).
+#[derive(Debug, Clone, Copy)]
+pub struct DefaultAbilityBehavior;
+
+impl AbilityBehavior for DefaultAbilityBehavior {}
