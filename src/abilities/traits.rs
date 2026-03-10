@@ -225,10 +225,9 @@ pub trait AbilityBehavior: Send + Sync + 'static {
     /// Execute commit logic (apply costs and cooldowns).
     ///
     /// Override this for custom commit behavior.
-    fn commit_execute(&self, _world: &mut World, _ability_entity: Entity, _source: Entity) {
-        // TODO: Implement after GameplayEffect logic is complete
-        // self.apply_cooldown(world, ability_entity, source);
-        // self.apply_cost(world, ability_entity, source);
+    fn commit_execute(&self, world: &mut World, ability_entity: Entity, source: Entity) {
+        self.apply_cooldown(world, ability_entity, source);
+        self.apply_cost(world, ability_entity, source);
     }
 
     /// Apply cooldown effect to source.
