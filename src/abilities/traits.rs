@@ -6,6 +6,7 @@ use bevy::prelude::*;
 use bevy_gameplay_tag::gameplay_tag_count_container::GameplayTagCountContainer;
 use bevy_gameplay_tag::{GameplayTagContainer, GameplayTagsManager};
 
+use crate::abilities::OnGameplayAbilityEnded;
 use crate::effects::GameplayEffectRegistry;
 use crate::prelude::{AbilityRegistry, AbilitySpec};
 
@@ -248,5 +249,8 @@ pub trait AbilityBehavior: Send + Sync + 'static {
         if let Some(mut spec) = world.get_mut::<AbilitySpec>(ability_entity) {
             spec.is_active = false;
         }
+        world.commands().trigger(OnGameplayAbilityEnded {
+            ability_spec: ability_entity,
+        });
     }
 }

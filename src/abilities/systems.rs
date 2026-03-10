@@ -146,6 +146,21 @@ pub struct CommitAbilityResultEvent {
     pub success: bool,
 }
 
+/// Entity event triggered on ability_spec when being canceled (before end).
+#[derive(EntityEvent, Debug, Clone)]
+pub struct OnGameplayAbilityCanceled {
+    #[event_target]
+    pub ability_spec: Entity,
+    pub was_cancelled: bool,
+}
+
+/// Entity event triggered on ability_spec when ended.
+#[derive(EntityEvent, Debug, Clone)]
+pub struct OnGameplayAbilityEnded {
+    #[event_target]
+    pub ability_spec: Entity,
+}
+
 // --- Enums ---
 
 /// Reason why ability activation failed.
