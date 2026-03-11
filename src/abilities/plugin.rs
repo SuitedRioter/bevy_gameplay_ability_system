@@ -28,6 +28,14 @@ impl Plugin for AbilityPlugin {
                 update_ability_cooldowns_system
                     .in_set(GasSystemSet::Abilities)
                     .in_set(AbilitySystemSet::UpdateCooldowns),
+            )
+            // Exclusive system: drives pre_activate → activate → commit for
+            // abilities that passed can_activate checks in the observer.
+            .add_systems(
+                Update,
+                execute_pending_activations_system
+                    .in_set(GasSystemSet::Abilities)
+                    .in_set(AbilitySystemSet::TryActivate),
             );
     }
 }

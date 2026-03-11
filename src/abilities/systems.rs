@@ -11,21 +11,6 @@ use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy_gameplay_tag::gameplay_tag_count_container::GameplayTagCountContainer;
 
-/// Mutable ability spec query (for activation writes).
-type AbilitySpecMutQuery = Query<
-    'static,
-    'static,
-    (
-        &'static mut AbilitySpec,
-        &'static AbilityOwner,
-        &'static mut AbilityState,
-    ),
->;
-
-/// Read-only ability spec query (for cancel scan).
-type AbilitySpecReadQuery =
-    Query<'static, 'static, (Entity, &'static AbilitySpec, &'static AbilityOwner)>;
-
 /// Bundled query parameters for activation checks (cost/tag validation).
 #[derive(SystemParam)]
 pub struct ActivationCheckParams<'w, 's> {
@@ -177,7 +162,56 @@ pub enum ActivationFailureReason {
     BlockedByTags,
 }
 
-// --- Observer functions ---
+// --- Pending activation ---
+
+/// Marker component inserted by the observer when activation checks pass.
+///
+/// A dedicated exclusive system picks this up to call pre_activate/activate,
+/// which need &mut World and cannot run inside an observer.
+#[derive(Component, Debug, Clone, Copy)]
+pub struct PendingActivation {
+    pub owner: Entity,
+}
+
+/// Exclusive system that drives pending ability activations.
+///
+/// Runs after on_try_activate_ability observer flushes. For each ability spec
+/// marked with PendingActivation it calls pre_activate → activate → triggers
+/// CommitAbilityEvent, then removes the marker.
+pub fn execute_pending_activations_system(world: &mut World) {
+    // Collect pending entities first to avoid borrowing world twice.
+    let pending: Vec<(Entity, Entity, string_cache::DefaultAtom)> = world
+        .query_filtered::<(Entity, &PendingActivation, &AbilitySpec), With<PendingActivation>>()
+        .iter(world)
+        .map(|(e, p, spec)| (e, p.owner, spec.definition_id.clone()))
+        .collect();
+
+    for (spec_entity, owner, definition_id) in pending {
+        // Borrow registry and extract behavior (Arc clone so we drop the borrow).
+        let behavior: Option<std::sync::Arc<dyn super::traits::AbilityBehavior>> = world
+            .resource::<AbilityRegistry>()
+            .get(&definition_id)
+            .and_then(|def| def.behavior.clone());
+
+        let b: &dyn super::traits::AbilityBehavior = match behavior.as_deref() {
+            Some(b) => b,
+            None => &super::traits::DefaultAbilityBehavior,
+        };
+
+        b.pre_activate(world, spec_entity, owner);
+        b.activate(world, spec_entity, owner, None);
+
+        // Trigger commit and clean up marker via deferred commands.
+        world.commands().trigger(CommitAbilityEvent {
+            ability_spec: spec_entity,
+            owner,
+        });
+        world
+            .commands()
+            .entity(spec_entity)
+            .remove::<PendingActivation>();
+    }
+}
 
 /// Observer for TryActivateAbilityEvent.
 pub fn on_try_activate_ability(
@@ -229,9 +263,11 @@ pub fn on_try_activate_ability(
         return;
     }
 
-    // Pre-activate and activate need to be deferred since we only have &World
-    behavior.pre_activate(world, spec_entity, owner);
-    behavior.activate(world, spec_entity, owner, None);
+    // Mark for deferred activation — pre_activate/activate need &mut World,
+    // which is unavailable in observers. A system will pick this up next.
+    commands
+        .entity(spec_entity)
+        .insert(PendingActivation { owner });
 }
 
 /// Observer for CommitAbilityEvent.
