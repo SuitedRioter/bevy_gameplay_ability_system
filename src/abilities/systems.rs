@@ -184,38 +184,30 @@ pub fn on_try_activate_ability(
     ev: On<TryActivateAbilityEvent>,
     mut commands: Commands,
     ability_registry: Res<AbilityRegistry>,
-    mut spec_set: ParamSet<(AbilitySpecMutQuery, AbilitySpecReadQuery)>,
-    mut params: ActivationCheckParams,
+    ability_specs: Query<(&AbilitySpec, &AbilityOwner)>,
+    tags_manager: Res<bevy_gameplay_tag::GameplayTagsManager>,
     world: &World,
 ) {
     let event = ev.event();
     let spec_entity = event.ability_spec;
     let owner = event.owner;
 
-    let definition_id;
-    {
-        let specs = spec_set.p0();
-        let Ok((spec, _ability_owner, _state)) = specs.get(spec_entity) else {
-            return;
-        };
-        definition_id = spec.definition_id.clone();
-    }
-
-    let Some(definition) = ability_registry.get(&definition_id) else {
+    let Ok((spec, _)) = ability_specs.get(spec_entity) else {
         return;
     };
 
-    // Get behavior (use default if not specified)
+    let Some(definition) = ability_registry.get(&spec.definition_id) else {
+        return;
+    };
+
     let behavior = definition
         .behavior
         .as_ref()
         .map(|b| b.as_ref() as &dyn super::traits::AbilityBehavior)
         .unwrap_or(&super::traits::DefaultAbilityBehavior);
 
-    // Call behavior.can_activate
-    if let Err(failure) =
-        behavior.can_activate(world, spec_entity, owner, None, &params.tags_manager)
-    {
+    // Check if can activate
+    if let Err(failure) = behavior.can_activate(world, spec_entity, owner, &tags_manager) {
         use super::traits::ActivationCheckFailure;
         let reason = match failure {
             ActivationCheckFailure::OnCooldown(_) => ActivationFailureReason::OnCooldown,
@@ -237,72 +229,9 @@ pub fn on_try_activate_ability(
         return;
     }
 
-    // --- PreActivate ---
-
-    let owned_tags = definition.activation_owned_tags.clone();
-    let block_tags = definition.block_abilities_with_tags.clone();
-    let cancel_tags = definition.cancel_abilities_with_tags.clone();
-
-    // Set active state
-    {
-        let mut specs = spec_set.p0();
-        let Ok((mut spec, _, mut state)) = specs.get_mut(spec_entity) else {
-            return;
-        };
-        spec.is_active = true;
-        spec.active_count += 1;
-        *state = AbilityState::Active;
-    }
-
-    // Add activation_owned_tags and block_abilities_with_tags to owner
-    if let Ok(mut owner_tag_container) = params.tag_containers.get_mut(owner) {
-        owner_tag_container.update_tag_container_count(
-            &owned_tags,
-            1,
-            &params.tags_manager,
-            &mut commands,
-            owner,
-        );
-        owner_tag_container.update_tag_container_count(
-            &block_tags,
-            1,
-            &params.tags_manager,
-            &mut commands,
-            owner,
-        );
-    }
-
-    // Cancel other active abilities matching cancel_abilities_with_tags
-    if !cancel_tags.is_empty() {
-        let all_specs = spec_set.p1();
-        for (other_spec_entity, other_spec, other_owner) in all_specs.iter() {
-            if other_spec_entity == spec_entity || !other_spec.is_active || other_owner.0 != owner {
-                continue;
-            }
-            if let Some(other_def) = ability_registry.get(&other_spec.definition_id)
-                && other_def.ability_tags.has_any(&cancel_tags)
-            {
-                commands.trigger(CancelAbilityEvent {
-                    ability_spec: other_spec_entity,
-                    owner,
-                });
-            }
-        }
-    }
-
-    // Spawn instance
-    let instance = commands
-        .spawn(ActiveAbilityInstance::new(
-            spec_entity,
-            params.time.elapsed_secs(),
-        ))
-        .id();
-
-    commands.trigger(AbilityActivatedEvent {
-        ability_spec: spec_entity,
-        owner,
-        instance: Some(instance),
-    });
+    // Pre-activate and activate need to be deferred since we only have &World
+    behavior.pre_activate(world, spec_entity, owner);
+    behavior.activate(world, spec_entity, owner, None);
 }
 
 /// Observer for CommitAbilityEvent.

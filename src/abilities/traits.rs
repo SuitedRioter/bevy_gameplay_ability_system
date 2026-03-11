@@ -43,7 +43,6 @@ pub trait AbilityBehavior: Send + Sync + 'static {
         world: &World,
         ability_entity: Entity,
         source: Entity,
-        target: Option<Entity>,
         tags_manager: &Res<GameplayTagsManager>,
     ) -> ActivationCheckResult {
         let Some(spec) = world.get::<AbilitySpec>(ability_entity) else {
@@ -100,36 +99,7 @@ pub trait AbilityBehavior: Send + Sync + 'static {
             return Err(ActivationCheckFailure::SourceHasBlockedTags(blocked_tags));
         }
 
-        // Check target tags
-        if let Some(target_entity) = target
-            && let Some(target_tags) = world.get::<GameplayTagCountContainer>(target_entity)
-        {
-            // Check target required tags
-            if !definition.target_required_tags.is_empty()
-                && !target_tags.has_all_matching_gameplay_tags(&definition.target_required_tags)
-            {
-                let mut missing_tags = GameplayTagContainer::default();
-                missing_tags.append_matches_tags(
-                    &definition.target_required_tags,
-                    &target_tags.explicit_tags,
-                    tags_manager,
-                );
-                return Err(ActivationCheckFailure::TargetMissingRequiredTags(
-                    missing_tags,
-                ));
-            }
-
-            // Check target blocked tags
-            if target_tags.has_any_matching_gameplay_tags(&definition.target_blocked_tags) {
-                let mut blocked_tags = GameplayTagContainer::default();
-                blocked_tags.append_matches_tags(
-                    &target_tags.explicit_tags,
-                    &definition.target_blocked_tags,
-                    tags_manager,
-                );
-                return Err(ActivationCheckFailure::TargetHasBlockedTags(blocked_tags));
-            }
-        }
+        // Check target tags - removed since target is not available at this stage
 
         Ok(())
     }
@@ -137,18 +107,12 @@ pub trait AbilityBehavior: Send + Sync + 'static {
     /// Called before activation begins.
     ///
     /// Use this for setup logic before the ability enters the Activating state.
-    fn pre_activate(
-        &self,
-        world: &mut World,
-        ability_entity: Entity,
-        _source: Entity,
-        _target: Option<Entity>,
-    ) {
-        if let Some(mut spec) =
-            world.get_mut::<crate::abilities::components::AbilitySpec>(ability_entity)
-        {
-            spec.active_count += 1;
-        }
+    fn pre_activate(&self, world: &mut World, ability_entity: Entity, _source: Entity) {
+        let Some(mut spec) = world.get_mut::<AbilitySpec>(ability_entity) else {
+            return;
+        };
+        spec.is_active = true;
+        spec.active_count += 1;
     }
 
     /// Called when the ability is activated.
