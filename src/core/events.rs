@@ -10,7 +10,7 @@ pub use crate::effects::systems::{
 
 // Re-export ability events
 pub use crate::abilities::systems::{
-    AbilityActivatedEvent, AbilityActivationFailedEvent, AbilityEndedEvent, CancelAbilityEvent,
+    AbilityActivatedEvent, AbilityActivationFailedEvent, CancelAbilityEvent,
     CommitAbilityEvent, CommitAbilityResultEvent, EndAbilityEvent, TryActivateAbilityEvent,
 };
 

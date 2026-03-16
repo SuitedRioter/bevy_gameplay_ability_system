@@ -61,7 +61,7 @@ pub mod prelude {
     pub use crate::abilities::definition::*;
     pub use crate::abilities::plugin::AbilityPlugin;
     pub use crate::abilities::systems::{
-        AbilityActivatedEvent, AbilityActivationFailedEvent, AbilityEndedEvent,
+        AbilityActivatedEvent, AbilityActivationFailedEvent,
         ActivationFailureReason, CancelAbilityEvent, CommitAbilityEvent,
         CommitAbilityResultEvent, EndAbilityEvent, TryActivateAbilityEvent,
     };

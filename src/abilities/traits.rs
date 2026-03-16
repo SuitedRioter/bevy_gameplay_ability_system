@@ -164,11 +164,11 @@ pub trait AbilityBehavior: Send + Sync + 'static {
 
     /// Called when the ability is committed.
     ///
-    /// Re-checks cost and cooldown, then executes commit logic.
+    /// Re-checks cost and cooldown, then queues commit commands.
     fn commit(
         &self,
         world: &World,
-        commands: Commands,
+        commands: &mut Commands,
         definition: &AbilityDefinition,
         spec: &AbilitySpec,
         source: Entity,
@@ -188,7 +188,7 @@ pub trait AbilityBehavior: Send + Sync + 'static {
     /// Override this for custom commit behavior.
     fn commit_execute(
         &self,
-        mut commands: Commands,
+        commands: &mut Commands,
         definition: &AbilityDefinition,
         spec: &AbilitySpec,
         source: Entity,
@@ -218,12 +218,10 @@ pub trait AbilityBehavior: Send + Sync + 'static {
     ///
     /// Use this for cleanup logic. The `was_cancelled` parameter indicates
     /// whether the ability ended normally or was cancelled.
-    fn end(&self, world: &mut World, ability_entity: Entity, _was_cancelled: bool) {
-        if let Some(mut spec) = world.get_mut::<AbilitySpec>(ability_entity) {
-            spec.is_active = false;
-        }
-        world.commands().trigger(OnGameplayAbilityEnded {
+    fn end(&self, commands: &mut Commands, ability_entity: Entity, was_cancelled: bool) {
+        commands.trigger(OnGameplayAbilityEnded {
             ability_spec: ability_entity,
+            was_cancelled,
         });
     }
 }

@@ -6,7 +6,6 @@ use super::components::*;
 use super::definition::*;
 use crate::attributes::{AttributeData, AttributeName};
 use crate::effects::definition::GameplayEffectRegistry;
-use crate::effects::systems::ApplyGameplayEffectEvent;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy_gameplay_tag::gameplay_tag_count_container::GameplayTagCountContainer;
@@ -68,19 +67,6 @@ pub struct AbilityActivatedEvent {
     pub instance: Option<Entity>,
 }
 
-/// Event triggered when an ability ends.
-#[derive(Event, Debug, Clone)]
-pub struct AbilityEndedEvent {
-    /// The ability spec entity.
-    pub ability_spec: Entity,
-    /// The owner entity.
-    pub owner: Entity,
-    /// The active instance entity (if instanced).
-    pub instance: Option<Entity>,
-    /// Whether the ability was cancelled (vs ended normally).
-    pub was_cancelled: bool,
-}
-
 /// Event for requesting ability end.
 #[derive(Event, Debug, Clone)]
 pub struct EndAbilityEvent {
@@ -130,19 +116,12 @@ pub struct CommitAbilityResultEvent {
     pub success: bool,
 }
 
-/// Entity event triggered on ability_spec when being canceled (before end).
-#[derive(EntityEvent, Debug, Clone)]
-pub struct OnGameplayAbilityCanceled {
-    #[event_target]
-    pub ability_spec: Entity,
-    pub was_cancelled: bool,
-}
-
 /// Entity event triggered on ability_spec when ended.
 #[derive(EntityEvent, Debug, Clone)]
 pub struct OnGameplayAbilityEnded {
     #[event_target]
     pub ability_spec: Entity,
+    pub was_cancelled: bool,
 }
 
 // --- Enums ---
@@ -298,9 +277,9 @@ pub fn on_commit_ability(
         .map(|b| b.as_ref() as &dyn super::traits::AbilityBehavior)
         .unwrap_or(&super::traits::DefaultAbilityBehavior);
 
-    // Call behavior.commit_check
+    // Call behavior.commit
     if behavior
-        .commit(world, commands, definition, spec, owner, &tags_manager)
+        .commit(world, &mut commands, definition, spec, owner, &tags_manager)
         .is_err()
     {
         commands.trigger(CommitAbilityResultEvent {
@@ -417,13 +396,14 @@ fn end_ability_internal(
         }
     }
 
-    // 5. Trigger AbilityEndedEvent
-    commands.trigger(AbilityEndedEvent {
-        ability_spec: spec_entity,
-        owner,
-        instance: None,
-        was_cancelled,
-    });
+    // 5. Call behavior.end to trigger OnGameplayAbilityEnded
+    let behavior = definition
+        .behavior
+        .as_ref()
+        .map(|b| b.as_ref() as &dyn super::traits::AbilityBehavior)
+        .unwrap_or(&super::traits::DefaultAbilityBehavior);
+
+    behavior.end(commands, spec_entity, was_cancelled);
 }
 
 // --- Helper functions ---
