@@ -189,6 +189,7 @@ pub fn execute_pending_activations_system(world: &mut World) {
             .commands()
             .entity(spec_entity)
             .remove::<PendingActivation>();
+        info!("→ TryActivate: {}", spec_entity);
     }
 }
 
@@ -247,6 +248,8 @@ pub fn on_try_activate_ability(
     commands
         .entity(spec_entity)
         .insert(PendingActivation { owner });
+
+    info!("→ TryActivate: {}", spec.definition_id);
 }
 
 /// Observer for CommitAbilityEvent.
@@ -295,6 +298,7 @@ pub fn on_commit_ability(
         owner,
         success: true,
     });
+    info!("→ TryActivate: {}", spec_entity);
 }
 
 /// Observer for EndAbilityEvent.
@@ -315,6 +319,7 @@ pub fn on_end_ability(
         &tags_manager,
         &mut params,
     );
+    info!("→ TryActivate: End");
 }
 
 /// Observer for CancelAbilityEvent.
