@@ -300,7 +300,7 @@ pub fn on_commit_ability(
 
     // Call behavior.commit_check
     if behavior
-        .commit_check(world, spec_entity, owner, &tags_manager)
+        .commit(world, commands, definition, spec, owner, &tags_manager)
         .is_err()
     {
         commands.trigger(CommitAbilityResultEvent {
@@ -309,25 +309,6 @@ pub fn on_commit_ability(
             success: false,
         });
         return;
-    }
-
-    // Apply cost and cooldown effects
-    if let Some(cost_id) = &definition.cost_effect {
-        commands.trigger(ApplyGameplayEffectEvent {
-            effect_id: cost_id.clone(),
-            target: owner,
-            instigator: Some(owner),
-            level: spec.level,
-        });
-    }
-
-    if let Some(cd_id) = &definition.cooldown_effect {
-        commands.trigger(ApplyGameplayEffectEvent {
-            effect_id: cd_id.clone(),
-            target: owner,
-            instigator: Some(owner),
-            level: spec.level,
-        });
     }
 
     commands.trigger(CommitAbilityResultEvent {

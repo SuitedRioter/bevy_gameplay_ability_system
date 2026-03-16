@@ -3,12 +3,13 @@
 //! Defines the lifecycle hooks for custom ability implementations.
 
 use crate::abilities::OnGameplayAbilityEnded;
+use crate::core::ApplyGameplayEffectEvent;
 use bevy::prelude::*;
 use bevy_gameplay_tag::gameplay_tag_count_container::GameplayTagCountContainer;
 use bevy_gameplay_tag::{GameplayTagContainer, GameplayTagsManager};
 
 use crate::effects::GameplayEffectRegistry;
-use crate::prelude::{AbilityRegistry, AbilitySpec};
+use crate::prelude::{AbilityDefinition, AbilityRegistry, AbilitySpec};
 
 /// Reason why ability activation check failed.
 #[derive(Debug, Clone, PartialEq)]
@@ -133,17 +134,10 @@ pub trait AbilityBehavior: Send + Sync + 'static {
     fn commit_check(
         &self,
         world: &World,
-        ability_entity: Entity,
+        definition: &AbilityDefinition,
         source: Entity,
         tags_manager: &Res<GameplayTagsManager>,
     ) -> ActivationCheckResult {
-        let Some(spec) = world.get::<AbilitySpec>(ability_entity) else {
-            return Err(ActivationCheckFailure::MissingComponents);
-        };
-        let registry = world.resource::<AbilityRegistry>();
-        let Some(definition) = registry.get(&spec.definition_id) else {
-            return Err(ActivationCheckFailure::MissingComponents);
-        };
         let effect_registry = world.resource::<GameplayEffectRegistry>();
         let Some(source_tags) = world.get::<GameplayTagCountContainer>(source) else {
             return Err(ActivationCheckFailure::MissingComponents);
@@ -173,16 +167,18 @@ pub trait AbilityBehavior: Send + Sync + 'static {
     /// Re-checks cost and cooldown, then executes commit logic.
     fn commit(
         &self,
-        world: &mut World,
-        ability_entity: Entity,
+        world: &World,
+        commands: Commands,
+        definition: &AbilityDefinition,
+        spec: &AbilitySpec,
         source: Entity,
         tags_manager: &Res<GameplayTagsManager>,
     ) -> ActivationCheckResult {
         // Re-check cost and cooldown
-        self.commit_check(world, ability_entity, source, tags_manager)?;
+        self.commit_check(world, definition, source, tags_manager)?;
 
         // Execute commit logic
-        self.commit_execute(world, ability_entity, source);
+        self.commit_execute(commands, definition, spec, source);
 
         Ok(())
     }
@@ -190,19 +186,32 @@ pub trait AbilityBehavior: Send + Sync + 'static {
     /// Execute commit logic (apply costs and cooldowns).
     ///
     /// Override this for custom commit behavior.
-    fn commit_execute(&self, world: &mut World, ability_entity: Entity, source: Entity) {
-        self.apply_cooldown(world, ability_entity, source);
-        self.apply_cost(world, ability_entity, source);
-    }
+    fn commit_execute(
+        &self,
+        mut commands: Commands,
+        definition: &AbilityDefinition,
+        spec: &AbilitySpec,
+        source: Entity,
+    ) {
+        // Apply cooldown effects
+        if let Some(cd_id) = &definition.cooldown_effect {
+            commands.trigger(ApplyGameplayEffectEvent {
+                effect_id: cd_id.clone(),
+                target: source,
+                instigator: Some(source),
+                level: spec.level,
+            });
+        };
 
-    /// Apply cooldown effect to source.
-    fn apply_cooldown(&self, _world: &mut World, _ability_entity: Entity, _source: Entity) {
-        // TODO: Implement after GameplayEffect logic is complete
-    }
-
-    /// Apply cost effect to source.
-    fn apply_cost(&self, _world: &mut World, _ability_entity: Entity, _source: Entity) {
-        // TODO: Implement after GameplayEffect logic is complete
+        // Apply cost effects
+        if let Some(cost_id) = &definition.cost_effect {
+            commands.trigger(ApplyGameplayEffectEvent {
+                effect_id: cost_id.clone(),
+                target: source,
+                instigator: Some(source),
+                level: spec.level,
+            });
+        }
     }
 
     /// Called when the ability ends.
