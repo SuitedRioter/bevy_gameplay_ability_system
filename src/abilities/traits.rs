@@ -49,6 +49,7 @@ pub trait AbilityBehavior: Send + Sync + 'static {
         let Some(spec) = world.get::<AbilitySpec>(ability_entity) else {
             return Err(ActivationCheckFailure::MissingComponents);
         };
+        info!("Press 1");
         let registry = world.resource::<AbilityRegistry>();
         let Some(definition) = registry.get(&spec.definition_id) else {
             return Err(ActivationCheckFailure::MissingComponents);
@@ -57,7 +58,7 @@ pub trait AbilityBehavior: Send + Sync + 'static {
         let Some(source_tags) = world.get::<GameplayTagCountContainer>(source) else {
             return Err(ActivationCheckFailure::MissingComponents);
         };
-
+        info!("Press 2");
         // Check cooldown
         if let Some(cd_id) = &definition.cooldown_effect
             && let Some(cd_def) = effect_registry.get(cd_id.as_ref())
@@ -71,7 +72,7 @@ pub trait AbilityBehavior: Send + Sync + 'static {
             );
             return Err(ActivationCheckFailure::OnCooldown(cooldown_tags));
         }
-
+        info!("Press 3");
         // TODO: Check cost when attribute system is ready
 
         // Check source required tags
@@ -88,7 +89,7 @@ pub trait AbilityBehavior: Send + Sync + 'static {
                 missing_tags,
             ));
         }
-
+        info!("Press 4");
         // Check source blocked tags
         if source_tags.has_any_matching_gameplay_tags(&definition.source_blocked_tags) {
             let mut blocked_tags = GameplayTagContainer::default();
@@ -101,7 +102,7 @@ pub trait AbilityBehavior: Send + Sync + 'static {
         }
 
         // Check target tags - removed since target is not available at this stage
-
+        info!("Press 5");
         Ok(())
     }
 

@@ -8,6 +8,7 @@ use crate::attributes::{AttributeData, AttributeName};
 use crate::effects::definition::GameplayEffectRegistry;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
+use bevy_gameplay_tag::GameplayTagsManager;
 use bevy_gameplay_tag::gameplay_tag_count_container::GameplayTagCountContainer;
 
 /// Bundled query parameters for activation checks (cost/tag validation).
@@ -28,20 +29,12 @@ pub struct ActivationCheckParams<'w, 's> {
     >,
 }
 
-/// Bundled query parameters for ending/cancelling abilities.
 #[derive(SystemParam)]
 pub struct EndAbilityParams<'w, 's> {
-    pub ability_specs: Query<
-        'w,
-        's,
-        (
-            &'static mut AbilitySpec,
-            &'static AbilityOwner,
-            &'static mut AbilityState,
-        ),
-    >,
+    pub ability_registry: Res<'w, AbilityRegistry>,
+    pub tags_manager: Res<'w, GameplayTagsManager>,
+    pub ability_specs: Query<'w, 's, (&'static mut AbilitySpec, &'static AbilityOwner)>,
     pub tag_containers: Query<'w, 's, &'static mut GameplayTagCountContainer>,
-    pub active_instances: Query<'w, 's, (Entity, &'static ActiveAbilityInstance)>,
 }
 
 // --- Events ---
@@ -189,7 +182,7 @@ pub fn execute_pending_activations_system(world: &mut World) {
             .commands()
             .entity(spec_entity)
             .remove::<PendingActivation>();
-        info!("→ TryActivate: {}", spec_entity);
+        info!("→ TryActivate: execute_pending_activations_system");
     }
 }
 
@@ -249,7 +242,7 @@ pub fn on_try_activate_ability(
         .entity(spec_entity)
         .insert(PendingActivation { owner });
 
-    info!("→ TryActivate: {}", spec.definition_id);
+    info!("→ TryActivate: on_try_activate_ability");
 }
 
 /// Observer for CommitAbilityEvent.
@@ -298,15 +291,13 @@ pub fn on_commit_ability(
         owner,
         success: true,
     });
-    info!("→ TryActivate: {}", spec_entity);
+    info!("→ TryActivate: on_commit_ability");
 }
 
 /// Observer for EndAbilityEvent.
 pub fn on_end_ability(
     ev: On<EndAbilityEvent>,
     mut commands: Commands,
-    ability_registry: Res<AbilityRegistry>,
-    tags_manager: Res<bevy_gameplay_tag::GameplayTagsManager>,
     mut params: EndAbilityParams,
 ) {
     let event = ev.event();
@@ -315,8 +306,6 @@ pub fn on_end_ability(
         event.owner,
         false,
         &mut commands,
-        &ability_registry,
-        &tags_manager,
         &mut params,
     );
     info!("→ TryActivate: End");
@@ -326,8 +315,6 @@ pub fn on_end_ability(
 pub fn on_cancel_ability(
     ev: On<CancelAbilityEvent>,
     mut commands: Commands,
-    ability_registry: Res<AbilityRegistry>,
-    tags_manager: Res<bevy_gameplay_tag::GameplayTagsManager>,
     mut params: EndAbilityParams,
 ) {
     let event = ev.event();
@@ -336,8 +323,6 @@ pub fn on_cancel_ability(
         event.owner,
         true,
         &mut commands,
-        &ability_registry,
-        &tags_manager,
         &mut params,
     );
 }
@@ -348,22 +333,21 @@ fn end_ability_internal(
     owner: Entity,
     was_cancelled: bool,
     commands: &mut Commands,
-    ability_registry: &AbilityRegistry,
-    tags_manager: &Res<bevy_gameplay_tag::GameplayTagsManager>,
     params: &mut EndAbilityParams,
 ) {
-    let Ok((mut spec, _, mut state)) = params.ability_specs.get_mut(spec_entity) else {
+    info!("→ End: 0");
+    let Ok((mut spec, _)) = params.ability_specs.get_mut(spec_entity) else {
         return;
     };
-
+    info!("→ End: 1");
     if !spec.is_active {
         return;
     }
-
-    let Some(definition) = ability_registry.get(&spec.definition_id) else {
+    info!("→ End: 2");
+    let Some(definition) = params.ability_registry.get(&spec.definition_id) else {
         return;
     };
-
+    info!("→ End: 3");
     let owned_tags = definition.activation_owned_tags.clone();
     let block_tags = definition.block_abilities_with_tags.clone();
 
@@ -372,7 +356,7 @@ fn end_ability_internal(
         owner_tag_container.update_tag_container_count(
             &owned_tags,
             -1,
-            tags_manager,
+            &params.tags_manager,
             commands,
             owner,
         );
@@ -381,27 +365,20 @@ fn end_ability_internal(
         owner_tag_container.update_tag_container_count(
             &block_tags,
             -1,
-            tags_manager,
+            &params.tags_manager,
             commands,
             owner,
         );
     }
-
+    info!("→ End: 4");
     // 3. Update spec state
     spec.active_count = spec.active_count.saturating_sub(1);
     if spec.active_count == 0 {
         spec.is_active = false;
+        info!("→ End: 5");
     }
-    *state = AbilityState::Ready;
-
-    // 4. Despawn ActiveAbilityInstance
-    for (instance_entity, instance) in params.active_instances.iter() {
-        if instance.spec_entity == spec_entity {
-            commands.entity(instance_entity).despawn();
-        }
-    }
-
-    // 5. Call behavior.end to trigger OnGameplayAbilityEnded
+    info!("→ End: 6");
+    // 4. Call behavior.end to trigger OnGameplayAbilityEnded
     let behavior = definition
         .behavior
         .as_ref()

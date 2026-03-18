@@ -4,7 +4,7 @@
 
 use bevy::prelude::*;
 use bevy_gameplay_ability_system::prelude::*;
-use bevy_gameplay_tag::GameplayTagsPlugin;
+use bevy_gameplay_tag::{GameplayTagCountContainer, GameplayTagsPlugin};
 
 fn main() {
     App::new()
@@ -21,10 +21,10 @@ fn main() {
 fn setup(mut commands: Commands, mut ability_registry: ResMut<AbilityRegistry>) {
     // Register ability definition
     ability_registry
-        .register(AbilityDefinition::new("Fireball").with_cooldown_effect("Fireball.Cooldown"));
+        .register(AbilityDefinition::new("Fireball").with_cooldown_effect("Cooldown.Fireball"));
 
     // Create player with granted ability
-    let player = commands.spawn_empty().id();
+    let player = commands.spawn(GameplayTagCountContainer::default()).id();
     let ability = commands
         .spawn((AbilitySpec::new("Fireball", 1), AbilityOwner(player)))
         .id();
@@ -43,6 +43,7 @@ fn activate_ability(
 ) {
     if keyboard.just_pressed(KeyCode::Space) {
         for (ability_entity, spec, owner) in &abilities {
+            info!("→ TryActivate: {}", spec.is_active);
             if !spec.is_active {
                 info!("→ TryActivate: {}", spec.definition_id);
                 commands.trigger(TryActivateAbilityEvent {
