@@ -3,7 +3,7 @@
 //! Entity hierarchy:
 //!   Owner Entity (player)
 //!     └── AbilitySpec Entity (granted ability slot)
-//!           ├── Components: AbilitySpec, AbilityActiveState, AbilityOwner, [AbilityCooldown]
+//!           ├── Components: AbilitySpec, AbilityActiveState, AbilityOwner
 //!           └── AbilitySpecInstance Entity (active instance, child)
 //!                 └── Components: AbilitySpecInstance, InstanceControlState
 
@@ -83,40 +83,6 @@ impl AbilityActiveState {
 /// Component that links an ability to its owner entity.
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AbilityOwner(pub Entity);
-
-/// Component that marks an ability as being on cooldown.
-#[derive(Component, Debug, Clone, Copy)]
-pub struct AbilityCooldown {
-    /// Remaining cooldown time in seconds.
-    pub remaining: f32,
-    /// Total cooldown duration in seconds.
-    pub total: f32,
-}
-
-impl AbilityCooldown {
-    pub fn new(duration: f32) -> Self {
-        Self {
-            remaining: duration,
-            total: duration,
-        }
-    }
-
-    pub fn is_expired(&self) -> bool {
-        self.remaining <= 0.0
-    }
-
-    pub fn tick(&mut self, delta: f32) {
-        self.remaining -= delta;
-    }
-
-    pub fn progress(&self) -> f32 {
-        if self.total <= 0.0 {
-            1.0
-        } else {
-            1.0 - (self.remaining / self.total).max(0.0)
-        }
-    }
-}
 
 // ---------------------------------------------------------------------------
 // AbilitySpecInstance — spawned as a child of AbilitySpec on activation
@@ -212,21 +178,4 @@ mod tests {
         assert_eq!(state.active_count, 0);
     }
 
-    #[test]
-    fn test_cooldown() {
-        let mut cooldown = AbilityCooldown::new(5.0);
-        assert_eq!(cooldown.remaining, 5.0);
-        assert!(!cooldown.is_expired());
-        assert_eq!(cooldown.progress(), 0.0);
-
-        cooldown.tick(2.5);
-        assert_eq!(cooldown.remaining, 2.5);
-        assert!(!cooldown.is_expired());
-        assert!((cooldown.progress() - 0.5).abs() < f32::EPSILON);
-
-        cooldown.tick(3.0);
-        assert_eq!(cooldown.remaining, -0.5);
-        assert!(cooldown.is_expired());
-        assert_eq!(cooldown.progress(), 1.0);
-    }
 }

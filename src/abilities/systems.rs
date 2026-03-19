@@ -504,21 +504,6 @@ fn end_ability_internal(
     }
 }
 
-/// System that updates ability cooldowns.
-pub fn update_ability_cooldowns_system(
-    mut commands: Commands,
-    mut cooldowns: Query<(Entity, &mut AbilityCooldown)>,
-    time: Res<Time>,
-) {
-    for (entity, mut cooldown) in cooldowns.iter_mut() {
-        cooldown.tick(time.delta_secs());
-
-        if cooldown.is_expired() {
-            commands.entity(entity).remove::<AbilityCooldown>();
-        }
-    }
-}
-
 /// Observer that fires behavior.end when an AbilitySpecInstance is removed
 /// (e.g., when the parent AbilitySpec entity is despawned via hierarchy cleanup).
 pub fn on_instance_removed(

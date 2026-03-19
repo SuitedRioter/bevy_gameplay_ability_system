@@ -84,8 +84,6 @@ pub enum AbilitySystemSet {
     Cancel,
     /// Update ability states (Ready, Active, Cooldown, Blocked).
     UpdateStates,
-    /// Update ability cooldowns.
-    UpdateCooldowns,
 }
 
 /// System sets for cue systems.
@@ -155,7 +153,6 @@ pub fn configure_gas_system_sets(app: &mut App) {
             AbilitySystemSet::End,
             AbilitySystemSet::Cancel,
             AbilitySystemSet::UpdateStates,
-            AbilitySystemSet::UpdateCooldowns,
         )
             .chain()
             .in_set(GasSystemSet::Abilities),

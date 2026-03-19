@@ -23,13 +23,6 @@ impl Plugin for AbilityPlugin {
             .add_observer(on_end_ability)
             .add_observer(on_cancel_ability)
             .add_observer(on_instance_removed)
-            // Register cooldown system
-            .add_systems(
-                Update,
-                update_ability_cooldowns_system
-                    .in_set(GasSystemSet::Abilities)
-                    .in_set(AbilitySystemSet::UpdateCooldowns),
-            )
             // Exclusive system: drives pending activations.
             .add_systems(
                 Update,
