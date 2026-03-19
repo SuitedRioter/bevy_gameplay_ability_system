@@ -47,7 +47,7 @@ Input → Attributes → Effects → Abilities → Cues → Cleanup
 Sub-sets (all chained within their parent):
 - `AttributeSystemSet`: Clamp → Events
 - `EffectSystemSet`: Apply → CreateModifiers → Aggregate → UpdateDurations → ExecutePeriodic → RemoveExpired → RemoveInstant
-- `AbilitySystemSet`: TryActivate → Commit → End → Cancel → UpdateStates
+- Abilities: Single exclusive system (`execute_pending_activations_system`), other logic via Observers
 - `CueSystemSet`: Handle → Route → ExecuteStatic → ManageActors → Cleanup → UpdateWhileActive
 
 Add custom systems to the appropriate set with `.in_set(GasSystemSet::X)`.

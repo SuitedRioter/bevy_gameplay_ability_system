@@ -286,15 +286,14 @@ Tag 计数使用 `GameplayTagCountContainer`，支持多个技能同时添加同
 
 ## 系统执行顺序
 
-所有系统在 `Update` 阶段运行，使用 SystemSet 链式排序：
+所有系统在 `Update` 阶段运行，使用 SystemSet 排序：
 
 ```
 GasSystemSet::Abilities
-    └─ AbilitySystemSet::TryActivate
-        └─ execute_pending_activations_system (Exclusive)
+    └─ execute_pending_activations_system (Exclusive)
 ```
 
-Observer（on_try_activate_ability, on_commit_ability, on_end_ability, on_cancel_ability）由事件触发，不受 SystemSet 排序约束。
+Observer（on_try_activate_ability, on_commit_ability, on_end_ability, on_cancel_ability）由事件触发，不受 SystemSet 排序约束。技能模块只有一个 Exclusive System 需要调度，不需要额外的子集划分。
 
 ## 使用指南
 

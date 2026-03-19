@@ -4,7 +4,7 @@
 
 use super::definition::AbilityRegistry;
 use super::systems::*;
-use crate::core::system_sets::{AbilitySystemSet, GasSystemSet};
+use crate::core::system_sets::GasSystemSet;
 use crate::effects::definition::GameplayEffectRegistry;
 use bevy::prelude::*;
 
@@ -27,8 +27,7 @@ impl Plugin for AbilityPlugin {
             .add_systems(
                 Update,
                 execute_pending_activations_system
-                    .in_set(GasSystemSet::Abilities)
-                    .in_set(AbilitySystemSet::TryActivate),
+                    .in_set(GasSystemSet::Abilities),
             );
     }
 }

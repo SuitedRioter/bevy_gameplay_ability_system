@@ -71,21 +71,6 @@ pub enum EffectSystemSet {
     RemoveInstant,
 }
 
-/// System sets for ability systems.
-#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum AbilitySystemSet {
-    /// Try to activate abilities.
-    TryActivate,
-    /// Commit abilities (apply costs and cooldowns).
-    Commit,
-    /// End active abilities.
-    End,
-    /// Cancel abilities based on tags.
-    Cancel,
-    /// Update ability states (Ready, Active, Cooldown, Blocked).
-    UpdateStates,
-}
-
 /// System sets for cue systems.
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CueSystemSet {
@@ -142,20 +127,6 @@ pub fn configure_gas_system_sets(app: &mut App) {
         )
             .chain()
             .in_set(GasSystemSet::Effects),
-    );
-
-    // Configure ability system ordering
-    app.configure_sets(
-        Update,
-        (
-            AbilitySystemSet::TryActivate,
-            AbilitySystemSet::Commit,
-            AbilitySystemSet::End,
-            AbilitySystemSet::Cancel,
-            AbilitySystemSet::UpdateStates,
-        )
-            .chain()
-            .in_set(GasSystemSet::Abilities),
     );
 
     // Configure cue system ordering
