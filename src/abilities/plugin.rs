@@ -22,6 +22,7 @@ impl Plugin for AbilityPlugin {
             .add_observer(on_commit_ability)
             .add_observer(on_end_ability)
             .add_observer(on_cancel_ability)
+            .add_observer(on_instance_removed)
             // Register cooldown system
             .add_systems(
                 Update,
@@ -29,8 +30,7 @@ impl Plugin for AbilityPlugin {
                     .in_set(GasSystemSet::Abilities)
                     .in_set(AbilitySystemSet::UpdateCooldowns),
             )
-            // Exclusive system: drives pre_activate → activate → commit for
-            // abilities that passed can_activate checks in the observer.
+            // Exclusive system: drives pending activations.
             .add_systems(
                 Update,
                 execute_pending_activations_system

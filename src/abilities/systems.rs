@@ -1,17 +1,34 @@
 //! Ability system implementations.
 //!
 //! This module contains the observer functions and systems that manage gameplay abilities.
+//!
+//! Activation flow:
+//!   TryActivateAbilityEvent → can_activate check → PendingActivation marker
+//!   → execute_pending_activations_system (exclusive):
+//!       spawn AbilitySpecInstance child entity → pre_activate → activate → CommitAbilityEvent
+//!   → on_commit_ability observer: apply costs/cooldowns
+//!
+//! End flow:
+//!   EndAbilityEvent / CancelAbilityEvent → end_ability_internal:
+//!       behavior.end → despawn instance entity → decrement AbilityActiveState
+//!
+//! Instance cleanup on AbilitySpec removal:
+//!   Bevy hierarchy automatically despawns child AbilitySpecInstance entities.
+//!   An observer on removal of AbilitySpecInstance calls behavior.end.
 
 use super::components::*;
 use super::definition::*;
 use crate::attributes::{AttributeData, AttributeName};
 use crate::effects::definition::GameplayEffectRegistry;
+use bevy::ecs::relationship::Relationship;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy_gameplay_tag::GameplayTagsManager;
 use bevy_gameplay_tag::gameplay_tag_count_container::GameplayTagCountContainer;
 
-/// Bundled query parameters for activation checks (cost/tag validation).
+// --- SystemParam bundles ---
+
+/// Bundled query parameters for activation checks.
 #[derive(SystemParam)]
 pub struct ActivationCheckParams<'w, 's> {
     pub effect_registry: Res<'w, GameplayEffectRegistry>,
@@ -33,7 +50,25 @@ pub struct ActivationCheckParams<'w, 's> {
 pub struct EndAbilityParams<'w, 's> {
     pub ability_registry: Res<'w, AbilityRegistry>,
     pub tags_manager: Res<'w, GameplayTagsManager>,
-    pub ability_specs: Query<'w, 's, (&'static mut AbilitySpec, &'static AbilityOwner)>,
+    pub ability_specs: Query<
+        'w,
+        's,
+        (
+            &'static AbilitySpec,
+            &'static mut AbilityActiveState,
+            &'static AbilityOwner,
+        ),
+    >,
+    pub instances: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static AbilitySpecInstance,
+            &'static InstanceControlState,
+            &'static ChildOf,
+        ),
+    >,
     pub tag_containers: Query<'w, 's, &'static mut GameplayTagCountContainer>,
 }
 
@@ -49,20 +84,21 @@ pub struct TryActivateAbilityEvent {
 }
 
 /// Event triggered when an ability is successfully activated.
-/// Targeted at the owner entity.
 #[derive(Event, Debug, Clone)]
 pub struct AbilityActivatedEvent {
     /// The ability spec entity.
     pub ability_spec: Entity,
     /// The owner entity.
     pub owner: Entity,
-    /// The active instance entity (if instanced).
-    pub instance: Option<Entity>,
+    /// The spawned instance entity.
+    pub instance: Entity,
 }
 
 /// Event for requesting ability end.
 #[derive(Event, Debug, Clone)]
 pub struct EndAbilityEvent {
+    /// The instance entity to end. If None, ends all instances of the spec.
+    pub instance: Option<Entity>,
     /// The ability spec entity.
     pub ability_spec: Entity,
     /// The owner entity.
@@ -74,6 +110,8 @@ pub struct EndAbilityEvent {
 pub struct CommitAbilityEvent {
     /// The ability spec entity.
     pub ability_spec: Entity,
+    /// The instance entity.
+    pub instance: Entity,
     /// The owner entity.
     pub owner: Entity,
 }
@@ -81,6 +119,8 @@ pub struct CommitAbilityEvent {
 /// Event for canceling an ability.
 #[derive(Event, Debug, Clone)]
 pub struct CancelAbilityEvent {
+    /// The instance entity to cancel. If None, cancels all instances.
+    pub instance: Option<Entity>,
     /// The ability spec entity.
     pub ability_spec: Entity,
     /// The owner entity.
@@ -103,17 +143,19 @@ pub struct AbilityActivationFailedEvent {
 pub struct CommitAbilityResultEvent {
     /// The ability spec entity.
     pub ability_spec: Entity,
+    /// The instance entity.
+    pub instance: Entity,
     /// The owner entity.
     pub owner: Entity,
     /// Whether the commit succeeded.
     pub success: bool,
 }
 
-/// Entity event triggered on ability_spec when ended.
+/// Entity event triggered on instance entity when ended.
 #[derive(EntityEvent, Debug, Clone)]
 pub struct OnGameplayAbilityEnded {
     #[event_target]
-    pub ability_spec: Entity,
+    pub ability_instance: Entity,
     pub was_cancelled: bool,
 }
 
@@ -122,8 +164,6 @@ pub struct OnGameplayAbilityEnded {
 /// Reason why ability activation failed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ActivationFailureReason {
-    /// Ability is already active (NonInstanced/InstancedPerActor).
-    AlreadyActive,
     /// Ability is on cooldown.
     OnCooldown,
     /// Owner doesn't have enough resources for the cost.
@@ -137,9 +177,7 @@ pub enum ActivationFailureReason {
 // --- Pending activation ---
 
 /// Marker component inserted by the observer when activation checks pass.
-///
-/// A dedicated exclusive system picks this up to call pre_activate/activate,
-/// which need &mut World and cannot run inside an observer.
+/// The exclusive system picks this up to spawn the instance entity.
 #[derive(Component, Debug, Clone, Copy)]
 pub struct PendingActivation {
     pub owner: Entity,
@@ -147,42 +185,94 @@ pub struct PendingActivation {
 
 /// Exclusive system that drives pending ability activations.
 ///
-/// Runs after on_try_activate_ability observer flushes. For each ability spec
-/// marked with PendingActivation it calls pre_activate → activate → triggers
-/// CommitAbilityEvent, then removes the marker.
+/// For each AbilitySpec with PendingActivation:
+/// 1. Spawns an AbilitySpecInstance child entity
+/// 2. Increments AbilityActiveState
+/// 3. Calls pre_activate → activate on the behavior
+/// 4. Triggers CommitAbilityEvent
 pub fn execute_pending_activations_system(world: &mut World) {
-    // Collect pending entities first to avoid borrowing world twice.
-    let pending: Vec<(Entity, Entity, string_cache::DefaultAtom)> = world
+    // Collect pending entities to avoid borrowing world twice.
+    let pending: Vec<(Entity, Entity, string_cache::DefaultAtom, i32)> = world
         .query_filtered::<(Entity, &PendingActivation, &AbilitySpec), With<PendingActivation>>()
         .iter(world)
-        .map(|(e, p, spec)| (e, p.owner, spec.definition_id.clone()))
+        .map(|(e, p, spec)| (e, p.owner, spec.definition_id.clone(), spec.level))
         .collect();
 
-    for (spec_entity, owner, definition_id) in pending {
-        // Borrow registry and extract behavior (Arc clone so we drop the borrow).
-        let behavior: Option<std::sync::Arc<dyn super::traits::AbilityBehavior>> = world
-            .resource::<AbilityRegistry>()
-            .get(&definition_id)
-            .and_then(|def| def.behavior.clone());
+    for (spec_entity, owner, definition_id, level) in pending {
+        // Look up definition and extract behavior + defaults.
+        let (behavior, default_blocks, default_cancelable) = {
+            let registry = world.resource::<AbilityRegistry>();
+            let Some(def) = registry.get(&definition_id) else {
+                world
+                    .commands()
+                    .entity(spec_entity)
+                    .remove::<PendingActivation>();
+                continue;
+            };
+            (
+                def.behavior.clone(),
+                def.default_blocks_other_abilities,
+                def.default_is_cancelable,
+            )
+        };
 
+        // Spawn AbilitySpecInstance as a child of the AbilitySpec entity.
+        let instance_entity = world
+            .commands()
+            .spawn((
+                AbilitySpecInstance {
+                    definition_id: definition_id.clone(),
+                    level,
+                    behavior: behavior.clone(),
+                },
+                InstanceControlState {
+                    is_active: true,
+                    is_blocking_other_abilities: default_blocks,
+                    is_cancelable: default_cancelable,
+                },
+            ))
+            .set_parent_in_place(spec_entity)
+            .id();
+
+        // Flush the spawn so the instance entity is visible for pre_activate/activate.
+        world.flush();
+
+        // Increment active state on the spec.
+        if let Some(mut active_state) = world.get_mut::<AbilityActiveState>(spec_entity) {
+            active_state.increment();
+        }
+
+        // Call behavior lifecycle methods.
         let b: &dyn super::traits::AbilityBehavior = match behavior.as_deref() {
             Some(b) => b,
             None => &super::traits::DefaultAbilityBehavior,
         };
 
-        b.pre_activate(world, spec_entity, owner);
-        b.activate(world, spec_entity, owner, None);
+        b.pre_activate(world, instance_entity, spec_entity, owner);
+        b.activate(world, instance_entity, spec_entity, owner, None);
 
-        // Trigger commit and clean up marker via deferred commands.
+        // Trigger commit and clean up marker.
         world.commands().trigger(CommitAbilityEvent {
             ability_spec: spec_entity,
+            instance: instance_entity,
             owner,
         });
         world
             .commands()
             .entity(spec_entity)
             .remove::<PendingActivation>();
-        info!("→ TryActivate: execute_pending_activations_system");
+
+        // Trigger activated event.
+        world.commands().trigger(AbilityActivatedEvent {
+            ability_spec: spec_entity,
+            owner,
+            instance: instance_entity,
+        });
+
+        info!(
+            "Ability {:?} activated: spec={:?} instance={:?}",
+            definition_id, spec_entity, instance_entity
+        );
     }
 }
 
@@ -191,7 +281,7 @@ pub fn on_try_activate_ability(
     ev: On<TryActivateAbilityEvent>,
     mut commands: Commands,
     ability_registry: Res<AbilityRegistry>,
-    ability_specs: Query<(&AbilitySpec, &AbilityOwner)>,
+    ability_specs: Query<&AbilitySpec>,
     tags_manager: Res<bevy_gameplay_tag::GameplayTagsManager>,
     world: &World,
 ) {
@@ -199,7 +289,7 @@ pub fn on_try_activate_ability(
     let spec_entity = event.ability_spec;
     let owner = event.owner;
 
-    let Ok((spec, _)) = ability_specs.get(spec_entity) else {
+    let Ok(spec) = ability_specs.get(spec_entity) else {
         return;
     };
 
@@ -236,13 +326,10 @@ pub fn on_try_activate_ability(
         return;
     }
 
-    // Mark for deferred activation — pre_activate/activate need &mut World,
-    // which is unavailable in observers. A system will pick this up next.
+    // Mark for deferred activation.
     commands
         .entity(spec_entity)
         .insert(PendingActivation { owner });
-
-    info!("→ TryActivate: on_try_activate_ability");
 }
 
 /// Observer for CommitAbilityEvent.
@@ -250,15 +337,16 @@ pub fn on_commit_ability(
     ev: On<CommitAbilityEvent>,
     mut commands: Commands,
     ability_registry: Res<AbilityRegistry>,
-    ability_specs: Query<(&AbilitySpec, &AbilityOwner)>,
+    ability_specs: Query<&AbilitySpec>,
     tags_manager: Res<bevy_gameplay_tag::GameplayTagsManager>,
     world: &World,
 ) {
     let event = ev.event();
     let spec_entity = event.ability_spec;
+    let instance_entity = event.instance;
     let owner = event.owner;
 
-    let Ok((spec, _)) = ability_specs.get(spec_entity) else {
+    let Ok(spec) = ability_specs.get(spec_entity) else {
         return;
     };
 
@@ -266,20 +354,19 @@ pub fn on_commit_ability(
         return;
     };
 
-    // Get behavior
     let behavior = definition
         .behavior
         .as_ref()
         .map(|b| b.as_ref() as &dyn super::traits::AbilityBehavior)
         .unwrap_or(&super::traits::DefaultAbilityBehavior);
 
-    // Call behavior.commit
     if behavior
         .commit(world, &mut commands, definition, spec, owner, &tags_manager)
         .is_err()
     {
         commands.trigger(CommitAbilityResultEvent {
             ability_spec: spec_entity,
+            instance: instance_entity,
             owner,
             success: false,
         });
@@ -288,10 +375,10 @@ pub fn on_commit_ability(
 
     commands.trigger(CommitAbilityResultEvent {
         ability_spec: spec_entity,
+        instance: instance_entity,
         owner,
         success: true,
     });
-    info!("→ TryActivate: on_commit_ability");
 }
 
 /// Observer for EndAbilityEvent.
@@ -302,13 +389,13 @@ pub fn on_end_ability(
 ) {
     let event = ev.event();
     end_ability_internal(
+        event.instance,
         event.ability_spec,
         event.owner,
         false,
         &mut commands,
         &mut params,
     );
-    info!("→ TryActivate: End");
 }
 
 /// Observer for CancelAbilityEvent.
@@ -319,6 +406,7 @@ pub fn on_cancel_ability(
 ) {
     let event = ev.event();
     end_ability_internal(
+        event.instance,
         event.ability_spec,
         event.owner,
         true,
@@ -328,64 +416,124 @@ pub fn on_cancel_ability(
 }
 
 /// Shared logic for ending/cancelling an ability.
+///
+/// If `instance` is Some, only that instance is ended. Otherwise all active
+/// instances under the spec are ended.
 fn end_ability_internal(
+    instance: Option<Entity>,
     spec_entity: Entity,
     owner: Entity,
     was_cancelled: bool,
     commands: &mut Commands,
     params: &mut EndAbilityParams,
 ) {
-    info!("→ End: 0");
-    let Ok((mut spec, _)) = params.ability_specs.get_mut(spec_entity) else {
+    let Ok((spec, _, _)) = params.ability_specs.get(spec_entity) else {
         return;
     };
-    info!("→ End: 1");
-    if !spec.is_active {
-        return;
-    }
-    info!("→ End: 2");
+
     let Some(definition) = params.ability_registry.get(&spec.definition_id) else {
         return;
     };
-    info!("→ End: 3");
+
     let owned_tags = definition.activation_owned_tags.clone();
     let block_tags = definition.block_abilities_with_tags.clone();
 
-    // 1. Remove activation_owned_tags from owner
-    if let Ok(mut owner_tag_container) = params.tag_containers.get_mut(owner) {
-        owner_tag_container.update_tag_container_count(
-            &owned_tags,
-            -1,
-            &params.tags_manager,
-            commands,
-            owner,
-        );
+    // Collect (entity, behavior) pairs for instances to end.
+    let instances_to_end: Vec<(
+        Entity,
+        Option<std::sync::Arc<dyn super::traits::AbilityBehavior>>,
+    )> = if let Some(inst) = instance {
+        // End a specific instance.
+        let Ok((_, inst_comp, ctrl, _)) = params.instances.get(inst) else {
+            return;
+        };
+        if !ctrl.is_active || (was_cancelled && !ctrl.is_cancelable) {
+            return;
+        }
+        vec![(inst, inst_comp.behavior.clone())]
+    } else {
+        // End all active instances that are children of this spec.
+        params
+            .instances
+            .iter()
+            .filter_map(|(inst_entity, inst_comp, ctrl, child_of)| {
+                if child_of.get() != spec_entity || !ctrl.is_active {
+                    return None;
+                }
+                if was_cancelled && !ctrl.is_cancelable {
+                    return None;
+                }
+                Some((inst_entity, inst_comp.behavior.clone()))
+            })
+            .collect()
+    };
 
-        // 2. Remove block_abilities_with_tags from owner
-        owner_tag_container.update_tag_container_count(
-            &block_tags,
-            -1,
-            &params.tags_manager,
-            commands,
-            owner,
-        );
-    }
-    info!("→ End: 4");
-    // 3. Update spec state
-    spec.active_count = spec.active_count.saturating_sub(1);
-    if spec.active_count == 0 {
-        spec.is_active = false;
-        info!("→ End: 5");
-    }
-    info!("→ End: 6");
-    // 4. Call behavior.end to trigger OnGameplayAbilityEnded
-    let behavior = definition
-        .behavior
-        .as_ref()
-        .map(|b| b.as_ref() as &dyn super::traits::AbilityBehavior)
-        .unwrap_or(&super::traits::DefaultAbilityBehavior);
+    for (inst_entity, behavior) in &instances_to_end {
+        // Call behavior.end.
+        let b: &dyn super::traits::AbilityBehavior = match behavior.as_deref() {
+            Some(b) => b,
+            None => &super::traits::DefaultAbilityBehavior,
+        };
+        b.end(commands, *inst_entity, was_cancelled);
 
-    behavior.end(commands, spec_entity, was_cancelled);
+        // Remove activation_owned_tags and block tags from owner.
+        if let Ok(mut owner_tags) = params.tag_containers.get_mut(owner) {
+            owner_tags.update_tag_container_count(
+                &owned_tags,
+                -1,
+                &params.tags_manager,
+                commands,
+                owner,
+            );
+            owner_tags.update_tag_container_count(
+                &block_tags,
+                -1,
+                &params.tags_manager,
+                commands,
+                owner,
+            );
+        }
+
+        // Despawn the instance entity.
+        commands.entity(*inst_entity).despawn();
+
+        // Decrement active state on the spec.
+        if let Ok((_, mut active_state, _)) = params.ability_specs.get_mut(spec_entity) {
+            active_state.decrement();
+        }
+    }
+}
+
+/// System that updates ability cooldowns.
+pub fn update_ability_cooldowns_system(
+    mut commands: Commands,
+    mut cooldowns: Query<(Entity, &mut AbilityCooldown)>,
+    time: Res<Time>,
+) {
+    for (entity, mut cooldown) in cooldowns.iter_mut() {
+        cooldown.tick(time.delta_secs());
+
+        if cooldown.is_expired() {
+            commands.entity(entity).remove::<AbilityCooldown>();
+        }
+    }
+}
+
+/// Observer that fires behavior.end when an AbilitySpecInstance is removed
+/// (e.g., when the parent AbilitySpec entity is despawned via hierarchy cleanup).
+pub fn on_instance_removed(
+    ev: On<Remove, AbilitySpecInstance>,
+    instances: Query<&AbilitySpecInstance>,
+    mut commands: Commands,
+) {
+    let entity = ev.event_target();
+    if let Ok(instance) = instances.get(entity) {
+        let b: &dyn super::traits::AbilityBehavior = match instance.behavior.as_deref() {
+            Some(b) => b,
+            None => &super::traits::DefaultAbilityBehavior,
+        };
+        b.end(&mut commands, entity, true);
+    }
 }
 
 // --- Helper functions ---
@@ -410,21 +558,6 @@ pub fn check_ability_activation_requirements(
     }
 
     true
-}
-
-/// System that updates ability cooldowns.
-pub fn update_ability_cooldowns_system(
-    mut commands: Commands,
-    mut cooldowns: Query<(Entity, &mut AbilityCooldown)>,
-    time: Res<Time>,
-) {
-    for (entity, mut cooldown) in cooldowns.iter_mut() {
-        cooldown.tick(time.delta_secs());
-
-        if cooldown.is_expired() {
-            commands.entity(entity).remove::<AbilityCooldown>();
-        }
-    }
 }
 
 #[cfg(test)]

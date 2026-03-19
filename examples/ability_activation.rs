@@ -26,7 +26,11 @@ fn setup(mut commands: Commands, mut ability_registry: ResMut<AbilityRegistry>) 
     // Create player with granted ability
     let player = commands.spawn(GameplayTagCountContainer::default()).id();
     let ability = commands
-        .spawn((AbilitySpec::new("Fireball", 1), AbilityOwner(player)))
+        .spawn((
+            AbilitySpec::new("Fireball", 1),
+            AbilityActiveState::default(),
+            AbilityOwner(player),
+        ))
         .id();
 
     info!(
@@ -38,13 +42,13 @@ fn setup(mut commands: Commands, mut ability_registry: ResMut<AbilityRegistry>) 
 
 fn activate_ability(
     mut commands: Commands,
-    abilities: Query<(Entity, &AbilitySpec, &AbilityOwner)>,
+    abilities: Query<(Entity, &AbilitySpec, &AbilityActiveState, &AbilityOwner)>,
     keyboard: Res<ButtonInput<KeyCode>>,
 ) {
     if keyboard.just_pressed(KeyCode::Space) {
-        for (ability_entity, spec, owner) in &abilities {
-            info!("→ TryActivate: {}", spec.is_active);
-            if !spec.is_active {
+        for (ability_entity, spec, active_state, owner) in &abilities {
+            info!("→ TryActivate: active={}", active_state.is_active);
+            if !active_state.is_active {
                 info!("→ TryActivate: {}", spec.definition_id);
                 commands.trigger(TryActivateAbilityEvent {
                     ability_spec: ability_entity,
@@ -55,10 +59,11 @@ fn activate_ability(
     }
 
     if keyboard.just_pressed(KeyCode::KeyE) {
-        for (ability_entity, spec, owner) in &abilities {
-            if spec.is_active {
+        for (ability_entity, spec, active_state, owner) in &abilities {
+            if active_state.is_active {
                 info!("→ EndAbility: {}", spec.definition_id);
                 commands.trigger(EndAbilityEvent {
+                    instance: None, // End all instances
                     ability_spec: ability_entity,
                     owner: owner.0,
                 });

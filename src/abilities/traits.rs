@@ -33,12 +33,14 @@ pub type ActivationCheckResult = Result<(), ActivationCheckFailure>;
 
 /// Ability behavior trait for custom ability logic.
 ///
-/// Implement this trait to define custom behavior for abilities.
-/// All methods have default implementations that do nothing.
+/// The behavior is stored on the AbilityDefinition (in the registry) and
+/// cloned (via Arc) onto each AbilitySpecInstance when activated.
+///
+/// Lifecycle: can_activate → pre_activate → activate → commit → end
 pub trait AbilityBehavior: Send + Sync + 'static {
     /// Check if the ability can be activated.
     ///
-    /// Called before any costs are applied. Return Err with details if activation should be prevented.
+    /// Called before any costs are applied.
     fn can_activate(
         &self,
         world: &World,
@@ -49,7 +51,7 @@ pub trait AbilityBehavior: Send + Sync + 'static {
         let Some(spec) = world.get::<AbilitySpec>(ability_entity) else {
             return Err(ActivationCheckFailure::MissingComponents);
         };
-        info!("Press 1");
+
         let registry = world.resource::<AbilityRegistry>();
         let Some(definition) = registry.get(&spec.definition_id) else {
             return Err(ActivationCheckFailure::MissingComponents);
@@ -58,7 +60,7 @@ pub trait AbilityBehavior: Send + Sync + 'static {
         let Some(source_tags) = world.get::<GameplayTagCountContainer>(source) else {
             return Err(ActivationCheckFailure::MissingComponents);
         };
-        info!("Press 2");
+
         // Check cooldown
         if let Some(cd_id) = &definition.cooldown_effect
             && let Some(cd_def) = effect_registry.get(cd_id.as_ref())
@@ -72,8 +74,6 @@ pub trait AbilityBehavior: Send + Sync + 'static {
             );
             return Err(ActivationCheckFailure::OnCooldown(cooldown_tags));
         }
-        info!("Press 3");
-        // TODO: Check cost when attribute system is ready
 
         // Check source required tags
         if !definition.source_required_tags.is_empty()
@@ -89,7 +89,7 @@ pub trait AbilityBehavior: Send + Sync + 'static {
                 missing_tags,
             ));
         }
-        info!("Press 4");
+
         // Check source blocked tags
         if source_tags.has_any_matching_gameplay_tags(&definition.source_blocked_tags) {
             let mut blocked_tags = GameplayTagContainer::default();
@@ -101,37 +101,31 @@ pub trait AbilityBehavior: Send + Sync + 'static {
             return Err(ActivationCheckFailure::SourceHasBlockedTags(blocked_tags));
         }
 
-        // Check target tags - removed since target is not available at this stage
-        info!("Press 5");
         Ok(())
     }
 
-    /// Called before activation begins.
-    ///
-    /// Use this for setup logic before the ability enters the Activating state.
-    fn pre_activate(&self, world: &mut World, ability_entity: Entity, _source: Entity) {
-        let Some(mut spec) = world.get_mut::<AbilitySpec>(ability_entity) else {
-            return;
-        };
-        spec.is_active = true;
-        spec.active_count += 1;
+    /// Called before activation begins. Runs with &mut World access.
+    fn pre_activate(
+        &self,
+        _world: &mut World,
+        _instance_entity: Entity,
+        _spec_entity: Entity,
+        _source: Entity,
+    ) {
     }
 
-    /// Called when the ability is activated.
-    ///
-    /// This is where the main ability logic should go (spawn projectiles, apply effects, etc).
+    /// Called when the ability instance is activated. Main ability logic goes here.
     fn activate(
         &self,
         _world: &mut World,
-        _ability_entity: Entity,
+        _instance_entity: Entity,
+        _spec_entity: Entity,
         _source: Entity,
         _target: Option<Entity>,
     ) {
     }
 
-    /// Check if the ability can be committed (cost and cooldown check).
-    ///
-    /// Called before applying costs and cooldowns to ensure resources haven't changed.
+    /// Check if the ability can be committed (cost and cooldown re-check).
     fn commit_check(
         &self,
         world: &World,
@@ -158,14 +152,10 @@ pub trait AbilityBehavior: Send + Sync + 'static {
             return Err(ActivationCheckFailure::OnCooldown(cooldown_tags));
         }
 
-        // TODO: Check cost when attribute system is ready
-
         Ok(())
     }
 
-    /// Called when the ability is committed.
-    ///
-    /// Re-checks cost and cooldown, then queues commit commands.
+    /// Called when the ability is committed. Re-checks cost/cooldown, then executes.
     fn commit(
         &self,
         world: &World,
@@ -175,18 +165,12 @@ pub trait AbilityBehavior: Send + Sync + 'static {
         source: Entity,
         tags_manager: &Res<GameplayTagsManager>,
     ) -> ActivationCheckResult {
-        // Re-check cost and cooldown
         self.commit_check(world, definition, source, tags_manager)?;
-
-        // Execute commit logic
         self.commit_execute(commands, definition, spec, source);
-
         Ok(())
     }
 
     /// Execute commit logic (apply costs and cooldowns).
-    ///
-    /// Override this for custom commit behavior.
     fn commit_execute(
         &self,
         commands: &mut Commands,
@@ -194,7 +178,6 @@ pub trait AbilityBehavior: Send + Sync + 'static {
         spec: &AbilitySpec,
         source: Entity,
     ) {
-        // Apply cooldown effects
         if let Some(cd_id) = &definition.cooldown_effect {
             commands.trigger(ApplyGameplayEffectEvent {
                 effect_id: cd_id.clone(),
@@ -204,7 +187,6 @@ pub trait AbilityBehavior: Send + Sync + 'static {
             });
         };
 
-        // Apply cost effects
         if let Some(cost_id) = &definition.cost_effect {
             commands.trigger(ApplyGameplayEffectEvent {
                 effect_id: cost_id.clone(),
@@ -215,13 +197,10 @@ pub trait AbilityBehavior: Send + Sync + 'static {
         }
     }
 
-    /// Called when the ability ends.
-    ///
-    /// Use this for cleanup logic. The `was_cancelled` parameter indicates
-    /// whether the ability ended normally or was cancelled.
-    fn end(&self, commands: &mut Commands, ability_entity: Entity, was_cancelled: bool) {
+    /// Called when the ability instance ends. Cleanup logic goes here.
+    fn end(&self, commands: &mut Commands, instance_entity: Entity, was_cancelled: bool) {
         commands.trigger(OnGameplayAbilityEnded {
-            ability_spec: ability_entity,
+            ability_instance: instance_entity,
             was_cancelled,
         });
     }

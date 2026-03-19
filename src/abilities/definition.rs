@@ -4,50 +4,21 @@
 
 use bevy::prelude::*;
 use bevy_gameplay_tag::{GameplayTagContainer, GameplayTagsManager, gameplay_tag::GameplayTag};
-use string_cache::DefaultAtom as Atom;
 use std::sync::Arc;
+use string_cache::DefaultAtom as Atom;
 
 use super::traits::AbilityBehavior;
 
-/// Instancing policy for abilities.
+/// Ability definition — pure configuration data stored in the AbilityRegistry.
 ///
-/// Determines how ability instances are created and managed.
-/// ECS no need this.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[warn(dead_code)]
-pub enum InstancingPolicy {
-    /// Ability is not instanced. The spec itself is used for activation.
-    NonInstanced,
-    /// A new instance is created per execution.
-    InstancedPerExecution,
-    /// A single instance is created per actor.
-    InstancedPerActor,
-}
-
-/// Net execution policy for abilities.
-///
-/// Determines where the ability executes in a networked environment.
-/// For single-player games, this is mostly informational.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum NetExecutionPolicy {
-    /// Execute on local client only.
-    LocalOnly,
-    /// Execute on server only.
-    ServerOnly,
-    /// Execute on both client and server.
-    LocalPredicted,
-}
-
-/// Ability definition.
-///
-/// This is the template for creating ability instances.
-/// Store these in a resource or asset system.
+/// Each ability type is described by one definition. When granted to a character,
+/// an AbilitySpec entity is spawned referencing this definition by ID. When
+/// activated, an AbilitySpecInstance child entity is spawned carrying a clone
+/// of the behavior Arc for the duration of execution.
 #[derive(Clone)]
 pub struct AbilityDefinition {
     /// Unique identifier for this ability.
     pub id: Atom,
-    /// Net execution policy (for future networking support).
-    pub net_execution_policy: NetExecutionPolicy,
     /// Effect ID to apply as costs when the ability is committed.
     pub cost_effect: Option<Atom>,
     /// Effect ID to apply as cooldown when the ability is committed.
@@ -74,13 +45,16 @@ pub struct AbilityDefinition {
     pub cancel_abilities_with_tags: GameplayTagContainer,
     /// Custom behavior implementation.
     pub behavior: Option<Arc<dyn AbilityBehavior>>,
+    /// Whether instances of this ability block other abilities by default.
+    pub default_blocks_other_abilities: bool,
+    /// Whether instances of this ability are cancelable by default.
+    pub default_is_cancelable: bool,
 }
 
 impl std::fmt::Debug for AbilityDefinition {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AbilityDefinition")
             .field("id", &self.id)
-            .field("net_execution_policy", &self.net_execution_policy)
             .field("cost_effect", &self.cost_effect)
             .field("cooldown_effect", &self.cooldown_effect)
             .field("ability_tags", &self.ability_tags)
@@ -92,7 +66,10 @@ impl std::fmt::Debug for AbilityDefinition {
             .field("target_required_tags", &self.target_required_tags)
             .field("target_blocked_tags", &self.target_blocked_tags)
             .field("block_abilities_with_tags", &self.block_abilities_with_tags)
-            .field("cancel_abilities_with_tags", &self.cancel_abilities_with_tags)
+            .field(
+                "cancel_abilities_with_tags",
+                &self.cancel_abilities_with_tags,
+            )
             .field("behavior", &self.behavior.as_ref().map(|_| "<behavior>"))
             .finish()
     }
@@ -111,7 +88,6 @@ impl AbilityDefinition {
     pub fn new(id: impl Into<Atom>) -> Self {
         Self {
             id: id.into(),
-            net_execution_policy: NetExecutionPolicy::LocalOnly,
             cost_effect: None,
             cooldown_effect: None,
             ability_tags: GameplayTagContainer::default(),
@@ -125,18 +101,14 @@ impl AbilityDefinition {
             block_abilities_with_tags: GameplayTagContainer::default(),
             cancel_abilities_with_tags: GameplayTagContainer::default(),
             behavior: None,
+            default_blocks_other_abilities: true,
+            default_is_cancelable: true,
         }
     }
 
     /// Sets the behavior implementation.
     pub fn with_behavior(mut self, behavior: Arc<dyn AbilityBehavior>) -> Self {
         self.behavior = Some(behavior);
-        self
-    }
-
-    /// Sets the net execution policy.
-    pub fn with_net_execution_policy(mut self, policy: NetExecutionPolicy) -> Self {
-        self.net_execution_policy = policy;
         self
     }
 
@@ -149,6 +121,18 @@ impl AbilityDefinition {
     /// Sets the cooldown effect.
     pub fn with_cooldown_effect(mut self, effect_id: impl Into<Atom>) -> Self {
         self.cooldown_effect = Some(effect_id.into());
+        self
+    }
+
+    /// Sets whether instances block other abilities by default.
+    pub fn with_blocks_other_abilities(mut self, blocks: bool) -> Self {
+        self.default_blocks_other_abilities = blocks;
+        self
+    }
+
+    /// Sets whether instances are cancelable by default.
+    pub fn with_cancelable(mut self, cancelable: bool) -> Self {
+        self.default_is_cancelable = cancelable;
         self
     }
 
@@ -260,17 +244,14 @@ pub struct AbilityRegistry {
 }
 
 impl AbilityRegistry {
-    /// Creates a new empty registry.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Registers an ability definition.
     pub fn register(&mut self, definition: AbilityDefinition) {
         self.definitions.insert(definition.id.clone(), definition);
     }
 
-    /// Gets an ability definition by ID.
     pub fn get(&self, id: impl Into<Atom>) -> Option<&AbilityDefinition> {
         self.definitions.get(&id.into())
     }
