@@ -3,9 +3,6 @@
 //! This module re-exports all events from the various GAS subsystems
 //! for convenient access.
 
-// Re-export attribute events
-pub use crate::attributes::systems::AttributeChangedEvent;
-
 // Re-export effect events
 pub use crate::effects::systems::{
     ApplyGameplayEffectEvent, GameplayEffectAppliedEvent, GameplayEffectRemovedEvent,
@@ -13,7 +10,7 @@ pub use crate::effects::systems::{
 
 // Re-export ability events
 pub use crate::abilities::systems::{
-    AbilityActivatedEvent, AbilityActivationFailedEvent, AbilityEndedEvent, CancelAbilityEvent,
+    AbilityActivatedEvent, AbilityActivationFailedEvent, CancelAbilityEvent,
     CommitAbilityEvent, CommitAbilityResultEvent, EndAbilityEvent, TryActivateAbilityEvent,
 };
 
@@ -41,9 +38,10 @@ mod tests {
 
     #[test]
     fn test_batchable_event_trait() {
+        use string_cache::DefaultAtom as Atom;
         let event = ApplyGameplayEffectEvent {
             target: Entity::PLACEHOLDER,
-            effect_id: "test".to_string(),
+            effect_id: Atom::from("test"),
             level: 1,
             instigator: None,
         };

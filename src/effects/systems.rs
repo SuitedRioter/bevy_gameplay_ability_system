@@ -4,11 +4,15 @@
 
 use super::components::*;
 use super::definition::*;
-use crate::attributes::{AttributeData, AttributeName, AttributeOwner};
+use crate::attributes::{
+    AttributeData, AttributeLifecycleHooks, AttributeModifyContext, AttributeName, AttributeSetId,
+};
+use bevy::ecs::relationship::Relationship;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy_gameplay_tag::GameplayTagsManager;
 use bevy_gameplay_tag::gameplay_tag_count_container::GameplayTagCountContainer;
+use string_cache::DefaultAtom as Atom;
 
 /// Bundled query parameters for applying gameplay effects.
 #[derive(SystemParam)]
@@ -20,7 +24,7 @@ pub struct ApplyEffectParams<'w, 's> {
         (
             &'static mut AttributeData,
             &'static AttributeName,
-            &'static AttributeOwner,
+            &'static ChildOf,
         ),
     >,
     pub existing_effects: Query<
@@ -39,7 +43,7 @@ pub struct ApplyEffectParams<'w, 's> {
 #[derive(Event, Debug, Clone)]
 pub struct ApplyGameplayEffectEvent {
     /// The effect definition ID to apply.
-    pub effect_id: String,
+    pub effect_id: Atom,
     /// The target entity.
     pub target: Entity,
     /// The instigator entity (optional).
@@ -56,7 +60,7 @@ pub struct GameplayEffectAppliedEvent {
     /// The target entity.
     pub target: Entity,
     /// The effect definition ID.
-    pub effect_id: String,
+    pub effect_id: Atom,
 }
 
 /// Event triggered when an effect is removed.
@@ -67,7 +71,7 @@ pub struct GameplayEffectRemovedEvent {
     /// The target entity.
     pub target: Entity,
     /// The effect definition ID.
-    pub effect_id: String,
+    pub effect_id: Atom,
 }
 
 /// Observer for ApplyGameplayEffectEvent.
@@ -155,7 +159,7 @@ pub fn on_apply_gameplay_effect(
             for modifier in &definition.modifiers {
                 let magnitude = modifier.magnitude.evaluate(level, None);
                 for (mut attr_data, attr_name, attr_owner) in params.attributes.iter_mut() {
-                    if attr_owner.0 == target && attr_name.as_str() == modifier.attribute_name {
+                    if attr_owner.0 == target && attr_name.0 == modifier.attribute_name {
                         match modifier.operation {
                             ModifierOperation::AddBase => {
                                 attr_data.base_value += magnitude;
@@ -289,44 +293,111 @@ pub fn create_effect_modifiers_system(
 
 /// System that aggregates attribute modifiers and applies them to attributes.
 pub fn aggregate_attribute_modifiers_system(
-    mut attributes: Query<(Entity, &mut AttributeData, &AttributeName, &AttributeOwner)>,
+    mut attributes: Query<(
+        Entity,
+        &mut AttributeData,
+        &AttributeName,
+        &ChildOf,
+        &AttributeSetId,
+    )>,
     modifiers: Query<&AttributeModifier>,
+    hooks: Option<Res<AttributeLifecycleHooks>>,
 ) {
-    for (_attr_entity, mut attr_data, attr_name, attr_owner) in attributes.iter_mut() {
+    for (attr_entity, mut attr_data, attr_name, child_of, set_id) in attributes.iter_mut() {
+        let owner = child_of.get();
         let mut applicable_modifiers: Vec<_> = modifiers
             .iter()
-            .filter(|m| m.target_entity == attr_owner.0 && m.target_attribute == attr_name.as_str())
+            .filter(|m| m.target_entity == owner && m.target_attribute == attr_name.0)
             .collect();
 
         applicable_modifiers.sort_by_key(|m| m.operation.priority());
 
-        let mut current = attr_data.base_value;
-        let mut additive_multiplier = 0.0;
-        let mut multiplicative_multiplier = 1.0;
+        // Check for Override first (short-circuit)
+        if let Some(override_mod) = applicable_modifiers
+            .iter()
+            .find(|m| matches!(m.operation, ModifierOperation::Override))
+        {
+            let old_value = attr_data.current_value;
+            let new_value = override_mod.magnitude;
+            if (old_value - new_value).abs() > f32::EPSILON {
+                let mut context = AttributeModifyContext {
+                    owner,
+                    attribute: attr_entity,
+                    attribute_name: attr_name.0.clone(),
+                    old_value,
+                    new_value,
+                    source_effect: None,
+                };
 
-        for modifier in applicable_modifiers {
-            match modifier.operation {
-                ModifierOperation::AddBase => {}
-                ModifierOperation::AddCurrent => {
-                    current += modifier.magnitude;
+                // Call pre hook for this AttributeSet
+                if let Some(hooks_res) = &hooks
+                    && let Some(set_hooks) = hooks_res.get(set_id.0)
+                {
+                    (set_hooks.pre_change)(&mut context);
                 }
-                ModifierOperation::MultiplyAdditive => {
-                    additive_multiplier += modifier.magnitude;
-                }
-                ModifierOperation::MultiplyMultiplicative => {
-                    multiplicative_multiplier *= 1.0 + modifier.magnitude;
-                }
-                ModifierOperation::Override => {
-                    current = modifier.magnitude;
+
+                attr_data.current_value = context.new_value;
+
+                // Call post hook
+                if let Some(hooks_res) = &hooks
+                    && let Some(set_hooks) = hooks_res.get(set_id.0)
+                {
+                    (set_hooks.post_change)(&context);
                 }
             }
+            continue;
         }
 
-        current *= 1.0 + additive_multiplier;
-        current *= multiplicative_multiplier;
+        let mut current = attr_data.base_value;
 
-        if (current - attr_data.current_value).abs() > f32::EPSILON {
-            attr_data.current_value = current;
+        // AddCurrent
+        for modifier in applicable_modifiers
+            .iter()
+            .filter(|m| matches!(m.operation, ModifierOperation::AddCurrent))
+        {
+            current += modifier.magnitude;
+        }
+
+        // MultiplyAdditive: (1 + sum)
+        let additive_multiplier: f32 = applicable_modifiers
+            .iter()
+            .filter(|m| matches!(m.operation, ModifierOperation::MultiplyAdditive))
+            .map(|m| m.magnitude)
+            .sum();
+        current *= 1.0 + additive_multiplier;
+
+        // MultiplyMultiplicative: prod(1 + m)
+        for modifier in applicable_modifiers
+            .iter()
+            .filter(|m| matches!(m.operation, ModifierOperation::MultiplyMultiplicative))
+        {
+            current *= 1.0 + modifier.magnitude;
+        }
+
+        let old_value = attr_data.current_value;
+        if (current - old_value).abs() > f32::EPSILON {
+            let mut context = AttributeModifyContext {
+                owner,
+                attribute: attr_entity,
+                attribute_name: attr_name.0.clone(),
+                old_value,
+                new_value: current,
+                source_effect: None,
+            };
+
+            if let Some(hooks_res) = &hooks
+                && let Some(set_hooks) = hooks_res.get(set_id.0)
+            {
+                (set_hooks.pre_change)(&mut context);
+            }
+
+            attr_data.current_value = context.new_value;
+
+            if let Some(hooks_res) = &hooks
+                && let Some(set_hooks) = hooks_res.get(set_id.0)
+            {
+                (set_hooks.post_change)(&context);
+            }
         }
     }
 }
@@ -393,7 +464,8 @@ pub fn execute_periodic_effects_system(
     time: Res<Time>,
 ) {
     for (mut periodic, _active_effect, _target) in effects.iter_mut() {
-        if periodic.tick(time.delta_secs()) {
+        let executions = periodic.tick(time.delta_secs());
+        for _ in 0..executions {
             // TODO: Trigger periodic execution
         }
     }
@@ -459,7 +531,7 @@ mod tests {
             .id();
 
         app.world_mut().trigger(ApplyGameplayEffectEvent {
-            effect_id: "test_effect".to_string(),
+            effect_id: Atom::from("test_effect"),
             target,
             instigator: None,
             level: 1,
@@ -469,7 +541,7 @@ mod tests {
 
         let apply_events = app.world().resource::<ReceivedApplyEvents>();
         assert_eq!(apply_events.0.len(), 1);
-        assert_eq!(apply_events.0[0].effect_id, "test_effect");
+        assert_eq!(apply_events.0[0].effect_id, Atom::from("test_effect"));
         assert_eq!(apply_events.0[0].target, target);
     }
 }

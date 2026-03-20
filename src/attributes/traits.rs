@@ -3,9 +3,11 @@
 //! This module provides traits for defining custom attribute sets.
 
 use super::components::{
-    AttributeData, AttributeMetadata, AttributeMetadataComponent, AttributeName, AttributeOwner,
+    AttributeData, AttributeMetadata, AttributeMetadataComponent, AttributeName, AttributeSetId,
 };
+use super::hooks::{AttributeLifecycleHooks, AttributeModifyContext, AttributeSetHooks};
 use bevy::prelude::*;
+use bevy::ecs::relationship::Relationship;
 
 /// Trait for defining an attribute set.
 ///
@@ -52,12 +54,41 @@ pub trait AttributeSetDefinition: Send + Sync + 'static {
     /// Returns the default value for a specific attribute.
     fn default_value(name: &str) -> f32;
 
+    /// Called before current_value changes. Can modify new_value.
+    #[allow(unused_variables)]
+    fn pre_attribute_change(context: &mut AttributeModifyContext) {}
+
+    /// Called after current_value changes.
+    #[allow(unused_variables)]
+    fn post_attribute_change(context: &AttributeModifyContext) {}
+
+    /// Called before base_value changes. Can modify new_value.
+    #[allow(unused_variables)]
+    fn pre_attribute_base_change(context: &mut AttributeModifyContext) {}
+
+    /// Called after base_value changes.
+    #[allow(unused_variables)]
+    fn post_attribute_base_change(context: &AttributeModifyContext) {}
+
+    /// Register this AttributeSet's hooks. Call once at startup.
+    fn register_hooks(world: &mut World) {
+        let type_id = std::any::TypeId::of::<Self>();
+        let hooks = AttributeSetHooks {
+            pre_change: Self::pre_attribute_change,
+            post_change: Self::post_attribute_change,
+            pre_base_change: Self::pre_attribute_base_change,
+            post_base_change: Self::post_attribute_base_change,
+        };
+
+        if let Some(mut hooks_res) = world.get_resource_mut::<AttributeLifecycleHooks>() {
+            hooks_res.register(type_id, hooks);
+        }
+    }
+
     /// Creates all attributes for this set and attaches them to the owner entity.
-    ///
-    /// This is a convenience method that creates attribute entities with the
-    /// appropriate components.
     fn create_attributes(commands: &mut Commands, owner: Entity) -> Vec<Entity> {
         let mut attribute_entities = Vec::new();
+        let set_id = AttributeSetId(std::any::TypeId::of::<Self>());
 
         for &name in Self::attribute_names() {
             let default_value = Self::default_value(name);
@@ -66,13 +97,14 @@ pub trait AttributeSetDefinition: Send + Sync + 'static {
             let mut entity_commands = commands.spawn((
                 AttributeData::new(default_value),
                 AttributeName::new(name),
-                AttributeOwner(owner),
+                set_id,
             ));
 
             if let Some(metadata) = metadata {
                 entity_commands.insert(AttributeMetadataComponent(metadata));
             }
 
+            entity_commands.set_parent_in_place(owner);
             attribute_entities.push(entity_commands.id());
         }
 
@@ -86,11 +118,11 @@ pub trait AttributeSetDefinition: Send + Sync + 'static {
 pub fn find_attribute(
     owner: Entity,
     attribute_name: &str,
-    query: &Query<(Entity, &AttributeName, &AttributeOwner)>,
+    query: &Query<(Entity, &AttributeName, &ChildOf)>,
 ) -> Option<Entity> {
     query
         .iter()
-        .find(|(_, name, attr_owner)| attr_owner.0 == owner && name.as_str() == attribute_name)
+        .find(|(_, name, child_of)| child_of.get() == owner && name.as_str() == attribute_name)
         .map(|(entity, _, _)| entity)
 }
 

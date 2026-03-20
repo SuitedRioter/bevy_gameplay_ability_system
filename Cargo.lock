@@ -832,7 +832,8 @@ dependencies = [
 [[package]]
 name = "bevy_gameplay_tag"
 version = "0.1.0"
-source = "git+https://github.com/SuitedRioter/bevy_gameplay_tag.git?branch=main#eeeae0bb6a0e27849a99244bbd153ec480bb8d9d"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cbafe9e21a8bab54abe3e60cb9e77a6c28e7d3e4aa66eb68d714a38096c5a1a7"
 dependencies = [
  "bevy",
  "serde",

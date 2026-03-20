@@ -39,11 +39,21 @@ impl AttributeData {
         }
     }
 
-    /// Sets the base value and updates the current value.
+    /// Sets the base value.
     ///
     /// This should be used for permanent changes to the attribute.
+    /// Note: This does NOT trigger lifecycle events. Use the system-level
+    /// functions for event-driven changes.
     pub fn set_base_value(&mut self, value: f32) {
         self.base_value = value;
+    }
+
+    /// Sets the current value.
+    ///
+    /// This should be used for temporary changes to the attribute.
+    /// Note: This does NOT trigger lifecycle events. Use the system-level
+    /// functions for event-driven changes.
+    pub fn set_current_value(&mut self, value: f32) {
         self.current_value = value;
     }
 }
@@ -102,27 +112,21 @@ impl AttributeMetadata {
 #[derive(Component, Debug, Clone, PartialEq)]
 pub struct AttributeMetadataComponent(pub AttributeMetadata);
 
-/// Component that links an attribute to its owner entity.
-///
-/// This creates a relationship between an attribute entity and the entity that owns it.
-#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
-pub struct AttributeOwner(pub Entity);
-
 /// Component that identifies which attribute this entity represents.
 ///
-/// This stores the name/identifier of the attribute for lookups.
+/// Uses interned strings (Atom) for O(1) comparison performance.
 #[derive(Component, Debug, Clone, PartialEq, Eq, Hash)]
-pub struct AttributeName(pub String);
+pub struct AttributeName(pub string_cache::DefaultAtom);
 
 impl AttributeName {
     /// Creates a new attribute name.
-    pub fn new(name: impl Into<String>) -> Self {
+    pub fn new(name: impl Into<string_cache::DefaultAtom>) -> Self {
         Self(name.into())
     }
 
     /// Gets the attribute name as a string slice.
     pub fn as_str(&self) -> &str {
-        &self.0
+        self.0.as_ref()
     }
 }
 
@@ -135,6 +139,10 @@ pub struct PreviousAttributeValue {
     pub previous_current: f32,
     pub previous_base: f32,
 }
+
+/// Marker component identifying which AttributeSet this attribute belongs to.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct AttributeSetId(pub std::any::TypeId);
 
 #[cfg(test)]
 mod tests {
@@ -152,7 +160,8 @@ mod tests {
         let mut attr = AttributeData::new(100.0);
         attr.set_base_value(150.0);
         assert_eq!(attr.base_value, 150.0);
-        assert_eq!(attr.current_value, 150.0);
+        // current_value is not automatically updated
+        assert_eq!(attr.current_value, 100.0);
     }
 
     #[test]

@@ -48,7 +48,6 @@ pub mod utils;
 pub mod prelude {
     pub use crate::attributes::components::*;
     pub use crate::attributes::plugin::AttributePlugin;
-    pub use crate::attributes::systems::AttributeChangedEvent;
     pub use crate::attributes::traits::*;
 
     pub use crate::effects::components::*;
@@ -62,9 +61,10 @@ pub mod prelude {
     pub use crate::abilities::definition::*;
     pub use crate::abilities::plugin::AbilityPlugin;
     pub use crate::abilities::systems::{
-        AbilityActivatedEvent, AbilityActivationFailedEvent, AbilityEndedEvent,
+        AbilityActivatedEvent, AbilityActivationFailedEvent,
         ActivationFailureReason, CancelAbilityEvent, CommitAbilityEvent,
-        CommitAbilityResultEvent, EndAbilityEvent, TryActivateAbilityEvent,
+        CommitAbilityResultEvent, EndAbilityEvent, OnGameplayAbilityEnded,
+        TryActivateAbilityEvent,
     };
 
     pub use crate::cues::manager::*;
@@ -73,7 +73,6 @@ pub mod prelude {
     pub use crate::cues::systems::TriggerGameplayCueEvent;
 
     pub use crate::core::events::*;
-    pub use crate::core::handles::*;
     pub use crate::core::system_sets::*;
 
     pub use crate::utils::*;

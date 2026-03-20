@@ -4,7 +4,7 @@
 
 use super::definition::AbilityRegistry;
 use super::systems::*;
-use crate::core::system_sets::{AbilitySystemSet, GasSystemSet};
+use crate::core::system_sets::GasSystemSet;
 use crate::effects::definition::GameplayEffectRegistry;
 use bevy::prelude::*;
 
@@ -22,24 +22,12 @@ impl Plugin for AbilityPlugin {
             .add_observer(on_commit_ability)
             .add_observer(on_end_ability)
             .add_observer(on_cancel_ability)
-            // Register kept systems with proper system sets
+            .add_observer(on_instance_removed)
+            // Exclusive system: drives pending activations.
             .add_systems(
                 Update,
-                cancel_abilities_by_tags_system
-                    .in_set(GasSystemSet::Abilities)
-                    .in_set(AbilitySystemSet::Cancel),
-            )
-            .add_systems(
-                Update,
-                update_ability_states_system
-                    .in_set(GasSystemSet::Abilities)
-                    .in_set(AbilitySystemSet::UpdateStates),
-            )
-            .add_systems(
-                Update,
-                update_ability_cooldowns_system
-                    .in_set(GasSystemSet::Abilities)
-                    .in_set(AbilitySystemSet::UpdateCooldowns),
+                execute_pending_activations_system
+                    .in_set(GasSystemSet::Abilities),
             );
     }
 }

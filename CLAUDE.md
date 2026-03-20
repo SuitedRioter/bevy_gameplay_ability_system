@@ -24,7 +24,7 @@ Examples: `basic_attributes`, `ability_activation`, `gameplay_effects`, `complet
 
 Six modules. Effects, abilities, and cues follow `components.rs`/`definition.rs`/`plugin.rs`/`systems.rs`. Attributes uses `traits.rs` instead of `definition.rs`.
 
-**Attributes** (`src/attributes/`) — Dual-value model (BaseValue/CurrentValue). Each attribute is a separate entity linked to its owner via `AttributeOwner`. Custom attribute sets implement the `AttributeSetDefinition` trait (in `traits.rs`). Modifiers applied in order: Add → Multiply → Override.
+**Attributes** (`src/attributes/`) — Dual-value model (BaseValue/CurrentValue). Each attribute is a separate entity linked to its owner via Bevy's `ChildOf` relationship (using `set_parent_in_place`). Custom attribute sets implement the `AttributeSetDefinition` trait (in `traits.rs`). Modifiers applied in order: Add → Multiply → Override.
 
 **Effects** (`src/effects/`) — Modify attributes via `GameplayEffectDefinition` templates stored in `GameplayEffectRegistry`. Each active effect is its own entity with `ActiveGameplayEffect` + `EffectTarget` components. Supports three duration policies (Instant, HasDuration, Infinite), periodic execution, and stacking (Independent, RefreshDuration, StackCount). Tag requirements gate application.
 
@@ -47,7 +47,7 @@ Input → Attributes → Effects → Abilities → Cues → Cleanup
 Sub-sets (all chained within their parent):
 - `AttributeSystemSet`: Clamp → Events
 - `EffectSystemSet`: Apply → CreateModifiers → Aggregate → UpdateDurations → ExecutePeriodic → RemoveExpired → RemoveInstant
-- `AbilitySystemSet`: TryActivate → Commit → End → Cancel → UpdateStates → UpdateCooldowns
+- Abilities: Single exclusive system (`execute_pending_activations_system`), other logic via Observers
 - `CueSystemSet`: Handle → Route → ExecuteStatic → ManageActors → Cleanup → UpdateWhileActive
 
 Add custom systems to the appropriate set with `.in_set(GasSystemSet::X)`.
@@ -85,3 +85,25 @@ Integration tests in `tests/` (`ability_activation_flow.rs`, `effect_application
 - Document WHY, not what
 - No over-engineering: only make changes directly requested
 - Delete unused code completely, no backwards-compat hacks
+
+## Project Status
+
+**⚠️ In Active Development** — Core systems functional but incomplete. Examples and comprehensive tests pending.
+
+## Known Issues & Technical Debt
+
+**Critical:**
+1. `AttributeData::set_base_value()` overwrites `current_value`, losing all active modifiers. Should only set `base_value` and let aggregation recalculate.
+2. Instant effects with `granted_tags` cause tag leaks (tags added but never removed since no entity exists).
+3. `execute_periodic_effects_system` has TODO — periodic effects tick but don't execute modifiers.
+4. `ModifierOperation::AddBase` is skipped in aggregation (line 309 in effects/systems.rs) — semantic unclear.
+
+**Design:**
+5. `StackCount` policy spawns duplicate modifiers on each stack without cleanup.
+6. Handle types (`AbilityHandle`, `EffectHandle`, `AttributeHandle`) defined but unused. Delete or implement generation tracking.
+7. String IDs (`definition_id`, `attribute_name`) used everywhere despite `string_cache` dependency. Consider using `Atom` for performance.
+
+**Code Quality:**
+8. `Changed<AttributeData>` filter used in both clamp and event systems — may cause duplicate events in same frame.
+9. Tests use hardcoded `"assets/gameplay_tags.json"` path — fails in CI/different environments.
+10. Registry lookup failures use `warn!` + early return — callers can't detect failures. Consider error events.
