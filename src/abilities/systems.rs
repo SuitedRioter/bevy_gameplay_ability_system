@@ -333,6 +333,11 @@ pub fn on_try_activate_ability(
         return;
     };
 
+    // Check if already pending activation (prevent duplicate activation in same frame).
+    if world.get::<PendingActivation>(spec_entity).is_some() {
+        return;
+    }
+
     let behavior = definition
         .behavior
         .as_ref()
