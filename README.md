@@ -36,9 +36,9 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-bevy = "0.18"
+bevy = "0.18.1"
 bevy_gameplay_ability_system = "0.1"
-bevy_gameplay_tag = { git = "https://github.com/SuitedRioter/bevy_gameplay_tag.git", branch = "main" }
+bevy_gameplay_tag = "0.2.0"
 ```
 
 ## Quick Start
