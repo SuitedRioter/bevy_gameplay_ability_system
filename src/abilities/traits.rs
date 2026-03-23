@@ -63,7 +63,9 @@ pub trait AbilityBehavior: Send + Sync + 'static {
         // Check cooldown
         if let Some(cd_id) = &definition.cooldown_effect
             && let Some(cd_def) = effect_registry.get(cd_id.as_ref())
-            && source_tags.0.has_any_matching_gameplay_tags(&cd_def.granted_tags)
+            && source_tags
+                .0
+                .has_any_matching_gameplay_tags(&cd_def.granted_tags)
         {
             let mut cooldown_tags = GameplayTagContainer::default();
             cooldown_tags.append_matches_tags(
@@ -76,7 +78,9 @@ pub trait AbilityBehavior: Send + Sync + 'static {
 
         // Check source required tags
         if !definition.source_required_tags.is_empty()
-            && !source_tags.0.has_all_matching_gameplay_tags(&definition.source_required_tags)
+            && !source_tags
+                .0
+                .has_all_matching_gameplay_tags(&definition.source_required_tags)
         {
             let mut missing_tags = GameplayTagContainer::default();
             missing_tags.append_matches_tags(
@@ -90,7 +94,10 @@ pub trait AbilityBehavior: Send + Sync + 'static {
         }
 
         // Check source blocked tags
-        if source_tags.0.has_any_matching_gameplay_tags(&definition.source_blocked_tags) {
+        if source_tags
+            .0
+            .has_any_matching_gameplay_tags(&definition.source_blocked_tags)
+        {
             let mut blocked_tags = GameplayTagContainer::default();
             blocked_tags.append_matches_tags(
                 &source_tags.0.explicit_tags,
@@ -140,7 +147,9 @@ pub trait AbilityBehavior: Send + Sync + 'static {
         // Check cooldown
         if let Some(cd_id) = &definition.cooldown_effect
             && let Some(cd_def) = effect_registry.get(cd_id.as_ref())
-            && source_tags.0.has_any_matching_gameplay_tags(&cd_def.granted_tags)
+            && source_tags
+                .0
+                .has_any_matching_gameplay_tags(&cd_def.granted_tags)
         {
             let mut cooldown_tags = GameplayTagContainer::default();
             cooldown_tags.append_matches_tags(
