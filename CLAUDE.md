@@ -83,7 +83,6 @@ Integration tests in `tests/` (`ability_activation_flow.rs`, `effect_application
 - Make illegal states unrepresentable (enums over strings/sentinels)
 - Exhaustive pattern matching
 - Document WHY, not what
-- No over-engineering: only make changes directly requested
 - Delete unused code completely, no backwards-compat hacks
 
 ## Project Status

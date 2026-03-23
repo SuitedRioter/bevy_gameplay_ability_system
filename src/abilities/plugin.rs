@@ -23,10 +23,14 @@ impl Plugin for AbilityPlugin {
             .add_observer(on_end_ability)
             .add_observer(on_cancel_ability)
             .add_observer(on_instance_removed)
-            // Exclusive system: drives pending activations.
+            // Activation systems: spawn instances, then call activate.
             .add_systems(
                 Update,
-                execute_pending_activations_system
+                (
+                    spawn_pending_ability_instances_system,
+                    call_activate_ability_system,
+                )
+                    .chain()
                     .in_set(GasSystemSet::Abilities),
             );
     }

@@ -4,8 +4,8 @@
 //!
 //! Activation flow:
 //!   TryActivateAbilityEvent → can_activate check → PendingActivation marker
-//!   → execute_pending_activations_system (exclusive):
-//!       spawn AbilitySpecInstance child entity → pre_activate → activate → CommitAbilityEvent
+//!   → spawn_pending_ability_instances_system: spawn AbilitySpecInstance child entity → ReadyToActivate marker
+//!   → call_activate_ability_system: pre_activate → activate → CommitAbilityEvent
 //!   → on_commit_ability observer: apply costs/cooldowns
 //!
 //! End flow:
@@ -19,6 +19,7 @@
 use super::components::*;
 use super::definition::*;
 use crate::attributes::{AttributeData, AttributeName};
+use crate::core::BlockedAbilityTags;
 use crate::core::OwnedTags;
 use crate::effects::definition::GameplayEffectRegistry;
 use bevy::ecs::relationship::Relationship;
@@ -70,6 +71,7 @@ pub struct EndAbilityParams<'w, 's> {
         ),
     >,
     pub tag_containers: Query<'w, 's, &'static mut OwnedTags>,
+    pub blocked_ability_tags: Query<'w, 's, &'static mut BlockedAbilityTags>,
 }
 
 // --- Events ---
@@ -177,138 +179,125 @@ pub enum ActivationFailureReason {
 // --- Pending activation ---
 
 /// Marker component inserted by the observer when activation checks pass.
-/// The exclusive system picks this up to spawn the instance entity.
+/// The first system picks this up to spawn the instance entity.
 #[derive(Component, Debug, Clone, Copy)]
 pub struct PendingActivation {
     pub owner: Entity,
 }
 
-/// Exclusive system that drives pending ability activations.
+/// Marker component inserted after instance spawn, before activation.
+/// The second system picks this up to call behavior methods.
+#[derive(Component, Debug, Clone, Copy)]
+pub struct ReadyToActivate {
+    pub owner: Entity,
+    pub instance: Entity,
+}
+
+/// First system: spawns AbilitySpecInstance entities for pending activations.
 ///
 /// For each AbilitySpec with PendingActivation:
-/// 1. Spawns an AbilitySpecInstance child entity
-/// 2. Increments AbilityActiveState
-/// 3. Calls pre_activate → activate on the behavior
-/// 4. Triggers CommitAbilityEvent
-///
-/// Optimized to batch registry lookups and minimize world.flush() calls.
-pub fn execute_pending_activations_system(world: &mut World) {
-    // Collect pending entities first.
-    let pending_specs: Vec<(Entity, Entity, string_cache::DefaultAtom, i32)> = world
-        .query_filtered::<(Entity, &PendingActivation, &AbilitySpec), With<PendingActivation>>()
-        .iter(world)
-        .map(|(e, p, spec)| (e, p.owner, spec.definition_id.clone(), spec.level))
-        .collect();
+/// 1. Resolves the ability definition from registry
+/// 2. Spawns an AbilitySpecInstance child entity
+/// 3. Adds ReadyToActivate marker for the next system
+pub fn spawn_pending_ability_instances_system(
+    mut commands: Commands,
+    registry: Res<AbilityRegistry>,
+    pending_query: Query<(Entity, &PendingActivation, &AbilitySpec), With<PendingActivation>>,
+) {
+    for (spec_entity, pending, spec) in pending_query.iter() {
+        let Some(def) = registry.get(&spec.definition_id) else {
+            // Invalid definition, remove marker.
+            commands.entity(spec_entity).remove::<PendingActivation>();
+            continue;
+        };
 
-    if pending_specs.is_empty() {
-        return;
-    }
-
-    // Resolve definitions and collect spawn data.
-    let registry = world.resource::<AbilityRegistry>();
-    let mut pending = Vec::with_capacity(pending_specs.len());
-    let mut invalid_specs = Vec::new();
-
-    for (spec_entity, owner, definition_id, level) in pending_specs {
-        if let Some(def) = registry.get(&definition_id) {
-            pending.push((
-                spec_entity,
-                owner,
-                definition_id,
-                level,
-                def.behavior.clone(),
-                def.default_blocks_other_abilities,
-                def.default_is_cancelable,
-            ));
-        } else {
-            // Mark invalid specs for cleanup.
-            invalid_specs.push(spec_entity);
-        }
-    }
-
-    let _ = registry; // Release registry borrow.
-
-    // Remove invalid specs.
-    for spec_entity in invalid_specs {
-        world
-            .commands()
-            .entity(spec_entity)
-            .remove::<PendingActivation>();
-    }
-
-    // Batch spawn all instances before flushing.
-    let mut instances = Vec::with_capacity(pending.len());
-    for (spec_entity, owner, definition_id, level, behavior, blocks, cancelable) in &pending {
-        let instance_entity = world
-            .commands()
+        // Spawn instance entity as child of spec.
+        let instance_entity = commands
             .spawn((
                 AbilitySpecInstance {
-                    definition_id: definition_id.clone(),
-                    level: *level,
-                    behavior: behavior.clone(),
+                    definition_id: spec.definition_id.clone(),
+                    level: spec.level,
+                    behavior: def.behavior.clone(),
                 },
                 InstanceControlState {
                     is_active: true,
-                    is_blocking_other_abilities: *blocks,
-                    is_cancelable: *cancelable,
+                    is_blocking_other_abilities: def.default_blocks_other_abilities,
+                    is_cancelable: def.default_is_cancelable,
                 },
             ))
-            .set_parent_in_place(*spec_entity)
+            .set_parent_in_place(spec_entity)
             .id();
 
-        instances.push((
-            *spec_entity,
-            *owner,
-            instance_entity,
-            definition_id.clone(),
-            behavior.clone(),
-        ));
+        // Mark as ready for activation in next system.
+        commands.entity(spec_entity).insert(ReadyToActivate {
+            owner: pending.owner,
+            instance: instance_entity,
+        });
+
+        // Remove pending marker.
+        commands.entity(spec_entity).remove::<PendingActivation>();
     }
+}
 
-    // Single flush for all spawns.
-    world.flush();
+/// Second system: calls behavior lifecycle methods and triggers events.
+///
+/// For each AbilitySpec with ReadyToActivate:
+/// 1. Increments AbilityActiveState
+/// 2. Calls pre_activate → activate on the behavior
+/// 3. Triggers CommitAbilityEvent and AbilityActivatedEvent
+pub fn call_activate_ability_system(
+    mut commands: Commands,
+    mut ready_query: Query<
+        (Entity, &ReadyToActivate, &mut AbilityActiveState),
+        With<ReadyToActivate>,
+    >,
+    instances: Query<&AbilitySpecInstance>,
+) {
+    for (spec_entity, ready, mut active_state) in ready_query.iter_mut() {
+        let Ok(instance) = instances.get(ready.instance) else {
+            // Instance not found, skip.
+            commands.entity(spec_entity).remove::<ReadyToActivate>();
+            continue;
+        };
 
-    // Process activations.
-    for (spec_entity, owner, instance_entity, definition_id, behavior) in instances {
         // Increment active state.
-        if let Some(mut active_state) = world.get_mut::<AbilityActiveState>(spec_entity) {
-            active_state.increment();
-        }
+        active_state.increment();
 
         // Call behavior lifecycle methods.
-        let b: &dyn super::traits::AbilityBehavior = match behavior.as_deref() {
+        let b: &dyn super::traits::AbilityBehavior = match instance.behavior.as_deref() {
             Some(b) => b,
             None => &super::traits::DefaultAbilityBehavior,
         };
 
-        b.pre_activate(world, instance_entity, spec_entity, owner);
-        b.activate(world, instance_entity, spec_entity, owner, None);
+        b.pre_activate(&mut commands, ready.instance, spec_entity, ready.owner);
+        b.activate(
+            &mut commands,
+            ready.instance,
+            spec_entity,
+            ready.owner,
+            None,
+        );
 
         // Trigger events.
-        world.commands().trigger(CommitAbilityEvent {
+        commands.trigger(CommitAbilityEvent {
             ability_spec: spec_entity,
-            instance: instance_entity,
-            owner,
+            instance: ready.instance,
+            owner: ready.owner,
         });
 
-        world.commands().trigger(AbilityActivatedEvent {
+        commands.trigger(AbilityActivatedEvent {
             ability_spec: spec_entity,
-            owner,
-            instance: instance_entity,
+            owner: ready.owner,
+            instance: ready.instance,
         });
 
         info!(
             "Ability {:?} activated: spec={:?} instance={:?}",
-            definition_id, spec_entity, instance_entity
+            instance.definition_id, spec_entity, ready.instance
         );
-    }
 
-    // Batch remove all PendingActivation markers.
-    for (spec_entity, _, _, _, _, _, _) in pending {
-        world
-            .commands()
-            .entity(spec_entity)
-            .remove::<PendingActivation>();
+        // Remove ready marker.
+        commands.entity(spec_entity).remove::<ReadyToActivate>();
     }
 }
 
@@ -517,7 +506,7 @@ fn end_ability_internal(
         };
         b.end(commands, *inst_entity, was_cancelled);
 
-        // Remove activation_owned_tags and block tags from owner.
+        // Remove activation_owned_tags from owner.
         if let Ok(mut owner_tags) = params.tag_containers.get_mut(owner) {
             owner_tags.0.update_tag_container_count(
                 &owned_tags,
@@ -526,7 +515,11 @@ fn end_ability_internal(
                 commands,
                 owner,
             );
-            owner_tags.0.update_tag_container_count(
+        }
+
+        // Remove block_abilities_with_tags from owner's BlockedAbilityTags.
+        if let Ok(mut blocked_tags) = params.blocked_ability_tags.get_mut(owner) {
+            blocked_tags.0.update_tag_container_count(
                 &block_tags,
                 -1,
                 &params.tags_manager,

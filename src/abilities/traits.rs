@@ -113,7 +113,7 @@ pub trait AbilityBehavior: Send + Sync + 'static {
     /// Called before activation begins. Runs with &mut World access.
     fn pre_activate(
         &self,
-        _world: &mut World,
+        _world: &mut Commands,
         _instance_entity: Entity,
         _spec_entity: Entity,
         _source: Entity,
@@ -123,7 +123,7 @@ pub trait AbilityBehavior: Send + Sync + 'static {
     /// Called when the ability instance is activated. Main ability logic goes here.
     fn activate(
         &self,
-        _world: &mut World,
+        _world: &mut Commands,
         _instance_entity: Entity,
         _spec_entity: Entity,
         _source: Entity,
