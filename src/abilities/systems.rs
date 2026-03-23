@@ -19,12 +19,12 @@
 use super::components::*;
 use super::definition::*;
 use crate::attributes::{AttributeData, AttributeName};
+use crate::core::OwnedTags;
 use crate::effects::definition::GameplayEffectRegistry;
 use bevy::ecs::relationship::Relationship;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy_gameplay_tag::GameplayTagsManager;
-use bevy_gameplay_tag::gameplay_tag_count_container::GameplayTagCountContainer;
 
 // --- SystemParam bundles ---
 
@@ -34,7 +34,7 @@ pub struct ActivationCheckParams<'w, 's> {
     pub effect_registry: Res<'w, GameplayEffectRegistry>,
     pub tags_manager: Res<'w, bevy_gameplay_tag::GameplayTagsManager>,
     pub time: Res<'w, Time>,
-    pub tag_containers: Query<'w, 's, &'static mut GameplayTagCountContainer>,
+    pub tag_containers: Query<'w, 's, &'static mut OwnedTags>,
     pub attributes: Query<
         'w,
         's,
@@ -69,7 +69,7 @@ pub struct EndAbilityParams<'w, 's> {
             &'static ChildOf,
         ),
     >,
-    pub tag_containers: Query<'w, 's, &'static mut GameplayTagCountContainer>,
+    pub tag_containers: Query<'w, 's, &'static mut OwnedTags>,
 }
 
 // --- Events ---
@@ -519,14 +519,14 @@ fn end_ability_internal(
 
         // Remove activation_owned_tags and block tags from owner.
         if let Ok(mut owner_tags) = params.tag_containers.get_mut(owner) {
-            owner_tags.update_tag_container_count(
+            owner_tags.0.update_tag_container_count(
                 &owned_tags,
                 -1,
                 &params.tags_manager,
                 commands,
                 owner,
             );
-            owner_tags.update_tag_container_count(
+            owner_tags.0.update_tag_container_count(
                 &block_tags,
                 -1,
                 &params.tags_manager,
@@ -567,9 +567,10 @@ pub fn on_instance_removed(
 /// Check if abilities can be activated based on tag requirements.
 pub fn check_ability_activation_requirements(
     ability_def: &AbilityDefinition,
-    tags: &GameplayTagCountContainer,
+    tags: &OwnedTags,
 ) -> bool {
     if !tags
+        .0
         .explicit_tags
         .has_all(&ability_def.activation_required_tags)
     {
@@ -577,6 +578,7 @@ pub fn check_ability_activation_requirements(
     }
 
     if tags
+        .0
         .explicit_tags
         .has_any(&ability_def.activation_blocked_tags)
     {

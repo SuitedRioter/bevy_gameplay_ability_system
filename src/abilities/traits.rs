@@ -3,9 +3,8 @@
 //! Defines the lifecycle hooks for custom ability implementations.
 
 use crate::abilities::OnGameplayAbilityEnded;
-use crate::core::ApplyGameplayEffectEvent;
+use crate::core::{ApplyGameplayEffectEvent, OwnedTags};
 use bevy::prelude::*;
-use bevy_gameplay_tag::gameplay_tag_count_container::GameplayTagCountContainer;
 use bevy_gameplay_tag::{GameplayTagContainer, GameplayTagsManager};
 
 use crate::effects::GameplayEffectRegistry;
@@ -57,18 +56,18 @@ pub trait AbilityBehavior: Send + Sync + 'static {
             return Err(ActivationCheckFailure::MissingComponents);
         };
         let effect_registry = world.resource::<GameplayEffectRegistry>();
-        let Some(source_tags) = world.get::<GameplayTagCountContainer>(source) else {
+        let Some(source_tags) = world.get::<OwnedTags>(source) else {
             return Err(ActivationCheckFailure::MissingComponents);
         };
 
         // Check cooldown
         if let Some(cd_id) = &definition.cooldown_effect
             && let Some(cd_def) = effect_registry.get(cd_id.as_ref())
-            && source_tags.has_any_matching_gameplay_tags(&cd_def.granted_tags)
+            && source_tags.0.has_any_matching_gameplay_tags(&cd_def.granted_tags)
         {
             let mut cooldown_tags = GameplayTagContainer::default();
             cooldown_tags.append_matches_tags(
-                &source_tags.explicit_tags,
+                &source_tags.0.explicit_tags,
                 &cd_def.granted_tags,
                 tags_manager,
             );
@@ -77,12 +76,12 @@ pub trait AbilityBehavior: Send + Sync + 'static {
 
         // Check source required tags
         if !definition.source_required_tags.is_empty()
-            && !source_tags.has_all_matching_gameplay_tags(&definition.source_required_tags)
+            && !source_tags.0.has_all_matching_gameplay_tags(&definition.source_required_tags)
         {
             let mut missing_tags = GameplayTagContainer::default();
             missing_tags.append_matches_tags(
                 &definition.source_required_tags,
-                &source_tags.explicit_tags,
+                &source_tags.0.explicit_tags,
                 tags_manager,
             );
             return Err(ActivationCheckFailure::SourceMissingRequiredTags(
@@ -91,10 +90,10 @@ pub trait AbilityBehavior: Send + Sync + 'static {
         }
 
         // Check source blocked tags
-        if source_tags.has_any_matching_gameplay_tags(&definition.source_blocked_tags) {
+        if source_tags.0.has_any_matching_gameplay_tags(&definition.source_blocked_tags) {
             let mut blocked_tags = GameplayTagContainer::default();
             blocked_tags.append_matches_tags(
-                &source_tags.explicit_tags,
+                &source_tags.0.explicit_tags,
                 &definition.source_blocked_tags,
                 tags_manager,
             );
@@ -134,18 +133,18 @@ pub trait AbilityBehavior: Send + Sync + 'static {
         tags_manager: &Res<GameplayTagsManager>,
     ) -> ActivationCheckResult {
         let effect_registry = world.resource::<GameplayEffectRegistry>();
-        let Some(source_tags) = world.get::<GameplayTagCountContainer>(source) else {
+        let Some(source_tags) = world.get::<OwnedTags>(source) else {
             return Err(ActivationCheckFailure::MissingComponents);
         };
 
         // Check cooldown
         if let Some(cd_id) = &definition.cooldown_effect
             && let Some(cd_def) = effect_registry.get(cd_id.as_ref())
-            && source_tags.has_any_matching_gameplay_tags(&cd_def.granted_tags)
+            && source_tags.0.has_any_matching_gameplay_tags(&cd_def.granted_tags)
         {
             let mut cooldown_tags = GameplayTagContainer::default();
             cooldown_tags.append_matches_tags(
-                &source_tags.explicit_tags,
+                &source_tags.0.explicit_tags,
                 &cd_def.granted_tags,
                 tags_manager,
             );

@@ -177,5 +177,4 @@ mod tests {
         assert!(!state.is_active);
         assert_eq!(state.active_count, 0);
     }
-
 }

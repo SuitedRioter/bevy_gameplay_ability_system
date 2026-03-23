@@ -7,17 +7,17 @@ use super::definition::*;
 use crate::attributes::{
     AttributeData, AttributeLifecycleHooks, AttributeModifyContext, AttributeName, AttributeSetId,
 };
+use crate::core::OwnedTags;
 use bevy::ecs::relationship::Relationship;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy_gameplay_tag::GameplayTagsManager;
-use bevy_gameplay_tag::gameplay_tag_count_container::GameplayTagCountContainer;
 use string_cache::DefaultAtom as Atom;
 
 /// Bundled query parameters for applying gameplay effects.
 #[derive(SystemParam)]
 pub struct ApplyEffectParams<'w, 's> {
-    pub tag_containers: Query<'w, 's, &'static mut GameplayTagCountContainer>,
+    pub tag_containers: Query<'w, 's, &'static mut OwnedTags>,
     pub attributes: Query<
         'w,
         's,
@@ -97,7 +97,7 @@ pub fn on_apply_gameplay_effect(
     if let Ok(owner_tags) = params.tag_containers.get(target)
         && !definition
             .application_tag_requirements
-            .requirements_met(&owner_tags.explicit_tags)
+            .requirements_met(&owner_tags.0.explicit_tags)
     {
         return;
     }
@@ -188,7 +188,7 @@ pub fn on_apply_gameplay_effect(
             if !definition.granted_tags.is_empty()
                 && let Ok(mut target_tags) = params.tag_containers.get_mut(target)
             {
-                target_tags.update_tag_container_count(
+                target_tags.0.update_tag_container_count(
                     &definition.granted_tags,
                     1,
                     &tags_manager,
@@ -231,11 +231,11 @@ pub fn on_apply_gameplay_effect(
 
             let effect_entity = effect_entity_commands.id();
 
-            // Add granted_tags to target's GameplayTagCountContainer
+            // Add granted_tags to target's OwnedTags
             if !definition.granted_tags.is_empty()
                 && let Ok(mut target_tags) = params.tag_containers.get_mut(target)
             {
-                target_tags.update_tag_container_count(
+                target_tags.0.update_tag_container_count(
                     &definition.granted_tags,
                     1,
                     &tags_manager,
@@ -421,15 +421,15 @@ pub fn remove_expired_effects_system(
         Option<&EffectGrantedTags>,
     )>,
     modifiers: Query<(Entity, &ModifierSource)>,
-    mut tag_containers: Query<&mut GameplayTagCountContainer>,
+    mut tag_containers: Query<&mut OwnedTags>,
 ) {
     for (effect_entity, duration, active_effect, target, granted_tags) in effects.iter() {
         if duration.is_expired() {
-            // Remove granted_tags from target's GameplayTagCountContainer
+            // Remove granted_tags from target's OwnedTags
             if let Some(granted) = granted_tags
                 && let Ok(mut target_tags) = tag_containers.get_mut(target.0)
             {
-                target_tags.update_tag_container_count(
+                target_tags.0.update_tag_container_count(
                     &granted.tags,
                     -1,
                     &tags_manager,
@@ -527,7 +527,7 @@ mod tests {
 
         let target = app
             .world_mut()
-            .spawn(GameplayTagCountContainer::default())
+            .spawn(OwnedTags::default())
             .id();
 
         app.world_mut().trigger(ApplyGameplayEffectEvent {
