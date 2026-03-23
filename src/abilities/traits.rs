@@ -110,14 +110,39 @@ pub trait AbilityBehavior: Send + Sync + 'static {
         Ok(())
     }
 
-    /// Called before activation begins. Runs with &mut World access.
+    /// Called before activation begins. Adds activation_owned_tags and block_abilities_with_tags.
     fn pre_activate(
         &self,
-        _world: &mut Commands,
+        commands: &mut Commands,
         _instance_entity: Entity,
         _spec_entity: Entity,
-        _source: Entity,
+        source: Entity,
+        definition: &AbilityDefinition,
+        tags_manager: &Res<GameplayTagsManager>,
+        tag_containers: &mut Query<&mut crate::core::OwnedTags>,
+        blocked_ability_tags: &mut Query<&mut crate::core::BlockedAbilityTags>,
     ) {
+        // Add activation_owned_tags to owner's OwnedTags.
+        if let Ok(mut owner_tags) = tag_containers.get_mut(source) {
+            owner_tags.0.update_tag_container_count(
+                &definition.activation_owned_tags,
+                1,
+                tags_manager,
+                commands,
+                source,
+            );
+        }
+
+        // Add block_abilities_with_tags to owner's BlockedAbilityTags.
+        if let Ok(mut blocked_tags) = blocked_ability_tags.get_mut(source) {
+            blocked_tags.0.update_tag_container_count(
+                &definition.block_abilities_with_tags,
+                1,
+                tags_manager,
+                commands,
+                source,
+            );
+        }
     }
 
     /// Called when the ability instance is activated. Main ability logic goes here.

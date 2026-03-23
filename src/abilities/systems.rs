@@ -243,19 +243,35 @@ pub fn spawn_pending_ability_instances_system(
 ///
 /// For each AbilitySpec with ReadyToActivate:
 /// 1. Increments AbilityActiveState
-/// 2. Calls pre_activate → activate on the behavior
-/// 3. Triggers CommitAbilityEvent and AbilityActivatedEvent
+/// 2. Adds activation_owned_tags to owner's OwnedTags
+/// 3. Adds block_abilities_with_tags to owner's BlockedAbilityTags
+/// 4. Calls pre_activate → activate on the behavior
+/// 5. Triggers CommitAbilityEvent and AbilityActivatedEvent
 pub fn call_activate_ability_system(
     mut commands: Commands,
+    ability_registry: Res<AbilityRegistry>,
+    tags_manager: Res<GameplayTagsManager>,
     mut ready_query: Query<
-        (Entity, &ReadyToActivate, &mut AbilityActiveState),
+        (
+            Entity,
+            &ReadyToActivate,
+            &AbilitySpec,
+            &mut AbilityActiveState,
+        ),
         With<ReadyToActivate>,
     >,
     instances: Query<&AbilitySpecInstance>,
+    mut tag_containers: Query<&mut OwnedTags>,
+    mut blocked_ability_tags: Query<&mut BlockedAbilityTags>,
 ) {
-    for (spec_entity, ready, mut active_state) in ready_query.iter_mut() {
+    for (spec_entity, ready, spec, mut active_state) in ready_query.iter_mut() {
         let Ok(instance) = instances.get(ready.instance) else {
             // Instance not found, skip.
+            commands.entity(spec_entity).remove::<ReadyToActivate>();
+            continue;
+        };
+
+        let Some(definition) = ability_registry.get(&spec.definition_id) else {
             commands.entity(spec_entity).remove::<ReadyToActivate>();
             continue;
         };
@@ -269,7 +285,16 @@ pub fn call_activate_ability_system(
             None => &super::traits::DefaultAbilityBehavior,
         };
 
-        b.pre_activate(&mut commands, ready.instance, spec_entity, ready.owner);
+        b.pre_activate(
+            &mut commands,
+            ready.instance,
+            spec_entity,
+            ready.owner,
+            definition,
+            &tags_manager,
+            &mut tag_containers,
+            &mut blocked_ability_tags,
+        );
         b.activate(
             &mut commands,
             ready.instance,
