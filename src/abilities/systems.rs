@@ -193,16 +193,20 @@ pub struct ReadyToActivate {
     pub instance: Entity,
 }
 
-/// First system: spawns AbilitySpecInstance entities for pending activations.
+/// First system: spawns AbilitySpecInstance entities for pending activations based on instancing policy.
 ///
 /// For each AbilitySpec with PendingActivation:
 /// 1. Resolves the ability definition from registry
-/// 2. Spawns an AbilitySpecInstance child entity
+/// 2. Based on instancing policy:
+///    - NonInstanced: No instance entity, uses Entity::PLACEHOLDER
+///    - InstancedPerActor: Reuses existing instance or creates new one
+///    - InstancedPerExecution: Always creates new instance (default)
 /// 3. Adds ReadyToActivate marker for the next system
 pub fn spawn_pending_ability_instances_system(
     mut commands: Commands,
     registry: Res<AbilityRegistry>,
     pending_query: Query<(Entity, &PendingActivation, &AbilitySpec), With<PendingActivation>>,
+    existing_instances: Query<(Entity, &AbilitySpecInstance, &ChildOf)>,
 ) {
     for (spec_entity, pending, spec) in pending_query.iter() {
         let Some(def) = registry.get(&spec.definition_id) else {
@@ -211,22 +215,62 @@ pub fn spawn_pending_ability_instances_system(
             continue;
         };
 
-        // Spawn instance entity as child of spec.
-        let instance_entity = commands
-            .spawn((
-                AbilitySpecInstance {
-                    definition_id: spec.definition_id.clone(),
-                    level: spec.level,
-                    behavior: def.behavior.clone(),
-                },
-                InstanceControlState {
-                    is_active: true,
-                    is_blocking_other_abilities: def.default_blocks_other_abilities,
-                    is_cancelable: def.default_is_cancelable,
-                },
-            ))
-            .set_parent_in_place(spec_entity)
-            .id();
+        let instance_entity = match def.instancing_policy {
+            super::definition::InstancingPolicy::NonInstanced => {
+                // No instance entity - logic executes directly from definition
+                Entity::PLACEHOLDER
+            }
+            super::definition::InstancingPolicy::InstancedPerActor => {
+                // Check if an instance already exists for this spec
+                let existing = existing_instances
+                    .iter()
+                    .find(|(_, instance, child_of): &(Entity, &AbilitySpecInstance, &ChildOf)| {
+                        child_of.get() == spec_entity
+                            && instance.definition_id == spec.definition_id
+                    })
+                    .map(|(entity, _, _)| entity);
+
+                if let Some(existing_entity) = existing {
+                    // Reuse existing instance
+                    existing_entity
+                } else {
+                    // Create new instance (first activation)
+                    commands
+                        .spawn((
+                            AbilitySpecInstance {
+                                definition_id: spec.definition_id.clone(),
+                                level: spec.level,
+                                behavior: def.behavior.clone(),
+                            },
+                            InstanceControlState {
+                                is_active: true,
+                                is_blocking_other_abilities: def.default_blocks_other_abilities,
+                                is_cancelable: def.default_is_cancelable,
+                            },
+                        ))
+                        .set_parent_in_place(spec_entity)
+                        .id()
+                }
+            }
+            super::definition::InstancingPolicy::InstancedPerExecution => {
+                // Always create new instance (current default behavior)
+                commands
+                    .spawn((
+                        AbilitySpecInstance {
+                            definition_id: spec.definition_id.clone(),
+                            level: spec.level,
+                            behavior: def.behavior.clone(),
+                        },
+                        InstanceControlState {
+                            is_active: true,
+                            is_blocking_other_abilities: def.default_blocks_other_abilities,
+                            is_cancelable: def.default_is_cancelable,
+                        },
+                    ))
+                    .set_parent_in_place(spec_entity)
+                    .id()
+            }
+        };
 
         // Mark as ready for activation in next system.
         commands.entity(spec_entity).insert(ReadyToActivate {

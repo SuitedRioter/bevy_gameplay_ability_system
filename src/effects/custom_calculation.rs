@@ -3,8 +3,8 @@
 //! Allows users to implement complex magnitude calculations that can capture
 //! multiple attributes from source and target entities.
 
-use bevy::prelude::*;
 use bevy::ecs::relationship::Relationship;
+use bevy::prelude::*;
 use std::collections::HashMap;
 use string_cache::DefaultAtom as Atom;
 
