@@ -9,16 +9,52 @@ use string_cache::DefaultAtom as Atom;
 
 use super::traits::AbilityBehavior;
 
+/// Instancing policy for abilities.
+///
+/// Determines how ability instances are created and managed.
+/// Follows UE GAS's instancing model.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum InstancingPolicy {
+    /// No instance is created. Logic executes directly from the definition.
+    /// - No per-activation state storage
+    /// - Best performance for simple abilities
+    /// - Cannot use instance-specific data
+    /// - Example: Simple buff application, montage playback
+    NonInstanced,
+
+    /// One instance per actor. Reused across activations.
+    /// - State persists between activations
+    /// - Useful for abilities that need to track cumulative state
+    /// - Example: Channeled abilities, combo counters
+    InstancedPerActor,
+
+    /// New instance created for each activation (default).
+    /// - State exists only for the duration of activation
+    /// - Most common pattern
+    /// - Example: Most abilities (fireball, dash, etc.)
+    InstancedPerExecution,
+}
+
+impl Default for InstancingPolicy {
+    fn default() -> Self {
+        Self::InstancedPerExecution
+    }
+}
+
 /// Ability definition — pure configuration data stored in the AbilityRegistry.
 ///
 /// Each ability type is described by one definition. When granted to a character,
 /// an AbilitySpec entity is spawned referencing this definition by ID. When
-/// activated, an AbilitySpecInstance child entity is spawned carrying a clone
-/// of the behavior Arc for the duration of execution.
+/// activated, behavior depends on the instancing policy:
+/// - NonInstanced: No spec instance, logic executes from definition
+/// - InstancedPerActor: Reuses existing spec entity
+/// - InstancedPerExecution: Spawns new spec instance entity
 #[derive(Clone)]
 pub struct AbilityDefinition {
     /// Unique identifier for this ability.
     pub id: Atom,
+    /// Instancing policy for this ability.
+    pub instancing_policy: InstancingPolicy,
     /// Effect ID to apply as costs when the ability is committed.
     pub cost_effect: Option<Atom>,
     /// Effect ID to apply as cooldown when the ability is committed.
@@ -55,6 +91,7 @@ impl std::fmt::Debug for AbilityDefinition {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AbilityDefinition")
             .field("id", &self.id)
+            .field("instancing_policy", &self.instancing_policy)
             .field("cost_effect", &self.cost_effect)
             .field("cooldown_effect", &self.cooldown_effect)
             .field("ability_tags", &self.ability_tags)
@@ -88,6 +125,7 @@ impl AbilityDefinition {
     pub fn new(id: impl Into<Atom>) -> Self {
         Self {
             id: id.into(),
+            instancing_policy: InstancingPolicy::default(),
             cost_effect: None,
             cooldown_effect: None,
             ability_tags: GameplayTagContainer::default(),
@@ -109,6 +147,12 @@ impl AbilityDefinition {
     /// Sets the behavior implementation.
     pub fn with_behavior(mut self, behavior: Arc<dyn AbilityBehavior>) -> Self {
         self.behavior = Some(behavior);
+        self
+    }
+
+    /// Sets the instancing policy.
+    pub fn with_instancing_policy(mut self, policy: InstancingPolicy) -> Self {
+        self.instancing_policy = policy;
         self
     }
 
