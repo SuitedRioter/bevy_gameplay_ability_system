@@ -32,7 +32,7 @@ pub struct ApplyEffectParams<'w, 's> {
         's,
         (
             Entity,
-            &'static ActiveGameplayEffect,
+            &'static mut ActiveGameplayEffect,
             &'static EffectTarget,
             Option<&'static mut EffectDuration>,
         ),
@@ -126,23 +126,23 @@ pub fn on_apply_gameplay_effect(
         }
         StackingPolicy::StackCount { max_stacks } => {
             // Find existing effect and increment stack count
-            for (effect_entity, active_effect, effect_target, _) in params.existing_effects.iter() {
+            for (effect_entity, mut active_effect, effect_target, _) in params.existing_effects.iter_mut() {
                 if effect_target.0 == target && active_effect.definition_id == *effect_id {
                     if active_effect.stack_count < max_stacks {
-                        // Need to increment stack count - we'll spawn a new modifier set
-                        // by letting it fall through, but first update the existing effect
-                        commands.entity(effect_entity).insert(ActiveGameplayEffect {
-                            definition_id: active_effect.definition_id.clone(),
-                            level: active_effect.level,
-                            start_time: active_effect.start_time,
-                            stack_count: active_effect.stack_count + 1,
-                        });
+                        // Increment stack count
+                        active_effect.stack_count += 1;
+
+                        // IMPORTANT: We need to spawn new modifiers for the new stack
+                        // The create_effect_modifiers_system will handle this automatically
+                        // when it sees the Changed<ActiveGameplayEffect> component
+
                         commands.trigger(GameplayEffectAppliedEvent {
                             effect: effect_entity,
                             target,
                             effect_id: effect_id.clone(),
                         });
                     }
+                    // If at max stacks, do nothing (could optionally refresh duration)
                     return;
                 }
             }
@@ -161,40 +161,38 @@ pub fn on_apply_gameplay_effect(
                 for (mut attr_data, attr_name, attr_owner) in params.attributes.iter_mut() {
                     if attr_owner.0 == target && attr_name.0 == modifier.attribute_name {
                         match modifier.operation {
-                            ModifierOperation::AddBase => {
+                            // For instant effects, we modify the base value permanently
+                            // The aggregation system will recalculate current_value
+                            ModifierOperation::AddBase | ModifierOperation::AddCurrent => {
                                 attr_data.base_value += magnitude;
-                                attr_data.current_value = attr_data.base_value;
-                            }
-                            ModifierOperation::AddCurrent => {
-                                attr_data.base_value += magnitude;
-                                attr_data.current_value = attr_data.base_value;
+                                // Don't set current_value - let aggregation handle it
                             }
                             ModifierOperation::MultiplyAdditive
                             | ModifierOperation::MultiplyMultiplicative => {
                                 attr_data.base_value *= 1.0 + magnitude;
-                                attr_data.current_value = attr_data.base_value;
+                                // Don't set current_value - let aggregation handle it
                             }
                             ModifierOperation::Override => {
                                 attr_data.base_value = magnitude;
-                                attr_data.current_value = magnitude;
+                                // Don't set current_value - let aggregation handle it
                             }
                         }
                     }
                 }
             }
 
-            // Add granted_tags to target (even for instant, they'll be removed when the "instant" is done)
-            // For instant effects, granted_tags are typically not used, but we support it
-            if !definition.granted_tags.is_empty()
-                && let Ok(mut target_tags) = params.tag_containers.get_mut(target)
-            {
-                target_tags.0.update_tag_container_count(
-                    &definition.granted_tags,
-                    1,
-                    &tags_manager,
-                    &mut commands,
-                    target,
+            // WARNING: Instant effects with granted_tags cause tag leaks!
+            // Tags are added but never removed since no entity persists.
+            // Solution: Either forbid granted_tags on instant effects, or
+            // spawn a temporary entity that despawns after one frame.
+            // For now, we log a warning and skip adding tags.
+            if !definition.granted_tags.is_empty() {
+                warn!(
+                    "Instant effect '{}' has granted_tags, which will leak. \
+                     Instant effects should not grant tags. Use HasDuration instead.",
+                    effect_id
                 );
+                // Do NOT add tags - they would never be removed
             }
 
             // Use PLACEHOLDER since no entity is spawned for instant effects
@@ -254,39 +252,79 @@ pub fn on_apply_gameplay_effect(
 }
 
 /// System that creates modifier entities for active effects.
+///
+/// This system runs when:
+/// 1. A new effect is added (Added<ActiveGameplayEffect>)
+/// 2. An effect's stack count changes (Changed<ActiveGameplayEffect>)
+///
+/// For stacking effects, we need to create additional modifiers when stack count increases.
 pub fn create_effect_modifiers_system(
     mut commands: Commands,
     registry: Res<GameplayEffectRegistry>,
-    new_effects: Query<
+    new_or_changed_effects: Query<
         (
             Entity,
             &ActiveGameplayEffect,
             &EffectTarget,
             Option<&EffectInstigator>,
         ),
-        Added<ActiveGameplayEffect>,
+        Or<(Added<ActiveGameplayEffect>, Changed<ActiveGameplayEffect>)>,
     >,
+    existing_modifiers: Query<(Entity, &ModifierSource)>,
 ) {
-    for (effect_entity, active_effect, target, _instigator) in new_effects.iter() {
+    for (effect_entity, active_effect, target, _instigator) in new_or_changed_effects.iter() {
         let Some(definition) = registry.get(&active_effect.definition_id) else {
             continue;
         };
 
-        for modifier_info in &definition.modifiers {
-            let source_value = None;
-            let magnitude = modifier_info
-                .magnitude
-                .evaluate(active_effect.level, source_value);
+        // Count existing modifiers for this effect
+        let existing_modifier_count = existing_modifiers
+            .iter()
+            .filter(|(_, source)| source.0 == effect_entity)
+            .count();
 
-            commands.spawn((
-                AttributeModifier {
-                    target_entity: target.0,
-                    target_attribute: modifier_info.attribute_name.clone(),
-                    operation: modifier_info.operation,
-                    magnitude,
-                },
-                ModifierSource(effect_entity),
-            ));
+        // Calculate how many modifier sets we need total
+        let needed_modifier_sets = active_effect.stack_count as usize;
+        let modifiers_per_set = definition.modifiers.len();
+        let needed_total = needed_modifier_sets * modifiers_per_set;
+
+        // If we already have the right number, skip
+        if existing_modifier_count == needed_total {
+            continue;
+        }
+
+        // If we have too many (stack decreased), remove excess
+        if existing_modifier_count > needed_total {
+            let to_remove = existing_modifier_count - needed_total;
+            let mut removed = 0;
+            for (modifier_entity, source) in existing_modifiers.iter() {
+                if source.0 == effect_entity && removed < to_remove {
+                    commands.entity(modifier_entity).despawn();
+                    removed += 1;
+                }
+            }
+            continue;
+        }
+
+        // We need more modifiers - spawn the difference
+        let sets_to_add = (needed_total - existing_modifier_count) / modifiers_per_set;
+        for _ in 0..sets_to_add {
+            for modifier_info in &definition.modifiers {
+                let source_value = None;
+                let magnitude = modifier_info
+                    .magnitude
+                    .evaluate(active_effect.level, source_value);
+
+                commands.spawn((
+                    AttributeModifier {
+                        target_entity: target.0,
+                        target_attribute: modifier_info.attribute_name.clone(),
+                        operation: modifier_info.operation,
+                        magnitude,
+                    },
+                    ModifierSource(effect_entity),
+                ));
+            }
         }
     }
 }
@@ -348,9 +386,20 @@ pub fn aggregate_attribute_modifiers_system(
             continue;
         }
 
+        // UE aggregation formula: ((BaseValue + AddBase) * MultiplyAdditive * MultiplyCompound) + AddFinal
+        // Note: We don't have DivideAdditive or AddFinal yet, but the structure is here
+
         let mut current = attr_data.base_value;
 
-        // AddCurrent
+        // Step 1: AddBase - adds to base value (from持续效果的修改器)
+        for modifier in applicable_modifiers
+            .iter()
+            .filter(|m| matches!(m.operation, ModifierOperation::AddBase))
+        {
+            current += modifier.magnitude;
+        }
+
+        // Step 2: AddCurrent - adds to current value
         for modifier in applicable_modifiers
             .iter()
             .filter(|m| matches!(m.operation, ModifierOperation::AddCurrent))
@@ -358,7 +407,8 @@ pub fn aggregate_attribute_modifiers_system(
             current += modifier.magnitude;
         }
 
-        // MultiplyAdditive: (1 + sum)
+        // Step 3: MultiplyAdditive - multipliers are summed then applied: (1 + sum)
+        // E.g. 50% + 50% = 100% bonus = 1.5 + 1.5 = 2.0 multiplier
         let additive_multiplier: f32 = applicable_modifiers
             .iter()
             .filter(|m| matches!(m.operation, ModifierOperation::MultiplyAdditive))
@@ -366,7 +416,8 @@ pub fn aggregate_attribute_modifiers_system(
             .sum();
         current *= 1.0 + additive_multiplier;
 
-        // MultiplyMultiplicative: prod(1 + m)
+        // Step 4: MultiplyMultiplicative (Compound) - each multiplier is applied separately: prod(1 + m)
+        // E.g. 50% * 50% = 1.5 * 1.5 = 2.25 multiplier
         for modifier in applicable_modifiers
             .iter()
             .filter(|m| matches!(m.operation, ModifierOperation::MultiplyMultiplicative))
@@ -459,14 +510,65 @@ pub fn remove_expired_effects_system(
 }
 
 /// System that executes periodic effects.
+///
+/// Periodic effects apply their modifiers at regular intervals. This system:
+/// 1. Ticks the periodic timer
+/// 2. For each execution, re-applies the effect's modifiers to the target's base value
+///
+/// Note: Periodic effects modify the base value permanently on each tick.
+/// This is consistent with UE GAS behavior where periodic damage/healing
+/// permanently changes the attribute.
 pub fn execute_periodic_effects_system(
-    mut effects: Query<(&mut PeriodicEffect, &ActiveGameplayEffect, &EffectTarget)>,
+    mut effects: Query<(
+        &mut PeriodicEffect,
+        &ActiveGameplayEffect,
+        &EffectTarget,
+    )>,
+    registry: Res<GameplayEffectRegistry>,
+    mut attributes: Query<(&mut AttributeData, &AttributeName, &ChildOf)>,
     time: Res<Time>,
 ) {
-    for (mut periodic, _active_effect, _target) in effects.iter_mut() {
+    for (mut periodic, active_effect, target) in effects.iter_mut() {
         let executions = periodic.tick(time.delta_secs());
+
+        if executions == 0 {
+            continue;
+        }
+
+        // Get the effect definition
+        let Some(definition) = registry.get(&active_effect.definition_id) else {
+            warn!(
+                "Periodic effect references unknown definition: {}",
+                active_effect.definition_id
+            );
+            continue;
+        };
+
+        // Apply modifiers for each execution
         for _ in 0..executions {
-            // TODO: Trigger periodic execution
+            for modifier in &definition.modifiers {
+                let magnitude = modifier.magnitude.evaluate(active_effect.level, None);
+
+                // Find and modify the target attribute
+                for (mut attr_data, attr_name, child_of) in attributes.iter_mut() {
+                    let owner = child_of.get();
+                    if owner == target.0 && attr_name.0 == modifier.attribute_name {
+                        match modifier.operation {
+                            ModifierOperation::AddBase | ModifierOperation::AddCurrent => {
+                                attr_data.base_value += magnitude;
+                            }
+                            ModifierOperation::MultiplyAdditive
+                            | ModifierOperation::MultiplyMultiplicative => {
+                                attr_data.base_value *= 1.0 + magnitude;
+                            }
+                            ModifierOperation::Override => {
+                                attr_data.base_value = magnitude;
+                            }
+                        }
+                        // Aggregation system will recalculate current_value
+                    }
+                }
+            }
         }
     }
 }
