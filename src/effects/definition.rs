@@ -30,29 +30,83 @@ pub enum StackingPolicy {
 }
 
 /// Magnitude calculation type.
+///
+/// Defines how the magnitude of a modifier is calculated.
+/// Follows UE GAS's magnitude calculation system.
 #[derive(Debug, Clone, PartialEq)]
 pub enum MagnitudeCalculation {
-    /// A fixed scalar value.
-    ScalableFloat { base_value: f32 },
-    /// Calculate from an attribute on the source.
+    /// A fixed scalar value (optionally scaled by level).
+    ///
+    /// Formula: `base_value * level_multiplier^(level - 1)`
+    ScalableFloat {
+        base_value: f32,
+        /// Multiplier applied per level (1.0 = no scaling).
+        level_multiplier: f32,
+    },
+
+    /// Calculate from an attribute on the source entity.
+    ///
+    /// Formula: `(coefficient * (pre_multiply_additive + [attribute_value])) + post_multiply_additive`
+    ///
+    /// This allows you to scale damage based on the caster's stats, for example.
     AttributeBased {
-        attribute_name: String,
+        /// Name of the attribute to read from the source entity.
+        attribute_name: Atom,
+        /// Coefficient to multiply the attribute value by.
         coefficient: f32,
+        /// Value added before multiplication.
         pre_multiply_additive: f32,
+        /// Value added after multiplication.
         post_multiply_additive: f32,
     },
-    /// Custom calculation (placeholder for future extension).
-    Custom,
+
+    /// Custom calculation using a registered calculator.
+    ///
+    /// The calculator is looked up by name from a registry.
+    /// This allows complex calculations that capture multiple attributes.
+    CustomClass {
+        /// Name of the custom calculator to use.
+        calculator_name: Atom,
+    },
+
+    /// Magnitude set at runtime by the caller.
+    ///
+    /// The caller must provide a value for this tag when applying the effect.
+    /// If not provided, defaults to 0.0.
+    SetByCaller {
+        /// Tag identifying this magnitude value.
+        data_tag: GameplayTag,
+    },
 }
 
 impl MagnitudeCalculation {
     /// Creates a simple scalar magnitude.
     pub fn scalar(value: f32) -> Self {
-        Self::ScalableFloat { base_value: value }
+        Self::ScalableFloat {
+            base_value: value,
+            level_multiplier: 1.0,
+        }
+    }
+
+    /// Creates a level-scaled magnitude.
+    ///
+    /// # Example
+    /// ```ignore
+    /// // Damage that scales: 10 at level 1, 20 at level 2, 40 at level 3
+    /// MagnitudeCalculation::scaled(10.0, 2.0)
+    /// ```
+    pub fn scaled(base_value: f32, level_multiplier: f32) -> Self {
+        Self::ScalableFloat {
+            base_value,
+            level_multiplier,
+        }
     }
 
     /// Creates an attribute-based magnitude.
-    pub fn from_attribute(attribute_name: impl Into<String>, coefficient: f32) -> Self {
+    pub fn from_attribute(
+        attribute_name: impl Into<Atom>,
+        coefficient: f32,
+    ) -> Self {
         Self::AttributeBased {
             attribute_name: attribute_name.into(),
             coefficient,
@@ -61,22 +115,53 @@ impl MagnitudeCalculation {
         }
     }
 
-    /// Evaluates the magnitude given a level and optional source entity.
+    /// Creates a SetByCaller magnitude.
+    pub fn set_by_caller(data_tag: GameplayTag) -> Self {
+        Self::SetByCaller { data_tag }
+    }
+
+    /// Creates a custom calculation magnitude.
+    pub fn custom(calculator_name: impl Into<Atom>) -> Self {
+        Self::CustomClass {
+            calculator_name: calculator_name.into(),
+        }
+    }
+
+    /// Evaluates the magnitude given a level and optional source value.
     ///
-    /// For attribute-based calculations, you'll need to query the source entity's attributes.
-    pub fn evaluate(&self, _level: i32, _source_value: Option<f32>) -> f32 {
+    /// For AttributeBased calculations, pass the captured attribute value as `source_value`.
+    /// For SetByCaller, pass the caller-provided value.
+    pub fn evaluate(&self, level: i32, source_value: Option<f32>) -> f32 {
         match self {
-            MagnitudeCalculation::ScalableFloat { base_value } => *base_value,
+            MagnitudeCalculation::ScalableFloat {
+                base_value,
+                level_multiplier,
+            } => {
+                if *level_multiplier == 1.0 {
+                    *base_value
+                } else {
+                    base_value * level_multiplier.powi(level - 1)
+                }
+            }
             MagnitudeCalculation::AttributeBased {
                 coefficient,
                 pre_multiply_additive,
                 post_multiply_additive,
                 ..
             } => {
-                let source = _source_value.unwrap_or(0.0);
+                let source = source_value.unwrap_or(0.0);
                 (source + pre_multiply_additive) * coefficient + post_multiply_additive
             }
-            MagnitudeCalculation::Custom => 0.0,
+            MagnitudeCalculation::SetByCaller { .. } => {
+                // Caller must provide the value
+                source_value.unwrap_or(0.0)
+            }
+            MagnitudeCalculation::CustomClass { .. } => {
+                // Custom calculators are looked up from a registry
+                // For now, return 0.0 as placeholder
+                warn!("Custom calculation not yet implemented");
+                0.0
+            }
         }
     }
 }

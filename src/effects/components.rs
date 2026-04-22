@@ -3,7 +3,8 @@
 //! This module defines the core components for the gameplay effect system.
 
 use bevy::prelude::*;
-use bevy_gameplay_tag::GameplayTagContainer;
+use bevy_gameplay_tag::{GameplayTag, GameplayTagContainer};
+use std::collections::HashMap;
 use string_cache::DefaultAtom as Atom;
 
 /// Active gameplay effect instance component.
@@ -31,6 +32,48 @@ impl ActiveGameplayEffect {
             start_time,
             stack_count: 1,
         }
+    }
+}
+
+/// Component storing SetByCaller magnitudes for an effect.
+///
+/// When applying an effect with SetByCaller magnitude calculations,
+/// the caller must provide values for each data tag.
+///
+/// # Example
+/// ```ignore
+/// commands.spawn((
+///     ActiveGameplayEffect::new("damage", 1, time),
+///     SetByCallerMagnitudes::new()
+///         .with_magnitude(damage_tag, 50.0)
+///         .with_magnitude(crit_chance_tag, 0.25),
+/// ));
+/// ```
+#[derive(Component, Debug, Clone, Default)]
+pub struct SetByCallerMagnitudes {
+    magnitudes: HashMap<GameplayTag, f32>,
+}
+
+impl SetByCallerMagnitudes {
+    /// Creates a new empty magnitude map.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Adds a magnitude for a data tag.
+    pub fn with_magnitude(mut self, tag: GameplayTag, magnitude: f32) -> Self {
+        self.magnitudes.insert(tag, magnitude);
+        self
+    }
+
+    /// Sets a magnitude for a data tag.
+    pub fn set_magnitude(&mut self, tag: GameplayTag, magnitude: f32) {
+        self.magnitudes.insert(tag, magnitude);
+    }
+
+    /// Gets a magnitude for a data tag.
+    pub fn get_magnitude(&self, tag: &GameplayTag) -> Option<f32> {
+        self.magnitudes.get(tag).copied()
     }
 }
 

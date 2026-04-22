@@ -160,23 +160,29 @@ pub fn on_apply_gameplay_effect(
                 let magnitude = modifier.magnitude.evaluate(level, None);
                 for (mut attr_data, attr_name, attr_owner) in params.attributes.iter_mut() {
                     if attr_owner.0 == target && attr_name.0 == modifier.attribute_name {
-                        match modifier.operation {
-                            // For instant effects, we modify the base value permanently
-                            // The aggregation system will recalculate current_value
+                        let old_value = attr_data.base_value;
+                        let new_value = match modifier.operation {
                             ModifierOperation::AddBase | ModifierOperation::AddCurrent => {
-                                attr_data.base_value += magnitude;
-                                // Don't set current_value - let aggregation handle it
+                                old_value + magnitude
                             }
                             ModifierOperation::MultiplyAdditive
                             | ModifierOperation::MultiplyMultiplicative => {
-                                attr_data.base_value *= 1.0 + magnitude;
-                                // Don't set current_value - let aggregation handle it
+                                old_value * (1.0 + magnitude)
                             }
-                            ModifierOperation::Override => {
-                                attr_data.base_value = magnitude;
-                                // Don't set current_value - let aggregation handle it
-                            }
-                        }
+                            ModifierOperation::Override => magnitude,
+                        };
+
+                        // Call pre_effect_execute hook (allows clamping/rejection)
+                        // TODO: Get AttributeSetId to look up hooks
+                        // For now, we skip hooks for instant effects
+                        // This will be implemented when we add AttributeSnapshot
+
+                        // Apply the modification
+                        attr_data.base_value = new_value;
+                        // Don't set current_value - let aggregation handle it
+
+                        // Call post_effect_execute hook
+                        // TODO: Implement when AttributeSnapshot is added
                     }
                 }
             }
@@ -258,6 +264,7 @@ pub fn on_apply_gameplay_effect(
 /// 2. An effect's stack count changes (Changed<ActiveGameplayEffect>)
 ///
 /// For stacking effects, we need to create additional modifiers when stack count increases.
+/// For AttributeBased and SetByCaller magnitudes, we need to capture/lookup values.
 pub fn create_effect_modifiers_system(
     mut commands: Commands,
     registry: Res<GameplayEffectRegistry>,
@@ -267,12 +274,14 @@ pub fn create_effect_modifiers_system(
             &ActiveGameplayEffect,
             &EffectTarget,
             Option<&EffectInstigator>,
+            Option<&SetByCallerMagnitudes>,
         ),
         Or<(Added<ActiveGameplayEffect>, Changed<ActiveGameplayEffect>)>,
     >,
     existing_modifiers: Query<(Entity, &ModifierSource)>,
+    attributes: Query<(&AttributeData, &AttributeName, &ChildOf)>,
 ) {
-    for (effect_entity, active_effect, target, _instigator) in new_or_changed_effects.iter() {
+    for (effect_entity, active_effect, target, instigator, set_by_caller) in new_or_changed_effects.iter() {
         let Some(definition) = registry.get(&active_effect.definition_id) else {
             continue;
         };
@@ -310,7 +319,28 @@ pub fn create_effect_modifiers_system(
         let sets_to_add = (needed_total - existing_modifier_count) / modifiers_per_set;
         for _ in 0..sets_to_add {
             for modifier_info in &definition.modifiers {
-                let source_value = None;
+                // Evaluate magnitude based on calculation type
+                let source_value = match &modifier_info.magnitude {
+                    MagnitudeCalculation::AttributeBased { attribute_name, .. } => {
+                        // Capture attribute value from instigator (source entity)
+                        if let Some(instigator_entity) = instigator.and_then(|i| i.0) {
+                            attributes
+                                .iter()
+                                .find(|(_, name, child_of)| {
+                                    child_of.get() == instigator_entity && name.0 == *attribute_name
+                                })
+                                .map(|(data, _, _)| data.current_value)
+                        } else {
+                            None
+                        }
+                    }
+                    MagnitudeCalculation::SetByCaller { data_tag } => {
+                        // Look up value from SetByCallerMagnitudes component
+                        set_by_caller.and_then(|magnitudes| magnitudes.get_magnitude(data_tag))
+                    }
+                    _ => None,
+                };
+
                 let magnitude = modifier_info
                     .magnitude
                     .evaluate(active_effect.level, source_value);

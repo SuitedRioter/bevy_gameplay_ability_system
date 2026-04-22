@@ -2,6 +2,7 @@
 //!
 //! This plugin registers all effect-related systems and events.
 
+use super::custom_calculation::CustomCalculationRegistry;
 use super::definition::GameplayEffectRegistry;
 use super::systems::*;
 use crate::core::system_sets::{EffectSystemSet, GasSystemSet};
@@ -15,6 +16,7 @@ impl Plugin for EffectPlugin {
         app
             // Register resources
             .init_resource::<GameplayEffectRegistry>()
+            .init_resource::<CustomCalculationRegistry>()
             // Register observer for effect application
             .add_observer(on_apply_gameplay_effect)
             // Register kept systems with proper system sets
