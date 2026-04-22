@@ -1,0 +1,15 @@
+我想的Ability模块设计。
+1. Ability定义类，为一个struct。放的是能力的配置数据。
+2. 当把一个Ability定义类赋予玩家时，就生成一个AbilitySpec的实体，这个实体代表玩家身上的这个技能，内部包含组件如下：AbilitySpec，AbilityActiveState（内部包含是否激活，激活次数信息），AbilityCooldown，AbilityOwner
+3. 当一个AbilitySpec的实体激活时，就生成一个AbilitySpecInstance实体（这个我想作为AbilitySpec的子实体实现，这样我在移除AbilitySpec能力时，就可以把他对应的多个AbilitySpecInstance实体，
+但是需要在销毁AbilitySpecInstance实体时调用behavior.end方法），他内部要有包含：bIsActive：标记当前实例是否活跃 bIsBlockingOtherAbilities：控制是否阻止其他能力 bIsCancelable：控制当前实例是否可取消这三个属性的组件，用于激活过程中的逻辑控制。另外AbilitySpecInstance实体本质是Ability定义类的复制。用于在激活过程中调用behavior的逻辑。
+4. 方法的参数尽量不要使用world，这个会降低性能，除非只能通过world来实现。
+
+
+我需要优化现有abilities模块的system和监听system的设计。
+1. on_try_activate_ability 这个监听入口需要改一下，生成的AbilitySpec Entity需要是激活者的child entity，这样激活者Entity被移除时，能自动移除子实体。
+2.
+
+
+这个（/Users/zhengwei/GeneralProject/UnrealEngine/Engine/Plugins/Runtime/GameplayAbilities）文件夹下是UnrealEngine的GAS插件的代码，我希望你在当前项目使用bevy来实现UnrealEngine的GAS插件的功能，
+对外功能表现必须与原模块一致，你需要把原模块oop思想的代码已bevy的ecs思想实现，现有项目已经实现了一部分代码。你可以参考并优化（当需要优化的时候）。我希望你先写一份设计文档放在docs里，然后再进行复刻,注意，我已经自己实现了GameplayTag的功能（参考bevy_gameplay_tag = "0.2.0"）。
