@@ -210,6 +210,9 @@ pub struct GameplayEffectDefinition {
     pub modifiers: Vec<ModifierInfo>,
     /// Tags granted while this effect is active.
     pub granted_tags: GameplayTagContainer,
+    /// Tags that identify this effect (for immunity checks).
+    /// If a target has any of these tags in their blocked_tags, the effect is rejected.
+    pub asset_tags: GameplayTagContainer,
     /// Tag requirements for applying this effect.
     pub application_tag_requirements: GameplayTagRequirements,
     /// Stacking policy.
@@ -226,6 +229,7 @@ impl GameplayEffectDefinition {
             period: 0.0,
             modifiers: Vec::new(),
             granted_tags: GameplayTagContainer::default(),
+            asset_tags: GameplayTagContainer::default(),
             application_tag_requirements: GameplayTagRequirements::default(),
             stacking_policy: StackingPolicy::Independent,
         }
@@ -259,6 +263,12 @@ impl GameplayEffectDefinition {
     /// Adds a granted tag.
     pub fn grant_tag(mut self, tag: GameplayTag, tags_manager: &Res<GameplayTagsManager>) -> Self {
         self.granted_tags.add_tag(tag, tags_manager);
+        self
+    }
+
+    /// Adds an asset tag (for immunity checks).
+    pub fn with_asset_tag(mut self, tag: GameplayTag, tags_manager: &Res<GameplayTagsManager>) -> Self {
+        self.asset_tags.add_tag(tag, tags_manager);
         self
     }
 

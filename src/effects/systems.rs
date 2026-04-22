@@ -93,13 +93,27 @@ pub fn on_apply_gameplay_effect(
         return;
     };
 
+    // Check immunity: if target has any of the effect's asset_tags in their blocked tags, reject
+    if let Ok(owner_tags) = params.tag_containers.get(target) {
+        for asset_tag in definition.asset_tags.gameplay_tags.iter() {
+            if owner_tags.0.explicit_tags.gameplay_tags.contains(asset_tag) {
+                // Target is immune to this effect
+                warn!(
+                    "Effect '{}' blocked by immunity (target has tag '{:?}')",
+                    effect_id, asset_tag
+                );
+                return;
+            }
+        }
+    }
+
     // Check application_tag_requirements
-    if let Ok(owner_tags) = params.tag_containers.get(target)
-        && !definition
-            .application_tag_requirements
-            .requirements_met(&owner_tags.0.explicit_tags)
-    {
-        return;
+    if let Ok(owner_tags) = params.tag_containers.get(target) {
+        // OwnedTags wraps GameplayTagCountContainer which has explicit_tags field
+        let tag_container = &owner_tags.0;
+        if !definition.application_tag_requirements.requirements_met(&tag_container.explicit_tags) {
+            return;
+        }
     }
 
     // Handle stacking

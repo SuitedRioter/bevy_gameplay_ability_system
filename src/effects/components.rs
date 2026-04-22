@@ -87,6 +87,89 @@ pub struct EffectTarget(pub Entity);
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EffectInstigator(pub Option<Entity>);
 
+/// Context information for a gameplay effect.
+///
+/// Stores information about where the effect came from and how it was applied.
+/// This is useful for tracking damage sources, applying conditional logic, etc.
+///
+/// # Example
+/// ```ignore
+/// commands.spawn((
+///     ActiveGameplayEffect::new("damage", 1, time),
+///     GameplayEffectContext::new()
+///         .with_source(caster_entity)
+///         .with_instigator(weapon_entity)
+///         .with_hit_location(Vec3::new(0.0, 1.0, 0.0)),
+/// ));
+/// ```
+#[derive(Component, Debug, Clone)]
+pub struct GameplayEffectContext {
+    /// The entity that owns the ability/effect (e.g., the player).
+    pub source: Option<Entity>,
+    /// The entity that directly caused the effect (e.g., a projectile or weapon).
+    pub instigator: Option<Entity>,
+    /// The location where the effect was applied (e.g., hit location).
+    pub hit_location: Option<Vec3>,
+    /// The normal vector at the hit location.
+    pub hit_normal: Option<Vec3>,
+    /// Custom data that can be attached to the context.
+    pub custom_data: HashMap<String, f32>,
+}
+
+impl Default for GameplayEffectContext {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl GameplayEffectContext {
+    /// Creates a new empty context.
+    pub fn new() -> Self {
+        Self {
+            source: None,
+            instigator: None,
+            hit_location: None,
+            hit_normal: None,
+            custom_data: HashMap::new(),
+        }
+    }
+
+    /// Sets the source entity.
+    pub fn with_source(mut self, source: Entity) -> Self {
+        self.source = Some(source);
+        self
+    }
+
+    /// Sets the instigator entity.
+    pub fn with_instigator(mut self, instigator: Entity) -> Self {
+        self.instigator = Some(instigator);
+        self
+    }
+
+    /// Sets the hit location.
+    pub fn with_hit_location(mut self, location: Vec3) -> Self {
+        self.hit_location = Some(location);
+        self
+    }
+
+    /// Sets the hit normal.
+    pub fn with_hit_normal(mut self, normal: Vec3) -> Self {
+        self.hit_normal = Some(normal);
+        self
+    }
+
+    /// Adds custom data.
+    pub fn with_custom_data(mut self, key: impl Into<String>, value: f32) -> Self {
+        self.custom_data.insert(key.into(), value);
+        self
+    }
+
+    /// Gets custom data by key.
+    pub fn get_custom_data(&self, key: &str) -> Option<f32> {
+        self.custom_data.get(key).copied()
+    }
+}
+
 /// Component for effects with a duration.
 ///
 /// This tracks the remaining time for duration-based effects.
