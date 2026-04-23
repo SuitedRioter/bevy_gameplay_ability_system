@@ -709,25 +709,31 @@ app.add_plugins(CuePlugin);
 
 ### 9.1 关键问题
 
-1. **AttributeData::set_base_value()** 覆盖 current_value
-   - 应仅设置 base_value，让聚合重新计算
+1. ~~**AttributeData::set_base_value()** 覆盖 current_value~~
+   - ✅ 已修复：仅设置 base_value，让聚合重新计算
 
-2. **即时效果的 granted_tags** 导致标签泄漏
-   - 标签被添加但永不移除
+2. **即时效果的 granted_tags 导致标签泄漏**
+   - **设计决策**: 即时效果不应授予标签
+   - **原因**: 即时效果不生成实体，无法追踪标签移除
+   - **解决方案**: 系统会警告并忽略即时效果的 granted_tags
+   - **建议**: 如需授予标签，使用 HasDuration 策略（即使 duration 为 0.0）
 
-3. **周期性效果** 未执行修饰符
-   - execute_periodic_effects_system 有 TODO
+3. ~~**周期性效果** 未执行修饰符~~
+   - ✅ 已修复：execute_periodic_effects_system 正常工作
 
-4. **ModifierOperation::AddBase** 在聚合中被跳过
-   - 语义不清晰
+4. ~~**ModifierOperation::AddBase** 在聚合中被跳过~~
+   - ✅ 已修复：AddBase 正确应用到基础值
 
 ### 9.2 设计问题
 
 5. **StackCount 策略** 生成重复修饰符无清理
+   - 需实现修饰符合并逻辑
 
 6. **Handle 类型** 定义但未使用
+   - 删除或实现 generation 追踪
 
 7. **字符串 ID** 到处使用，未用 Atom
+   - 考虑性能优化
 
 ### 9.3 代码质量
 
