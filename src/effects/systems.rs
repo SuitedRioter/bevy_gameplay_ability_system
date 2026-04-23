@@ -335,15 +335,45 @@ pub fn create_effect_modifiers_system(
             for modifier_info in &definition.modifiers {
                 // Evaluate magnitude based on calculation type
                 let source_value = match &modifier_info.magnitude {
-                    MagnitudeCalculation::AttributeBased { attribute_name, .. } => {
-                        // Capture attribute value from instigator (source entity)
-                        if let Some(instigator_entity) = instigator.and_then(|i| i.0) {
+                    MagnitudeCalculation::AttributeBased {
+                        attribute_name,
+                        capture_source,
+                        calculation_type,
+                        ..
+                    } => {
+                        use super::definition::{AttributeCalculationType, AttributeCaptureSource};
+
+                        // Determine which entity to capture from
+                        let capture_entity = match capture_source {
+                            AttributeCaptureSource::Source => {
+                                instigator.and_then(|i| i.0)
+                            }
+                            AttributeCaptureSource::Target => {
+                                Some(target.0)
+                            }
+                        };
+
+                        // Find the attribute on the capture entity
+                        if let Some(entity) = capture_entity {
                             attributes
                                 .iter()
-                                .find(|(_, name, child_of)| {
-                                    child_of.get() == instigator_entity && name.0 == *attribute_name
+                                .find(|(_data, name, child_of)| {
+                                    child_of.get() == entity && name.0 == *attribute_name
                                 })
-                                .map(|(data, _, _)| data.current_value)
+                                .map(|(data, _, _)| {
+                                    // Apply calculation type
+                                    match calculation_type {
+                                        AttributeCalculationType::AttributeMagnitude => {
+                                            data.current_value
+                                        }
+                                        AttributeCalculationType::AttributeBaseValue => {
+                                            data.base_value
+                                        }
+                                        AttributeCalculationType::AttributeBonusMagnitude => {
+                                            data.current_value - data.base_value
+                                        }
+                                    }
+                                })
                         } else {
                             None
                         }
