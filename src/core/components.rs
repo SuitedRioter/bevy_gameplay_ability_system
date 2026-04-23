@@ -14,3 +14,10 @@ pub struct OwnedTags(pub GameplayTagCountContainer);
 /// and removes them during end.
 #[derive(Component, Debug, Default)]
 pub struct BlockedAbilityTags(pub GameplayTagCountContainer);
+
+/// Component that stores immunity tags.
+///
+/// Effects with tags matching these immunity tags will be rejected.
+/// This allows implementing damage immunity, status immunity, etc.
+#[derive(Component, Debug, Default)]
+pub struct ImmunityTags(pub GameplayTagCountContainer);

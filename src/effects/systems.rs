@@ -18,6 +18,7 @@ use string_cache::DefaultAtom as Atom;
 #[derive(SystemParam)]
 pub struct ApplyEffectParams<'w, 's> {
     pub tag_containers: Query<'w, 's, &'static mut OwnedTags>,
+    pub immunity_tags: Query<'w, 's, &'static crate::core::ImmunityTags>,
     pub attributes: Query<
         'w,
         's,
@@ -74,6 +75,19 @@ pub struct GameplayEffectRemovedEvent {
     pub effect_id: Atom,
 }
 
+/// Event triggered when an effect is blocked by immunity.
+#[derive(Event, Debug, Clone)]
+pub struct GameplayEffectBlockedByImmunityEvent {
+    /// The effect definition ID that was blocked.
+    pub effect_id: Atom,
+    /// The target entity that has immunity.
+    pub target: Entity,
+    /// The instigator entity (if any).
+    pub instigator: Option<Entity>,
+    /// The immunity tag that blocked the effect.
+    pub immunity_tag: bevy_gameplay_tag::gameplay_tag::GameplayTag,
+}
+
 /// Observer for ApplyGameplayEffectEvent.
 pub fn on_apply_gameplay_effect(
     ev: On<ApplyGameplayEffectEvent>,
@@ -93,14 +107,43 @@ pub fn on_apply_gameplay_effect(
         return;
     };
 
-    // Check immunity: if target has any of the effect's asset_tags in their blocked tags, reject
+    // Check immunity: if target has immunity tags matching effect's immunity_tags, reject
+    if let Ok(target_immunity) = params.immunity_tags.get(target) {
+        for immunity_tag in definition.immunity_tags.gameplay_tags.iter() {
+            if target_immunity
+                .0
+                .explicit_tags
+                .gameplay_tags
+                .contains(immunity_tag)
+            {
+                // Target is immune to this effect
+                info!(
+                    "Effect '{}' blocked by immunity tag '{:?}' on target {:?}",
+                    effect_id, immunity_tag, target
+                );
+
+                // Trigger immunity event
+                commands.trigger(GameplayEffectBlockedByImmunityEvent {
+                    effect_id: effect_id.clone(),
+                    target,
+                    instigator: event.instigator,
+                    immunity_tag: immunity_tag.clone(),
+                });
+
+                return;
+            }
+        }
+    }
+
+    // Legacy check: if target has any of the effect's asset_tags in their owned tags, reject
+    // This is for backwards compatibility with the old immunity system
     if let Ok(owner_tags) = params.tag_containers.get(target) {
         for asset_tag in definition.asset_tags.gameplay_tags.iter() {
             if owner_tags.0.explicit_tags.gameplay_tags.contains(asset_tag) {
                 // Target is immune to this effect
-                warn!(
-                    "Effect '{}' blocked by immunity (target has tag '{:?}')",
-                    effect_id, asset_tag
+                info!(
+                    "Effect '{}' blocked by asset tag immunity '{:?}' on target {:?}",
+                    effect_id, asset_tag, target
                 );
                 return;
             }
@@ -111,7 +154,10 @@ pub fn on_apply_gameplay_effect(
     if let Ok(owner_tags) = params.tag_containers.get(target) {
         // OwnedTags wraps GameplayTagCountContainer which has explicit_tags field
         let tag_container = &owner_tags.0;
-        if !definition.application_tag_requirements.requirements_met(&tag_container.explicit_tags) {
+        if !definition
+            .application_tag_requirements
+            .requirements_met(&tag_container.explicit_tags)
+        {
             return;
         }
     }
@@ -140,7 +186,9 @@ pub fn on_apply_gameplay_effect(
         }
         StackingPolicy::StackCount { max_stacks } => {
             // Find existing effect and increment stack count
-            for (effect_entity, mut active_effect, effect_target, _) in params.existing_effects.iter_mut() {
+            for (effect_entity, mut active_effect, effect_target, _) in
+                params.existing_effects.iter_mut()
+            {
                 if effect_target.0 == target && active_effect.definition_id == *effect_id {
                     if active_effect.stack_count < max_stacks {
                         // Increment stack count
@@ -296,7 +344,9 @@ pub fn create_effect_modifiers_system(
     existing_modifiers: Query<(Entity, &ModifierSource)>,
     attributes: Query<(&AttributeData, &AttributeName, &ChildOf)>,
 ) {
-    for (effect_entity, active_effect, target, instigator, set_by_caller) in new_or_changed_effects.iter() {
+    for (effect_entity, active_effect, target, instigator, set_by_caller) in
+        new_or_changed_effects.iter()
+    {
         let Some(definition) = registry.get(&active_effect.definition_id) else {
             continue;
         };
@@ -346,12 +396,8 @@ pub fn create_effect_modifiers_system(
 
                         // Determine which entity to capture from
                         let capture_entity = match capture_source {
-                            AttributeCaptureSource::Source => {
-                                instigator.and_then(|i| i.0)
-                            }
-                            AttributeCaptureSource::Target => {
-                                Some(target.0)
-                            }
+                            AttributeCaptureSource::Source => instigator.and_then(|i| i.0),
+                            AttributeCaptureSource::Target => Some(target.0),
                         };
 
                         // Find the attribute on the capture entity
@@ -396,9 +442,14 @@ pub fn create_effect_modifiers_system(
                             // Capture source attributes
                             if let Some(source_entity) = instigator.and_then(|i| i.0) {
                                 for attr_name in calculator.required_source_attributes() {
-                                    if let Some(value) = attributes.iter().find(|(_, name, child_of)| {
-                                        child_of.get() == source_entity && name.as_str() == *attr_name
-                                    }).map(|(data, _, _)| data.current_value) {
+                                    if let Some(value) = attributes
+                                        .iter()
+                                        .find(|(_, name, child_of)| {
+                                            child_of.get() == source_entity
+                                                && name.as_str() == *attr_name
+                                        })
+                                        .map(|(data, _, _)| data.current_value)
+                                    {
                                         source_attrs.insert((*attr_name).into(), value);
                                     }
                                 }
@@ -406,9 +457,13 @@ pub fn create_effect_modifiers_system(
 
                             // Capture target attributes
                             for attr_name in calculator.required_target_attributes() {
-                                if let Some(value) = attributes.iter().find(|(_, name, child_of)| {
-                                    child_of.get() == target.0 && name.as_str() == *attr_name
-                                }).map(|(data, _, _)| data.current_value) {
+                                if let Some(value) = attributes
+                                    .iter()
+                                    .find(|(_, name, child_of)| {
+                                        child_of.get() == target.0 && name.as_str() == *attr_name
+                                    })
+                                    .map(|(data, _, _)| data.current_value)
+                                {
                                     target_attrs.insert((*attr_name).into(), value);
                                 }
                             }
@@ -423,7 +478,10 @@ pub fn create_effect_modifiers_system(
 
                             Some(calculator.calculate(&context))
                         } else {
-                            warn!("Custom calculator '{}' not found in registry", calculator_name);
+                            warn!(
+                                "Custom calculator '{}' not found in registry",
+                                calculator_name
+                            );
                             None
                         }
                     }
@@ -638,11 +696,7 @@ pub fn remove_expired_effects_system(
 /// This is consistent with UE GAS behavior where periodic damage/healing
 /// permanently changes the attribute.
 pub fn execute_periodic_effects_system(
-    mut effects: Query<(
-        &mut PeriodicEffect,
-        &ActiveGameplayEffect,
-        &EffectTarget,
-    )>,
+    mut effects: Query<(&mut PeriodicEffect, &ActiveGameplayEffect, &EffectTarget)>,
     registry: Res<GameplayEffectRegistry>,
     mut attributes: Query<(&mut AttributeData, &AttributeName, &ChildOf)>,
     time: Res<Time>,
@@ -746,10 +800,7 @@ mod tests {
             .resource_mut::<GameplayEffectRegistry>()
             .register(effect);
 
-        let target = app
-            .world_mut()
-            .spawn(OwnedTags::default())
-            .id();
+        let target = app.world_mut().spawn(OwnedTags::default()).id();
 
         app.world_mut().trigger(ApplyGameplayEffectEvent {
             effect_id: Atom::from("test_effect"),
