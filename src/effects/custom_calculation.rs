@@ -3,62 +3,36 @@
 //! Allows users to implement complex magnitude calculations that can capture
 //! multiple attributes from source and target entities.
 
-use bevy::ecs::relationship::Relationship;
 use bevy::prelude::*;
 use std::collections::HashMap;
 use string_cache::DefaultAtom as Atom;
 
-use crate::attributes::{AttributeData, AttributeName};
-
 /// Context passed to custom magnitude calculators.
 ///
-/// Provides access to source and target entities for attribute queries.
-#[derive(Debug)]
-pub struct CalculationContext<'w> {
+/// Provides captured attribute values from source and target entities.
+#[derive(Debug, Clone)]
+pub struct CalculationContext {
     /// The entity applying the effect (instigator).
     pub source: Option<Entity>,
     /// The entity receiving the effect.
     pub target: Entity,
     /// The level of the effect.
     pub level: i32,
-    /// Query for reading attributes.
-    pub attributes: &'w Query<
-        'w,
-        'w,
-        (
-            &'static AttributeData,
-            &'static AttributeName,
-            &'static ChildOf,
-        ),
-    >,
+    /// Captured attribute values from source entity.
+    pub source_attributes: HashMap<Atom, f32>,
+    /// Captured attribute values from target entity.
+    pub target_attributes: HashMap<Atom, f32>,
 }
 
-impl<'w> CalculationContext<'w> {
+impl CalculationContext {
     /// Gets an attribute value from the source entity.
-    ///
-    /// Returns None if source doesn't exist or attribute not found.
     pub fn get_source_attribute(&self, attribute_name: &Atom) -> Option<f32> {
-        let source = self.source?;
-        self.attributes
-            .iter()
-            .find(
-                |(_, name, parent): &(&AttributeData, &AttributeName, &ChildOf)| {
-                    parent.get() == source && name.0 == *attribute_name
-                },
-            )
-            .map(|(data, _, _)| data.current_value)
+        self.source_attributes.get(attribute_name).copied()
     }
 
     /// Gets an attribute value from the target entity.
     pub fn get_target_attribute(&self, attribute_name: &Atom) -> Option<f32> {
-        self.attributes
-            .iter()
-            .find(
-                |(_, name, parent): &(&AttributeData, &AttributeName, &ChildOf)| {
-                    parent.get() == self.target && name.0 == *attribute_name
-                },
-            )
-            .map(|(data, _, _)| data.current_value)
+        self.target_attributes.get(attribute_name).copied()
     }
 }
 
@@ -84,11 +58,33 @@ impl<'w> CalculationContext<'w> {
 ///             base_damage
 ///         }
 ///     }
+///
+///     fn required_source_attributes(&self) -> &[&'static str] {
+///         &["Attack", "CritChance", "CritMultiplier"]
+///     }
+///
+///     fn required_target_attributes(&self) -> &[&'static str] {
+///         &[]
+///     }
 /// }
 /// ```
 pub trait CustomMagnitudeCalculation: Send + Sync {
     /// Calculates the magnitude based on the context.
     fn calculate(&self, ctx: &CalculationContext) -> f32;
+
+    /// Returns the list of source attributes this calculator needs.
+    ///
+    /// These attributes will be captured from the source entity before calling calculate().
+    fn required_source_attributes(&self) -> &[&'static str] {
+        &[]
+    }
+
+    /// Returns the list of target attributes this calculator needs.
+    ///
+    /// These attributes will be captured from the target entity before calling calculate().
+    fn required_target_attributes(&self) -> &[&'static str] {
+        &[]
+    }
 }
 
 /// Registry for custom magnitude calculators.

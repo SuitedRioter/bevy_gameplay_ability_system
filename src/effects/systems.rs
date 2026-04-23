@@ -282,6 +282,7 @@ pub fn on_apply_gameplay_effect(
 pub fn create_effect_modifiers_system(
     mut commands: Commands,
     registry: Res<GameplayEffectRegistry>,
+    custom_calculators: Res<super::custom_calculation::CustomCalculationRegistry>,
     new_or_changed_effects: Query<
         (
             Entity,
@@ -381,6 +382,50 @@ pub fn create_effect_modifiers_system(
                     MagnitudeCalculation::SetByCaller { data_tag } => {
                         // Look up value from SetByCallerMagnitudes component
                         set_by_caller.and_then(|magnitudes| magnitudes.get_magnitude(data_tag))
+                    }
+                    MagnitudeCalculation::CustomClass { calculator_name } => {
+                        // Look up custom calculator and execute it
+                        if let Some(calculator) = custom_calculators.get(calculator_name) {
+                            use super::custom_calculation::CalculationContext;
+                            use bevy::ecs::relationship::Relationship;
+
+                            // Capture required attributes
+                            let mut source_attrs = std::collections::HashMap::new();
+                            let mut target_attrs = std::collections::HashMap::new();
+
+                            // Capture source attributes
+                            if let Some(source_entity) = instigator.and_then(|i| i.0) {
+                                for attr_name in calculator.required_source_attributes() {
+                                    if let Some(value) = attributes.iter().find(|(_, name, child_of)| {
+                                        child_of.get() == source_entity && name.as_str() == *attr_name
+                                    }).map(|(data, _, _)| data.current_value) {
+                                        source_attrs.insert((*attr_name).into(), value);
+                                    }
+                                }
+                            }
+
+                            // Capture target attributes
+                            for attr_name in calculator.required_target_attributes() {
+                                if let Some(value) = attributes.iter().find(|(_, name, child_of)| {
+                                    child_of.get() == target.0 && name.as_str() == *attr_name
+                                }).map(|(data, _, _)| data.current_value) {
+                                    target_attrs.insert((*attr_name).into(), value);
+                                }
+                            }
+
+                            let context = CalculationContext {
+                                source: instigator.and_then(|i| i.0),
+                                target: target.0,
+                                level: active_effect.level,
+                                source_attributes: source_attrs,
+                                target_attributes: target_attrs,
+                            };
+
+                            Some(calculator.calculate(&context))
+                        } else {
+                            warn!("Custom calculator '{}' not found in registry", calculator_name);
+                            None
+                        }
                     }
                     _ => None,
                 };
