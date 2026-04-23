@@ -27,7 +27,11 @@ impl AttributeSetDefinition for CombatAttributeSet {
 
     fn attribute_metadata(name: &str) -> Option<AttributeMetadata> {
         match name {
-            "Health" => Some(AttributeMetadata::new("Health").with_min(0.0).with_max(100.0)),
+            "Health" => Some(
+                AttributeMetadata::new("Health")
+                    .with_min(0.0)
+                    .with_max(100.0),
+            ),
             _ => None,
         }
     }
@@ -57,8 +61,12 @@ fn setup(
     // Grant immunity to fire damage using GameplayTag
     let fire_immunity_tag = GameplayTag::new("Effect.Damage.Fire");
     let mut immunity_container = bevy_gameplay_tag::GameplayTagCountContainer::default();
-    immunity_container.explicit_tags.add_tag(fire_immunity_tag.clone(), &tags_manager);
-    commands.entity(immune_target).insert(ImmunityTags(immunity_container));
+    immunity_container
+        .explicit_tags
+        .add_tag(fire_immunity_tag.clone(), &tags_manager);
+    commands
+        .entity(immune_target)
+        .insert(ImmunityTags(immunity_container));
 
     // Register a fire damage effect
     let fire_damage = GameplayEffectDefinition::new("fire_damage")
@@ -110,10 +118,7 @@ fn setup(
     info!("Immune target should block fire damage but take physical: 100 -> 85");
 }
 
-fn check_results(
-    time: Res<Time>,
-    attributes: Query<(&AttributeData, &AttributeName, &ChildOf)>,
-) {
+fn check_results(time: Res<Time>, attributes: Query<(&AttributeData, &AttributeName, &ChildOf)>) {
     static mut PRINTED: bool = false;
     if time.elapsed_secs() > 0.2 && unsafe { !PRINTED } {
         unsafe { PRINTED = true };

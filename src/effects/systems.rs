@@ -380,9 +380,10 @@ pub fn create_effect_modifiers_system(
             continue;
         }
 
-        // We need more modifiers - spawn the difference
-        let sets_to_add = (needed_total - existing_modifier_count) / modifiers_per_set;
-        for _ in 0..sets_to_add {
+        // We need more modifiers - spawn one complete set per missing stack
+        let missing_stacks = (needed_total - existing_modifier_count) / modifiers_per_set;
+
+        for _ in 0..missing_stacks {
             for modifier_info in &definition.modifiers {
                 // Evaluate magnitude based on calculation type
                 let source_value = match &modifier_info.magnitude {

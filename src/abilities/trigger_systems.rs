@@ -51,7 +51,7 @@ pub fn handle_owned_tag_added_triggers_system(
         &AbilityOwner,
         Option<&AbilityTriggers>,
     )>,
-    tags_manager: Res<GameplayTagsManager>,
+    _tags_manager: Res<GameplayTagsManager>,
     mut commands: Commands,
 ) {
     for (owner_entity, owner_tags) in changed_tags.iter() {

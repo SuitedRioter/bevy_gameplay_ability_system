@@ -3,7 +3,6 @@
 //! This plugin registers all ability-related systems and events.
 
 use super::definition::AbilityRegistry;
-use super::events::GameplayEvent;
 use super::systems::*;
 use super::trigger_systems::*;
 use crate::core::system_sets::GasSystemSet;

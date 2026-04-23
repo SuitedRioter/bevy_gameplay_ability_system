@@ -224,10 +224,12 @@ pub fn spawn_pending_ability_instances_system(
                 // Check if an instance already exists for this spec
                 let existing = existing_instances
                     .iter()
-                    .find(|(_, instance, child_of): &(Entity, &AbilitySpecInstance, &ChildOf)| {
-                        child_of.get() == spec_entity
-                            && instance.definition_id == spec.definition_id
-                    })
+                    .find(
+                        |(_, instance, child_of): &(Entity, &AbilitySpecInstance, &ChildOf)| {
+                            child_of.get() == spec_entity
+                                && instance.definition_id == spec.definition_id
+                        },
+                    )
                     .map(|(entity, _, _)| entity);
 
                 if let Some(existing_entity) = existing {

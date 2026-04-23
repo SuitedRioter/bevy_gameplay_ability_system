@@ -6,8 +6,8 @@
 use crate::abilities::components::{AbilityOwner, AbilitySpec};
 use crate::attributes::components::{AttributeData, AttributeName};
 use crate::effects::components::{ActiveGameplayEffect, EffectTarget};
-use bevy::prelude::*;
 use bevy::ecs::relationship::Relationship;
+use bevy::prelude::*;
 
 /// Helper for querying attributes by name for a specific owner.
 pub fn find_attribute_by_name(
@@ -132,7 +132,9 @@ mod tests {
         let mut world = World::new();
         let owner = world.spawn_empty().id();
 
-        world.spawn(AttributeName::new("Health")).set_parent_in_place(owner);
+        world
+            .spawn(AttributeName::new("Health"))
+            .set_parent_in_place(owner);
 
         // Use QueryState for direct world access
         let mut query_state = world.query::<(&ChildOf, &AttributeName)>();

@@ -61,10 +61,9 @@ pub mod prelude {
     pub use crate::abilities::definition::*;
     pub use crate::abilities::plugin::AbilityPlugin;
     pub use crate::abilities::systems::{
-        AbilityActivatedEvent, AbilityActivationFailedEvent,
-        ActivationFailureReason, CancelAbilityEvent, CommitAbilityEvent,
-        CommitAbilityResultEvent, EndAbilityEvent, OnGameplayAbilityEnded,
-        TryActivateAbilityEvent,
+        AbilityActivatedEvent, AbilityActivationFailedEvent, ActivationFailureReason,
+        CancelAbilityEvent, CommitAbilityEvent, CommitAbilityResultEvent, EndAbilityEvent,
+        OnGameplayAbilityEnded, TryActivateAbilityEvent,
     };
 
     pub use crate::cues::manager::*;
