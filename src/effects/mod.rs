@@ -48,6 +48,7 @@
 //! }
 //! ```
 
+pub mod ability_granting;
 pub mod application_requirement;
 pub mod components;
 pub mod custom_calculation;
@@ -55,6 +56,7 @@ pub mod definition;
 pub mod plugin;
 pub mod systems;
 
+pub use ability_granting::*;
 pub use application_requirement::*;
 pub use components::*;
 pub use custom_calculation::*;

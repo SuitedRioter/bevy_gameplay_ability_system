@@ -295,6 +295,11 @@ pub fn on_apply_gameplay_effect(
                 });
             }
 
+            // Add granted abilities component if needed
+            if !definition.granted_abilities.is_empty() {
+                effect_entity_commands.insert(EffectGrantedAbilities::default());
+            }
+
             let effect_entity = effect_entity_commands.id();
 
             // Add granted_tags to target's OwnedTags

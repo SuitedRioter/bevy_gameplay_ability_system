@@ -8,6 +8,46 @@ use bevy_gameplay_tag::{
     GameplayTagContainer, GameplayTagRequirements, GameplayTagsManager, gameplay_tag::GameplayTag,
 };
 use string_cache::DefaultAtom as Atom;
+
+/// Policy for handling granted abilities when the effect is removed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AbilityRemovalPolicy {
+    /// Cancel the ability immediately when the effect is removed.
+    CancelAbilityImmediately,
+    /// Remove the ability spec but let active instances finish.
+    RemoveAbilityOnEnd,
+    /// Do nothing - the ability remains granted permanently.
+    DoNothing,
+}
+
+impl Default for AbilityRemovalPolicy {
+    fn default() -> Self {
+        Self::CancelAbilityImmediately
+    }
+}
+
+/// Describes an ability to be granted by an effect.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GrantedAbilityConfig {
+    /// The ability definition ID to grant.
+    pub ability_id: Atom,
+    /// How to handle the ability when the effect is removed.
+    pub removal_policy: AbilityRemovalPolicy,
+}
+
+impl GrantedAbilityConfig {
+    pub fn new(ability_id: impl Into<Atom>) -> Self {
+        Self {
+            ability_id: ability_id.into(),
+            removal_policy: AbilityRemovalPolicy::default(),
+        }
+    }
+
+    pub fn with_removal_policy(mut self, policy: AbilityRemovalPolicy) -> Self {
+        self.removal_policy = policy;
+        self
+    }
+}
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DurationPolicy {
     /// Effect applies instantly and is removed immediately.
@@ -299,6 +339,8 @@ pub struct GameplayEffectDefinition {
     pub application_tag_requirements: GameplayTagRequirements,
     /// Stacking policy.
     pub stacking_policy: StackingPolicy,
+    /// Abilities granted while this effect is active.
+    pub granted_abilities: Vec<GrantedAbilityConfig>,
 }
 
 impl GameplayEffectDefinition {
@@ -315,6 +357,7 @@ impl GameplayEffectDefinition {
             immunity_tags: GameplayTagContainer::default(),
             application_tag_requirements: GameplayTagRequirements::default(),
             stacking_policy: StackingPolicy::Independent,
+            granted_abilities: Vec::new(),
         }
     }
 
@@ -380,6 +423,22 @@ impl GameplayEffectDefinition {
     /// Sets the stacking policy.
     pub fn with_stacking_policy(mut self, policy: StackingPolicy) -> Self {
         self.stacking_policy = policy;
+        self
+    }
+
+    /// Grants an ability while this effect is active.
+    ///
+    /// The ability will be granted when the effect is applied and removed when the effect ends.
+    /// This is useful for temporary abilities (e.g., equipment abilities, buff abilities).
+    pub fn grant_ability(mut self, config: GrantedAbilityConfig) -> Self {
+        self.granted_abilities.push(config);
+        self
+    }
+
+    /// Convenience method to grant an ability with default removal policy.
+    pub fn grant_ability_simple(mut self, ability_id: impl Into<Atom>) -> Self {
+        self.granted_abilities
+            .push(GrantedAbilityConfig::new(ability_id));
         self
     }
 }

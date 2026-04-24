@@ -81,6 +81,16 @@ impl SetByCallerMagnitudes {
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EffectTarget(pub Entity);
 
+/// Component tracking abilities granted by this effect.
+///
+/// When an effect grants abilities, this component stores the ability spec entities
+/// so they can be properly removed when the effect ends.
+#[derive(Component, Debug, Clone, Default)]
+pub struct EffectGrantedAbilities {
+    /// List of ability spec entities granted by this effect.
+    pub granted_ability_specs: Vec<Entity>,
+}
+
 /// Component that identifies the instigator of an effect.
 ///
 /// This is the entity that caused the effect to be applied.
@@ -295,6 +305,15 @@ impl ModifierOperation {
 #[derive(Component, Debug, Clone)]
 pub struct EffectGrantedTags {
     pub tags: GameplayTagContainer,
+}
+
+/// Component that tracks abilities granted by this effect.
+///
+/// When the effect is removed, these abilities should also be removed.
+#[derive(Component, Debug, Clone, Default)]
+pub struct GrantedAbilities {
+    /// List of ability spec entities that were granted by this effect.
+    pub ability_specs: Vec<Entity>,
 }
 
 #[cfg(test)]
