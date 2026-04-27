@@ -39,6 +39,9 @@ pub struct ApplyEffectParams<'w, 's> {
             &'static mut ActiveGameplayEffect,
             &'static EffectTarget,
             Option<&'static mut EffectDuration>,
+            Option<&'static mut EffectInstigator>,
+            Option<&'static mut GameplayEffectContext>,
+            Option<&'static mut SetByCallerMagnitudes>,
         ),
     >,
 }
@@ -362,14 +365,29 @@ pub fn on_apply_gameplay_effect(
     match definition.stacking_policy {
         StackingPolicy::RefreshDuration => {
             // Find existing effect and refresh its duration
-            for (effect_entity, active_effect, effect_target, duration) in
-                params.existing_effects.iter_mut()
+            for (
+                effect_entity,
+                active_effect,
+                effect_target,
+                duration,
+                effect_instigator,
+                effect_context,
+                set_by_caller,
+            ) in params.existing_effects.iter_mut()
             {
                 if effect_target.0 == target && active_effect.definition_id == *effect_id {
                     if let Some(mut dur) = duration {
                         dur.remaining = definition.duration_magnitude;
                     }
-                    // Trigger applied event for the existing effect
+                    if let Some(mut instigator_component) = effect_instigator {
+                        instigator_component.0 = spec.instigator();
+                    }
+                    if let Some(mut context_component) = effect_context {
+                        *context_component = spec.context.clone();
+                    }
+                    if let Some(mut set_by_caller_component) = set_by_caller {
+                        *set_by_caller_component = spec.set_by_caller_magnitudes.clone();
+                    }
                     commands.trigger(GameplayEffectAppliedEvent {
                         effect: effect_entity,
                         target,
@@ -382,25 +400,37 @@ pub fn on_apply_gameplay_effect(
         }
         StackingPolicy::StackCount { max_stacks } => {
             // Find existing effect and increment stack count
-            for (effect_entity, mut active_effect, effect_target, _) in
-                params.existing_effects.iter_mut()
+            for (
+                effect_entity,
+                mut active_effect,
+                effect_target,
+                duration,
+                effect_instigator,
+                effect_context,
+                set_by_caller,
+            ) in params.existing_effects.iter_mut()
             {
                 if effect_target.0 == target && active_effect.definition_id == *effect_id {
                     if active_effect.stack_count < max_stacks {
-                        // Increment stack count
                         active_effect.stack_count += 1;
-
-                        // IMPORTANT: We need to spawn new modifiers for the new stack
-                        // The create_effect_modifiers_system will handle this automatically
-                        // when it sees the Changed<ActiveGameplayEffect> component
-
-                        commands.trigger(GameplayEffectAppliedEvent {
-                            effect: effect_entity,
-                            target,
-                            effect_id: effect_id.clone(),
-                        });
                     }
-                    // If at max stacks, do nothing (could optionally refresh duration)
+                    if let Some(mut dur) = duration {
+                        dur.remaining = definition.duration_magnitude;
+                    }
+                    if let Some(mut instigator_component) = effect_instigator {
+                        instigator_component.0 = spec.instigator();
+                    }
+                    if let Some(mut context_component) = effect_context {
+                        *context_component = spec.context.clone();
+                    }
+                    if let Some(mut set_by_caller_component) = set_by_caller {
+                        *set_by_caller_component = spec.set_by_caller_magnitudes.clone();
+                    }
+                    commands.trigger(GameplayEffectAppliedEvent {
+                        effect: effect_entity,
+                        target,
+                        effect_id: effect_id.clone(),
+                    });
                     return;
                 }
             }
@@ -819,12 +849,27 @@ pub fn remove_expired_effects_system(
 /// This is consistent with UE GAS behavior where periodic damage/healing
 /// permanently changes the attribute.
 pub fn execute_periodic_effects_system(
-    mut effects: Query<(&mut PeriodicEffect, &ActiveGameplayEffect, &EffectTarget)>,
+    mut effects: Query<(
+        &mut PeriodicEffect,
+        &ActiveGameplayEffect,
+        &EffectTarget,
+        Option<&EffectInstigator>,
+        Option<&GameplayEffectContext>,
+        Option<&SetByCallerMagnitudes>,
+    )>,
     registry: Res<GameplayEffectRegistry>,
+    custom_calculators: Res<super::custom_calculation::CustomCalculationRegistry>,
     mut attributes: Query<(&mut AttributeData, &AttributeName, &ChildOf)>,
     time: Res<Time>,
 ) {
-    for (mut periodic, active_effect, target) in effects.iter_mut() {
+    let attribute_snapshots: Vec<_> = attributes
+        .iter()
+        .map(|(data, name, child_of)| ApplicationAttributeSnapshot::new(child_of.get(), name, data))
+        .collect();
+
+    for (mut periodic, active_effect, target, instigator, context, set_by_caller) in
+        effects.iter_mut()
+    {
         let executions = periodic.tick(time.delta_secs());
 
         if executions == 0 {
@@ -840,10 +885,22 @@ pub fn execute_periodic_effects_system(
             continue;
         };
 
+        let source_entity = context
+            .and_then(|context| context.source.or(context.instigator))
+            .or_else(|| instigator.and_then(|instigator| instigator.0));
+
         // Apply modifiers for each execution
         for _ in 0..executions {
             for modifier in &definition.modifiers {
-                let magnitude = modifier.magnitude.evaluate(active_effect.level, None);
+                let magnitude = calculate_modifier_magnitude(
+                    &modifier.magnitude,
+                    active_effect.level,
+                    source_entity,
+                    target.0,
+                    set_by_caller,
+                    &custom_calculators,
+                    &attribute_snapshots,
+                );
 
                 // Find and modify the target attribute
                 for (mut attr_data, attr_name, child_of) in attributes.iter_mut() {
