@@ -79,12 +79,7 @@ fn setup(
     effect_registry.register(buff_effect);
 
     // Apply the buff to the player
-    commands.trigger(ApplyGameplayEffectEvent {
-        effect_id: "movement_buff".into(),
-        target: player,
-        instigator: None,
-        level: 1,
-    });
+    commands.trigger(ApplyGameplayEffectEvent::new("movement_buff", player).with_level(1));
 
     info!("Applied movement buff to player");
     info!("Player should now have 'dash' and 'double_jump' abilities");

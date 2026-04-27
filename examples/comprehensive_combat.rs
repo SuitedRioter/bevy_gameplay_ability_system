@@ -149,12 +149,8 @@ fn setup(mut commands: Commands, mut custom_calc_registry: ResMut<CustomCalculat
         .insert((OwnedTags::default(), Name::new("Enemy")));
 
     // === Apply Equipment Buff (grants temporary ability) ===
-    commands.trigger(ApplyGameplayEffectEvent {
-        effect_id: "equipment_sword_of_power".into(),
-        target: player,
-        instigator: None,
-        level: 1,
-    });
+    commands
+        .trigger(ApplyGameplayEffectEvent::new("equipment_sword_of_power", player).with_level(1));
 
     info!("\n=== Combat Starting ===");
     info!("Player: 500 HP, 50 Attack, 20 Defense");
@@ -371,12 +367,11 @@ fn simulate_combat(
     // Player's turn
     if state.turn == 1 {
         info!("Player uses Basic Attack on Enemy");
-        commands.trigger(ApplyGameplayEffectEvent {
-            effect_id: "basic_damage".into(),
-            target: enemy,
-            instigator: Some(player),
-            level: 1,
-        });
+        commands.trigger(
+            ApplyGameplayEffectEvent::new("basic_damage", enemy)
+                .with_level(1)
+                .with_instigator(player),
+        );
         // Trigger damage event for counter-attack
         commands.trigger(GameplayEvent {
             event_tag: GameplayTag::new("Event.Damage.Received"),
@@ -390,44 +385,39 @@ fn simulate_combat(
             owner: player,
             ability_spec: Entity::PLACEHOLDER, // Will be found by system
         });
-        commands.trigger(ApplyGameplayEffectEvent {
-            effect_id: "power_strike_damage".into(),
-            target: enemy,
-            instigator: Some(player),
-            level: 1,
-        });
+        commands.trigger(
+            ApplyGameplayEffectEvent::new("power_strike_damage", enemy)
+                .with_level(1)
+                .with_instigator(player),
+        );
     } else if state.turn == 3 {
         info!("Player applies Poison to Enemy");
-        commands.trigger(ApplyGameplayEffectEvent {
-            effect_id: "poison_dot".into(),
-            target: enemy,
-            instigator: Some(player),
-            level: 1,
-        });
+        commands.trigger(
+            ApplyGameplayEffectEvent::new("poison_dot", enemy)
+                .with_level(1)
+                .with_instigator(player),
+        );
     } else if state.turn == 4 {
         info!("Player stacks Defense Buff (1st stack)");
-        commands.trigger(ApplyGameplayEffectEvent {
-            effect_id: "defense_buff".into(),
-            target: player,
-            instigator: Some(player),
-            level: 1,
-        });
+        commands.trigger(
+            ApplyGameplayEffectEvent::new("defense_buff", player)
+                .with_level(1)
+                .with_instigator(player),
+        );
     } else if state.turn == 5 {
         info!("Player stacks Defense Buff (2nd stack)");
-        commands.trigger(ApplyGameplayEffectEvent {
-            effect_id: "defense_buff".into(),
-            target: player,
-            instigator: Some(player),
-            level: 1,
-        });
+        commands.trigger(
+            ApplyGameplayEffectEvent::new("defense_buff", player)
+                .with_level(1)
+                .with_instigator(player),
+        );
     } else if state.turn == 6 {
         info!("Player uses Heal");
-        commands.trigger(ApplyGameplayEffectEvent {
-            effect_id: "heal_effect".into(),
-            target: player,
-            instigator: Some(player),
-            level: 1,
-        });
+        commands.trigger(
+            ApplyGameplayEffectEvent::new("heal_effect", player)
+                .with_level(1)
+                .with_instigator(player),
+        );
     } else if state.turn >= 7 {
         // End combat
         info!("\n=== Combat Ended ===");

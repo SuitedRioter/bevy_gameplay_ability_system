@@ -26,12 +26,8 @@ fn test_effect_grants_and_removes_ability_on_expiration() {
 
     let target = app.world_mut().spawn(OwnedTags::default()).id();
 
-    app.world_mut().trigger(ApplyGameplayEffectEvent {
-        effect_id: "temporary_grant".into(),
-        target,
-        instigator: None,
-        level: 3,
-    });
+    app.world_mut()
+        .trigger(ApplyGameplayEffectEvent::new("temporary_grant", target).with_level(3));
     app.update();
 
     let granted_ability = {

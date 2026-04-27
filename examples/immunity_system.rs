@@ -92,27 +92,12 @@ fn setup(
     registry.register(physical_damage);
 
     // Apply fire damage to both targets
-    commands.trigger(ApplyGameplayEffectEvent {
-        effect_id: "fire_damage".into(),
-        target: vulnerable_target,
-        instigator: None,
-        level: 1,
-    });
+    commands.trigger(ApplyGameplayEffectEvent::new("fire_damage", vulnerable_target).with_level(1));
 
-    commands.trigger(ApplyGameplayEffectEvent {
-        effect_id: "fire_damage".into(),
-        target: immune_target,
-        instigator: None,
-        level: 1,
-    });
+    commands.trigger(ApplyGameplayEffectEvent::new("fire_damage", immune_target).with_level(1));
 
     // Apply physical damage to immune target (should work)
-    commands.trigger(ApplyGameplayEffectEvent {
-        effect_id: "physical_damage".into(),
-        target: immune_target,
-        instigator: None,
-        level: 1,
-    });
+    commands.trigger(ApplyGameplayEffectEvent::new("physical_damage", immune_target).with_level(1));
 
     info!("Vulnerable target should take fire damage: 100 -> 80");
     info!("Immune target should block fire damage but take physical: 100 -> 85");

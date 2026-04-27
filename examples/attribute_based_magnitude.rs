@@ -88,12 +88,11 @@ fn setup(mut commands: Commands, mut registry: ResMut<GameplayEffectRegistry>) {
     registry.register(heal_effect);
 
     // Apply damage effect (attacker -> target)
-    commands.trigger(ApplyGameplayEffectEvent {
-        effect_id: "damage_from_attack_power".into(),
-        target,
-        instigator: Some(attacker),
-        level: 1,
-    });
+    commands.trigger(
+        ApplyGameplayEffectEvent::new("damage_from_attack_power", target)
+            .with_level(1)
+            .with_instigator(attacker),
+    );
 
     // Spawn timer for heal
     commands.spawn((
@@ -119,12 +118,9 @@ fn check_results(
         heal_timer.0.tick(time.delta());
         if heal_timer.0.just_finished() {
             // Apply heal effect
-            commands.trigger(ApplyGameplayEffectEvent {
-                effect_id: "heal_percentage".into(),
-                target: heal_target.0,
-                instigator: None,
-                level: 1,
-            });
+            commands.trigger(
+                ApplyGameplayEffectEvent::new("heal_percentage", heal_target.0).with_level(1),
+            );
 
             commands.entity(timer_entity).despawn();
         }

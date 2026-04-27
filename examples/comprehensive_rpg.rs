@@ -113,12 +113,11 @@ impl AbilityBehavior for ApplyEffectBehavior {
                 .map(|spec| spec.level)
                 .unwrap_or(1);
 
-            world.trigger(ApplyGameplayEffectEvent {
-                effect_id: effect_id.into(),
-                target,
-                instigator: Some(source),
-                level,
-            });
+            world.trigger(
+                ApplyGameplayEffectEvent::new(effect_id, target)
+                    .with_level(level)
+                    .with_instigator(source),
+            );
         });
     }
 }
@@ -445,12 +444,11 @@ fn simulate_combat(
         }
         9 => {
             info!("\n=== Phase 5: Enemy attacks Player (should be reduced by defense) ===");
-            commands.trigger(ApplyGameplayEffectEvent {
-                effect_id: "basic_attack".into(),
-                target: player,
-                instigator: Some(enemy),
-                level: 1,
-            });
+            commands.trigger(
+                ApplyGameplayEffectEvent::new("basic_attack", player)
+                    .with_level(1)
+                    .with_instigator(enemy),
+            );
         }
         10 => {
             info!("\n=== Phase 6: Player heals self ===");

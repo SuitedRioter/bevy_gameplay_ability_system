@@ -70,12 +70,8 @@ fn test_stack_count_spawns_correct_modifiers() {
     };
 
     // Apply effect first time (stack = 1)
-    app.world_mut().trigger(ApplyGameplayEffectEvent {
-        effect_id: "stack_buff".into(),
-        target,
-        instigator: None,
-        level: 1,
-    });
+    app.world_mut()
+        .trigger(ApplyGameplayEffectEvent::new("stack_buff", target).with_level(1));
 
     app.update();
 
@@ -91,12 +87,8 @@ fn test_stack_count_spawns_correct_modifiers() {
     );
 
     // Apply effect second time (stack = 2)
-    app.world_mut().trigger(ApplyGameplayEffectEvent {
-        effect_id: "stack_buff".into(),
-        target,
-        instigator: None,
-        level: 1,
-    });
+    app.world_mut()
+        .trigger(ApplyGameplayEffectEvent::new("stack_buff", target).with_level(1));
 
     app.update();
 
@@ -112,12 +104,8 @@ fn test_stack_count_spawns_correct_modifiers() {
     );
 
     // Apply effect third time (stack = 3, max)
-    app.world_mut().trigger(ApplyGameplayEffectEvent {
-        effect_id: "stack_buff".into(),
-        target,
-        instigator: None,
-        level: 1,
-    });
+    app.world_mut()
+        .trigger(ApplyGameplayEffectEvent::new("stack_buff", target).with_level(1));
 
     app.update();
 
@@ -130,12 +118,8 @@ fn test_stack_count_spawns_correct_modifiers() {
     assert_eq!(modifier_count, 3, "Should have 3 modifiers at max stacks");
 
     // Try to apply fourth time (should not increase beyond max)
-    app.world_mut().trigger(ApplyGameplayEffectEvent {
-        effect_id: "stack_buff".into(),
-        target,
-        instigator: None,
-        level: 1,
-    });
+    app.world_mut()
+        .trigger(ApplyGameplayEffectEvent::new("stack_buff", target).with_level(1));
 
     app.update();
 
@@ -183,12 +167,8 @@ fn test_stack_count_removes_modifiers_on_decrease() {
 
     // Apply effect 3 times
     for _ in 0..3 {
-        app.world_mut().trigger(ApplyGameplayEffectEvent {
-            effect_id: "stack_buff_removable".into(),
-            target,
-            instigator: None,
-            level: 1,
-        });
+        app.world_mut()
+            .trigger(ApplyGameplayEffectEvent::new("stack_buff_removable", target).with_level(1));
         app.update();
     }
 

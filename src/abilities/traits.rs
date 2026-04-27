@@ -212,21 +212,21 @@ pub trait AbilityBehavior: Send + Sync + 'static {
         source: Entity,
     ) {
         if let Some(cd_id) = &definition.cooldown_effect {
-            commands.trigger(ApplyGameplayEffectEvent {
-                effect_id: cd_id.clone(),
-                target: source,
-                instigator: Some(source),
-                level: spec.level,
-            });
+            commands.trigger(
+                ApplyGameplayEffectEvent::new(cd_id.clone(), source)
+                    .with_source(source)
+                    .with_instigator(source)
+                    .with_level(spec.level),
+            );
         };
 
         if let Some(cost_id) = &definition.cost_effect {
-            commands.trigger(ApplyGameplayEffectEvent {
-                effect_id: cost_id.clone(),
-                target: source,
-                instigator: Some(source),
-                level: spec.level,
-            });
+            commands.trigger(
+                ApplyGameplayEffectEvent::new(cost_id.clone(), source)
+                    .with_source(source)
+                    .with_instigator(source)
+                    .with_level(spec.level),
+            );
         }
     }
 

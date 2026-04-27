@@ -69,12 +69,8 @@ fn test_set_base_value_preserves_active_modifier_effect_until_reaggregation() {
         owner
     };
 
-    app.world_mut().trigger(ApplyGameplayEffectEvent {
-        effect_id: "base_buff".into(),
-        target: owner,
-        instigator: None,
-        level: 1,
-    });
+    app.world_mut()
+        .trigger(ApplyGameplayEffectEvent::new("base_buff", owner).with_level(1));
     app.update();
 
     let health_attr = find_attribute_entity(app.world_mut(), owner, "Health");
@@ -150,12 +146,8 @@ fn test_add_base_modifier_recomputes_from_base_value() {
         owner
     };
 
-    app.world_mut().trigger(ApplyGameplayEffectEvent {
-        effect_id: "permanent_style_buff".into(),
-        target: owner,
-        instigator: None,
-        level: 1,
-    });
+    app.world_mut()
+        .trigger(ApplyGameplayEffectEvent::new("permanent_style_buff", owner).with_level(1));
     app.update();
 
     let health_attr = find_attribute_entity(app.world_mut(), owner, "Health");

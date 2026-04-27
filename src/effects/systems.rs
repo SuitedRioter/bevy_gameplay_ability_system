@@ -7,10 +7,10 @@ use super::definition::*;
 use crate::attributes::{
     AttributeData, AttributeLifecycleHooks, AttributeModifyContext, AttributeName, AttributeSetId,
 };
+use crate::core::OwnedTags;
 use crate::effects::application_requirement::{
     ApplicationAttributeSnapshot, ApplicationContext, ApplicationRequirementRegistry,
 };
-use crate::core::OwnedTags;
 use bevy::ecs::relationship::Relationship;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
@@ -46,14 +46,70 @@ pub struct ApplyEffectParams<'w, 's> {
 /// Event for applying a gameplay effect.
 #[derive(Event, Debug, Clone)]
 pub struct ApplyGameplayEffectEvent {
-    /// The effect definition ID to apply.
-    pub effect_id: Atom,
-    /// The target entity.
-    pub target: Entity,
-    /// The instigator entity (optional).
-    pub instigator: Option<Entity>,
-    /// The level at which to apply the effect.
-    pub level: i32,
+    /// Complete runtime spec for this application.
+    pub spec: GameplayEffectSpec,
+}
+
+impl ApplyGameplayEffectEvent {
+    /// Creates an effect application event from a spec.
+    pub fn from_spec(spec: GameplayEffectSpec) -> Self {
+        Self { spec }
+    }
+
+    /// Creates an effect application event targeting an entity at level 1.
+    pub fn new(effect_id: impl Into<Atom>, target: Entity) -> Self {
+        Self::from_spec(GameplayEffectSpec::new(effect_id, target))
+    }
+
+    /// Sets the level on the contained spec.
+    pub fn with_level(mut self, level: i32) -> Self {
+        self.spec.level = level;
+        self
+    }
+
+    /// Sets the source entity on the contained spec.
+    pub fn with_source(mut self, source: Entity) -> Self {
+        self.spec.context.source = Some(source);
+        self
+    }
+
+    /// Sets the instigator entity on the contained spec.
+    pub fn with_instigator(mut self, instigator: Entity) -> Self {
+        self.spec.context.instigator = Some(instigator);
+        self
+    }
+
+    /// Adds a SetByCaller magnitude to the contained spec.
+    pub fn with_set_by_caller_magnitude(
+        mut self,
+        tag: bevy_gameplay_tag::gameplay_tag::GameplayTag,
+        magnitude: f32,
+    ) -> Self {
+        self.spec
+            .set_by_caller_magnitudes
+            .set_magnitude(tag, magnitude);
+        self
+    }
+
+    /// Returns the effect definition ID.
+    pub fn effect_id(&self) -> &Atom {
+        &self.spec.effect_id
+    }
+
+    /// Returns the target entity.
+    pub fn target(&self) -> Entity {
+        self.spec.target
+    }
+
+    /// Returns the legacy instigator field.
+    pub fn instigator(&self) -> Option<Entity> {
+        self.spec.instigator()
+    }
+
+    /// Returns the application level.
+    pub fn level(&self) -> i32 {
+        self.spec.level
+    }
 }
 
 /// Event triggered when an effect is applied.
@@ -91,20 +147,121 @@ pub struct GameplayEffectBlockedByImmunityEvent {
     pub immunity_tag: bevy_gameplay_tag::gameplay_tag::GameplayTag,
 }
 
+fn calculate_modifier_magnitude(
+    magnitude: &MagnitudeCalculation,
+    level: i32,
+    source_entity: Option<Entity>,
+    target_entity: Entity,
+    set_by_caller: Option<&SetByCallerMagnitudes>,
+    custom_calculators: &super::custom_calculation::CustomCalculationRegistry,
+    attributes: &[ApplicationAttributeSnapshot],
+) -> f32 {
+    let source_value = match magnitude {
+        MagnitudeCalculation::AttributeBased {
+            attribute_name,
+            capture_source,
+            calculation_type,
+            ..
+        } => {
+            use super::definition::{AttributeCalculationType, AttributeCaptureSource};
+
+            let capture_entity = match capture_source {
+                AttributeCaptureSource::Source => source_entity,
+                AttributeCaptureSource::Target => Some(target_entity),
+            };
+
+            capture_entity.and_then(|entity| {
+                attributes
+                    .iter()
+                    .find(|snapshot| {
+                        snapshot.owner == entity && snapshot.attribute_name == *attribute_name
+                    })
+                    .map(|snapshot| match calculation_type {
+                        AttributeCalculationType::AttributeMagnitude => snapshot.current_value,
+                        AttributeCalculationType::AttributeBaseValue => snapshot.base_value,
+                        AttributeCalculationType::AttributeBonusMagnitude => {
+                            snapshot.current_value - snapshot.base_value
+                        }
+                    })
+            })
+        }
+        MagnitudeCalculation::SetByCaller { data_tag } => {
+            set_by_caller.and_then(|magnitudes| magnitudes.get_magnitude(data_tag))
+        }
+        MagnitudeCalculation::CustomClass { calculator_name } => {
+            if let Some(calculator) = custom_calculators.get(calculator_name) {
+                use super::custom_calculation::CalculationContext;
+
+                let mut source_attrs = std::collections::HashMap::new();
+                let mut target_attrs = std::collections::HashMap::new();
+
+                if let Some(source) = source_entity {
+                    for attr_name in calculator.required_source_attributes() {
+                        if let Some(value) = attributes
+                            .iter()
+                            .find(|snapshot| {
+                                snapshot.owner == source
+                                    && snapshot.attribute_name.as_ref() == *attr_name
+                            })
+                            .map(|snapshot| snapshot.current_value)
+                        {
+                            source_attrs.insert((*attr_name).into(), value);
+                        }
+                    }
+                }
+
+                for attr_name in calculator.required_target_attributes() {
+                    if let Some(value) = attributes
+                        .iter()
+                        .find(|snapshot| {
+                            snapshot.owner == target_entity
+                                && snapshot.attribute_name.as_ref() == *attr_name
+                        })
+                        .map(|snapshot| snapshot.current_value)
+                    {
+                        target_attrs.insert((*attr_name).into(), value);
+                    }
+                }
+
+                let context = CalculationContext {
+                    source: source_entity,
+                    target: target_entity,
+                    level,
+                    source_attributes: source_attrs,
+                    target_attributes: target_attrs,
+                };
+
+                Some(calculator.calculate(&context))
+            } else {
+                warn!(
+                    "Custom calculator '{}' not found in registry",
+                    calculator_name
+                );
+                None
+            }
+        }
+        MagnitudeCalculation::ScalableFloat { .. } => None,
+    };
+
+    magnitude.evaluate(level, source_value)
+}
+
 /// Observer for ApplyGameplayEffectEvent.
 pub fn on_apply_gameplay_effect(
     ev: On<ApplyGameplayEffectEvent>,
     mut commands: Commands,
     registry: Res<GameplayEffectRegistry>,
     application_requirements: Res<ApplicationRequirementRegistry>,
+    custom_calculators: Res<super::custom_calculation::CustomCalculationRegistry>,
     tags_manager: Res<GameplayTagsManager>,
     time: Res<Time>,
     mut params: ApplyEffectParams,
 ) {
     let event = ev.event();
-    let target = event.target;
-    let effect_id = &event.effect_id;
-    let level = event.level;
+    let spec = &event.spec;
+    let target = spec.target;
+    let effect_id = &spec.effect_id;
+    let level = spec.level;
 
     let Some(definition) = registry.get(effect_id) else {
         warn!("Effect definition not found: {}", effect_id);
@@ -130,7 +287,7 @@ pub fn on_apply_gameplay_effect(
                 commands.trigger(GameplayEffectBlockedByImmunityEvent {
                     effect_id: effect_id.clone(),
                     target,
-                    instigator: event.instigator,
+                    instigator: spec.instigator(),
                     immunity_tag: immunity_tag.clone(),
                 });
 
@@ -168,16 +325,14 @@ pub fn on_apply_gameplay_effect(
 
     // Check custom application requirements.
     let target_tags = params.tag_containers.get(target).ok();
-    let source_tags = event
-        .instigator
+    let source_tags = spec
+        .source_entity()
         .and_then(|source| params.tag_containers.get(source).ok());
 
     let attribute_snapshots: Vec<_> = params
         .attributes
         .iter()
-        .map(|(data, name, child_of)| {
-            ApplicationAttributeSnapshot::new(child_of.get(), name, data)
-        })
+        .map(|(data, name, child_of)| ApplicationAttributeSnapshot::new(child_of.get(), name, data))
         .collect();
 
     for requirement_name in &definition.application_requirements {
@@ -190,7 +345,7 @@ pub fn on_apply_gameplay_effect(
         };
 
         let context = ApplicationContext {
-            source: event.instigator,
+            source: spec.source_entity(),
             target,
             level,
             target_tags: target_tags.as_ref().copied(),
@@ -260,7 +415,15 @@ pub fn on_apply_gameplay_effect(
         DurationPolicy::Instant => {
             // Directly modify attribute base_value, no entity spawn
             for modifier in &definition.modifiers {
-                let magnitude = modifier.magnitude.evaluate(level, None);
+                let magnitude = calculate_modifier_magnitude(
+                    &modifier.magnitude,
+                    level,
+                    spec.source_entity(),
+                    target,
+                    Some(&spec.set_by_caller_magnitudes),
+                    &custom_calculators,
+                    &attribute_snapshots,
+                );
                 for (mut attr_data, attr_name, attr_owner) in params.attributes.iter_mut() {
                     if attr_owner.0 == target && attr_name.0 == modifier.attribute_name {
                         let old_value = attr_data.base_value;
@@ -316,8 +479,13 @@ pub fn on_apply_gameplay_effect(
             let mut effect_entity_commands = commands.spawn((
                 ActiveGameplayEffect::new(effect_id.clone(), level, time.elapsed_secs()),
                 EffectTarget(target),
-                EffectInstigator(event.instigator),
+                EffectInstigator(spec.instigator()),
+                spec.context.clone(),
             ));
+
+            if !spec.set_by_caller_magnitudes.is_empty() {
+                effect_entity_commands.insert(spec.set_by_caller_magnitudes.clone());
+            }
 
             // Add duration component for HasDuration
             if definition.duration_policy == DurationPolicy::HasDuration {
@@ -379,13 +547,14 @@ pub fn create_effect_modifiers_system(
             &EffectTarget,
             Option<&EffectInstigator>,
             Option<&SetByCallerMagnitudes>,
+            Option<&GameplayEffectContext>,
         ),
         Or<(Added<ActiveGameplayEffect>, Changed<ActiveGameplayEffect>)>,
     >,
     existing_modifiers: Query<(Entity, &ModifierSource)>,
     attributes: Query<(&AttributeData, &AttributeName, &ChildOf)>,
 ) {
-    for (effect_entity, active_effect, target, instigator, set_by_caller) in
+    for (effect_entity, active_effect, target, instigator, set_by_caller, context) in
         new_or_changed_effects.iter()
     {
         let Some(definition) = registry.get(&active_effect.definition_id) else {
@@ -424,115 +593,27 @@ pub fn create_effect_modifiers_system(
         // We need more modifiers - spawn one complete set per missing stack
         let missing_stacks = (needed_total - existing_modifier_count) / modifiers_per_set;
 
+        let attribute_snapshots: Vec<_> = attributes
+            .iter()
+            .map(|(data, name, child_of)| {
+                ApplicationAttributeSnapshot::new(child_of.get(), name, data)
+            })
+            .collect();
+        let source_entity = context
+            .and_then(|context| context.source.or(context.instigator))
+            .or_else(|| instigator.and_then(|instigator| instigator.0));
+
         for _ in 0..missing_stacks {
             for modifier_info in &definition.modifiers {
-                // Evaluate magnitude based on calculation type
-                let source_value = match &modifier_info.magnitude {
-                    MagnitudeCalculation::AttributeBased {
-                        attribute_name,
-                        capture_source,
-                        calculation_type,
-                        ..
-                    } => {
-                        use super::definition::{AttributeCalculationType, AttributeCaptureSource};
-
-                        // Determine which entity to capture from
-                        let capture_entity = match capture_source {
-                            AttributeCaptureSource::Source => instigator.and_then(|i| i.0),
-                            AttributeCaptureSource::Target => Some(target.0),
-                        };
-
-                        // Find the attribute on the capture entity
-                        if let Some(entity) = capture_entity {
-                            attributes
-                                .iter()
-                                .find(|(_data, name, child_of)| {
-                                    child_of.get() == entity && name.0 == *attribute_name
-                                })
-                                .map(|(data, _, _)| {
-                                    // Apply calculation type
-                                    match calculation_type {
-                                        AttributeCalculationType::AttributeMagnitude => {
-                                            data.current_value
-                                        }
-                                        AttributeCalculationType::AttributeBaseValue => {
-                                            data.base_value
-                                        }
-                                        AttributeCalculationType::AttributeBonusMagnitude => {
-                                            data.current_value - data.base_value
-                                        }
-                                    }
-                                })
-                        } else {
-                            None
-                        }
-                    }
-                    MagnitudeCalculation::SetByCaller { data_tag } => {
-                        // Look up value from SetByCallerMagnitudes component
-                        set_by_caller.and_then(|magnitudes| magnitudes.get_magnitude(data_tag))
-                    }
-                    MagnitudeCalculation::CustomClass { calculator_name } => {
-                        // Look up custom calculator and execute it
-                        if let Some(calculator) = custom_calculators.get(calculator_name) {
-                            use super::custom_calculation::CalculationContext;
-                            use bevy::ecs::relationship::Relationship;
-
-                            // Capture required attributes
-                            let mut source_attrs = std::collections::HashMap::new();
-                            let mut target_attrs = std::collections::HashMap::new();
-
-                            // Capture source attributes
-                            if let Some(source_entity) = instigator.and_then(|i| i.0) {
-                                for attr_name in calculator.required_source_attributes() {
-                                    if let Some(value) = attributes
-                                        .iter()
-                                        .find(|(_, name, child_of)| {
-                                            child_of.get() == source_entity
-                                                && name.as_str() == *attr_name
-                                        })
-                                        .map(|(data, _, _)| data.current_value)
-                                    {
-                                        source_attrs.insert((*attr_name).into(), value);
-                                    }
-                                }
-                            }
-
-                            // Capture target attributes
-                            for attr_name in calculator.required_target_attributes() {
-                                if let Some(value) = attributes
-                                    .iter()
-                                    .find(|(_, name, child_of)| {
-                                        child_of.get() == target.0 && name.as_str() == *attr_name
-                                    })
-                                    .map(|(data, _, _)| data.current_value)
-                                {
-                                    target_attrs.insert((*attr_name).into(), value);
-                                }
-                            }
-
-                            let context = CalculationContext {
-                                source: instigator.and_then(|i| i.0),
-                                target: target.0,
-                                level: active_effect.level,
-                                source_attributes: source_attrs,
-                                target_attributes: target_attrs,
-                            };
-
-                            Some(calculator.calculate(&context))
-                        } else {
-                            warn!(
-                                "Custom calculator '{}' not found in registry",
-                                calculator_name
-                            );
-                            None
-                        }
-                    }
-                    _ => None,
-                };
-
-                let magnitude = modifier_info
-                    .magnitude
-                    .evaluate(active_effect.level, source_value);
+                let magnitude = calculate_modifier_magnitude(
+                    &modifier_info.magnitude,
+                    active_effect.level,
+                    source_entity,
+                    target.0,
+                    set_by_caller,
+                    &custom_calculators,
+                    &attribute_snapshots,
+                );
 
                 commands.spawn((
                     AttributeModifier {
@@ -823,6 +904,7 @@ mod tests {
         app.init_resource::<ReceivedAppliedEvents>();
         app.init_resource::<GameplayEffectRegistry>();
         app.init_resource::<ApplicationRequirementRegistry>();
+        app.init_resource::<crate::effects::custom_calculation::CustomCalculationRegistry>();
         app.init_resource::<Time>();
         app.add_observer(on_apply_gameplay_effect);
         app.update();
@@ -845,18 +927,15 @@ mod tests {
 
         let target = app.world_mut().spawn(OwnedTags::default()).id();
 
-        app.world_mut().trigger(ApplyGameplayEffectEvent {
-            effect_id: Atom::from("test_effect"),
-            target,
-            instigator: None,
-            level: 1,
-        });
+        app.world_mut().trigger(
+            ApplyGameplayEffectEvent::new(Atom::from("test_effect"), target).with_level(1),
+        );
 
         app.update();
 
         let apply_events = app.world().resource::<ReceivedApplyEvents>();
         assert_eq!(apply_events.0.len(), 1);
-        assert_eq!(apply_events.0[0].effect_id, Atom::from("test_effect"));
-        assert_eq!(apply_events.0[0].target, target);
+        assert_eq!(apply_events.0[0].effect_id(), &Atom::from("test_effect"));
+        assert_eq!(apply_events.0[0].target(), target);
     }
 }

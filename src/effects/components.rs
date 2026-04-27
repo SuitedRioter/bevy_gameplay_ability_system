@@ -60,6 +60,11 @@ impl SetByCallerMagnitudes {
         Self::default()
     }
 
+    /// Returns true when no caller-provided magnitudes are stored.
+    pub fn is_empty(&self) -> bool {
+        self.magnitudes.is_empty()
+    }
+
     /// Adds a magnitude for a data tag.
     pub fn with_magnitude(mut self, tag: GameplayTag, magnitude: f32) -> Self {
         self.magnitudes.insert(tag, magnitude);
@@ -177,6 +182,83 @@ impl GameplayEffectContext {
     /// Gets custom data by key.
     pub fn get_custom_data(&self, key: &str) -> Option<f32> {
         self.custom_data.get(key).copied()
+    }
+}
+
+/// Runtime gameplay effect specification.
+///
+/// This is the ECS equivalent of Unreal's `FGameplayEffectSpec`: immutable enough
+/// to pass through events, but complete enough to carry caller-specific context.
+#[derive(Debug, Clone)]
+pub struct GameplayEffectSpec {
+    /// The effect definition ID in `GameplayEffectRegistry`.
+    pub effect_id: Atom,
+    /// The target entity receiving the effect.
+    pub target: Entity,
+    /// The level at which to apply the effect.
+    pub level: i32,
+    /// Runtime context describing source, causer, and hit data.
+    pub context: GameplayEffectContext,
+    /// Magnitudes supplied by the caller for SetByCaller calculations.
+    pub set_by_caller_magnitudes: SetByCallerMagnitudes,
+}
+
+impl GameplayEffectSpec {
+    /// Creates a spec targeting an entity at level 1.
+    pub fn new(effect_id: impl Into<Atom>, target: Entity) -> Self {
+        Self {
+            effect_id: effect_id.into(),
+            target,
+            level: 1,
+            context: GameplayEffectContext::new(),
+            set_by_caller_magnitudes: SetByCallerMagnitudes::new(),
+        }
+    }
+
+    /// Sets the effect level.
+    pub fn with_level(mut self, level: i32) -> Self {
+        self.level = level;
+        self
+    }
+
+    /// Sets the source entity in the effect context.
+    pub fn with_source(mut self, source: Entity) -> Self {
+        self.context.source = Some(source);
+        self
+    }
+
+    /// Sets the instigator entity in the effect context.
+    pub fn with_instigator(mut self, instigator: Entity) -> Self {
+        self.context.instigator = Some(instigator);
+        self
+    }
+
+    /// Replaces the full effect context.
+    pub fn with_context(mut self, context: GameplayEffectContext) -> Self {
+        self.context = context;
+        self
+    }
+
+    /// Adds a SetByCaller magnitude.
+    pub fn with_set_by_caller_magnitude(mut self, tag: GameplayTag, magnitude: f32) -> Self {
+        self.set_by_caller_magnitudes.set_magnitude(tag, magnitude);
+        self
+    }
+
+    /// Replaces all SetByCaller magnitudes.
+    pub fn with_set_by_caller_magnitudes(mut self, magnitudes: SetByCallerMagnitudes) -> Self {
+        self.set_by_caller_magnitudes = magnitudes;
+        self
+    }
+
+    /// Returns the entity used for source-side attribute capture.
+    pub fn source_entity(&self) -> Option<Entity> {
+        self.context.source.or(self.context.instigator)
+    }
+
+    /// Returns the legacy instigator field used by existing events/components.
+    pub fn instigator(&self) -> Option<Entity> {
+        self.context.instigator.or(self.context.source)
     }
 }
 
