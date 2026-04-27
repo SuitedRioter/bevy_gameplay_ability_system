@@ -4,6 +4,7 @@
 
 use super::components::*;
 use super::definition::*;
+use super::systems::GameplayEffectRemovedEvent;
 use crate::abilities::{AbilityOwner, AbilityRegistry, AbilitySpec};
 use bevy::prelude::*;
 
@@ -41,13 +42,13 @@ pub fn grant_abilities_from_effects_system(
 
         // Grant each ability to the target
         for granted_config in &definition.granted_abilities {
-            let Some(ability_def) = ability_registry.get(&granted_config.ability_id) else {
+            if ability_registry.get(&granted_config.ability_id).is_none() {
                 warn!(
                     "Ability definition not found: {}",
                     granted_config.ability_id
                 );
                 continue;
-            };
+            }
 
             // Spawn the ability spec
             let ability_entity = commands
@@ -93,12 +94,10 @@ pub struct GrantedByEffect {
     pub removal_policy: AbilityRemovalPolicy,
 }
 
-/// System that removes granted abilities when effects are removed.
-///
-/// This system handles the removal policy for granted abilities.
-pub fn remove_granted_abilities_system(
+/// Observer that removes granted abilities when their source effect is removed.
+pub fn on_gameplay_effect_removed_remove_granted_abilities(
+    ev: On<GameplayEffectRemovedEvent>,
     mut commands: Commands,
-    mut removed_effects: RemovedComponents<ActiveGameplayEffect>,
     granted_abilities_query: Query<&GrantedAbilities>,
     ability_query: Query<(
         &GrantedByEffect,
@@ -106,59 +105,53 @@ pub fn remove_granted_abilities_system(
         &crate::abilities::AbilityOwner,
     )>,
 ) {
-    for effect_entity in removed_effects.read() {
-        // Get the list of granted abilities before the effect is fully despawned
-        let Ok(granted_abilities) = granted_abilities_query.get(effect_entity) else {
+    let effect_entity = ev.event().effect;
+    let Ok(granted_abilities) = granted_abilities_query.get(effect_entity) else {
+        return;
+    };
+
+    for &ability_entity in &granted_abilities.granted_ability_entities {
+        let Ok((granted_by, active_state, ability_owner)) = ability_query.get(ability_entity)
+        else {
             continue;
         };
 
-        for &ability_entity in &granted_abilities.granted_ability_entities {
-            let Ok((granted_by, active_state, ability_owner)) = ability_query.get(ability_entity)
-            else {
-                continue;
-            };
-
-            match granted_by.removal_policy {
-                AbilityRemovalPolicy::CancelAbilityImmediately => {
-                    // Cancel the ability if active, then remove it
-                    if active_state.is_active {
-                        commands.trigger(crate::abilities::systems::CancelAbilityEvent {
-                            instance: None, // Cancel all instances
-                            ability_spec: ability_entity,
-                            owner: ability_owner.0, // Use the actual owner from AbilityOwner component
-                        });
-                    }
+        match granted_by.removal_policy {
+            AbilityRemovalPolicy::CancelAbilityImmediately => {
+                if active_state.is_active {
+                    commands.trigger(crate::abilities::systems::CancelAbilityEvent {
+                        instance: None,
+                        ability_spec: ability_entity,
+                        owner: ability_owner.0,
+                    });
+                }
+                commands.entity(ability_entity).despawn();
+                info!(
+                    "Removed granted ability {:?} (CancelAbilityImmediately)",
+                    ability_entity
+                );
+            }
+            AbilityRemovalPolicy::RemoveAbilityOnEnd => {
+                if active_state.is_active {
+                    commands.entity(ability_entity).insert(RemoveAbilityOnEnd);
+                    info!(
+                        "Marked granted ability {:?} for removal on end",
+                        ability_entity
+                    );
+                } else {
                     commands.entity(ability_entity).despawn();
                     info!(
-                        "Removed granted ability {:?} (CancelAbilityImmediately)",
+                        "Removed granted ability {:?} (RemoveAbilityOnEnd, not active)",
                         ability_entity
                     );
                 }
-                AbilityRemovalPolicy::RemoveAbilityOnEnd => {
-                    // If active, mark for removal when it ends
-                    // If not active, remove immediately
-                    if active_state.is_active {
-                        commands.entity(ability_entity).insert(RemoveAbilityOnEnd);
-                        info!(
-                            "Marked granted ability {:?} for removal on end",
-                            ability_entity
-                        );
-                    } else {
-                        commands.entity(ability_entity).despawn();
-                        info!(
-                            "Removed granted ability {:?} (RemoveAbilityOnEnd, not active)",
-                            ability_entity
-                        );
-                    }
-                }
-                AbilityRemovalPolicy::DoNothing => {
-                    // Leave the ability, but remove the GrantedByEffect marker
-                    commands.entity(ability_entity).remove::<GrantedByEffect>();
-                    info!(
-                        "Kept granted ability {:?} (DoNothing policy)",
-                        ability_entity
-                    );
-                }
+            }
+            AbilityRemovalPolicy::DoNothing => {
+                commands.entity(ability_entity).remove::<GrantedByEffect>();
+                info!(
+                    "Kept granted ability {:?} (DoNothing policy)",
+                    ability_entity
+                );
             }
         }
     }

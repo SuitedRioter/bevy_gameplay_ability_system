@@ -10,16 +10,10 @@
 //! - Periodic effects (DoT/HoT)
 //! - Cooldowns and costs
 
-use bevy::prelude::*;
-use bevy_gameplay_ability_system::{
-    GasPlugin,
-    attributes::*,
-    effects::*,
-    abilities::*,
-    core::*,
-};
-use bevy_gameplay_tag::{GameplayTagsPlugin, GameplayTagsManager, gameplay_tag::GameplayTag};
 use bevy::ecs::relationship::Relationship;
+use bevy::prelude::*;
+use bevy_gameplay_ability_system::{GasPlugin, abilities::*, attributes::*, core::*, effects::*};
+use bevy_gameplay_tag::{GameplayTagsManager, GameplayTagsPlugin, gameplay_tag::GameplayTag};
 use string_cache::DefaultAtom as Atom;
 
 fn main() {
@@ -41,18 +35,42 @@ struct CombatAttributes;
 
 impl AttributeSetDefinition for CombatAttributes {
     fn attribute_names() -> &'static [&'static str] {
-        &["Health", "MaxHealth", "Mana", "MaxMana", "AttackPower", "Defense", "CritChance"]
+        &[
+            "Health",
+            "MaxHealth",
+            "Mana",
+            "MaxMana",
+            "AttackPower",
+            "Defense",
+            "CritChance",
+        ]
     }
 
     fn attribute_metadata(name: &str) -> Option<AttributeMetadata> {
         match name {
-            "Health" => Some(AttributeMetadata::new("Health").with_min(0.0).with_max(1000.0)),
-            "MaxHealth" => Some(AttributeMetadata::new("MaxHealth").with_min(1.0).with_max(1000.0)),
+            "Health" => Some(
+                AttributeMetadata::new("Health")
+                    .with_min(0.0)
+                    .with_max(1000.0),
+            ),
+            "MaxHealth" => Some(
+                AttributeMetadata::new("MaxHealth")
+                    .with_min(1.0)
+                    .with_max(1000.0),
+            ),
             "Mana" => Some(AttributeMetadata::new("Mana").with_min(0.0).with_max(500.0)),
-            "MaxMana" => Some(AttributeMetadata::new("MaxMana").with_min(1.0).with_max(500.0)),
+            "MaxMana" => Some(
+                AttributeMetadata::new("MaxMana")
+                    .with_min(1.0)
+                    .with_max(500.0),
+            ),
             "AttackPower" => Some(AttributeMetadata::new("AttackPower").with_min(0.0)),
             "Defense" => Some(AttributeMetadata::new("Defense").with_min(0.0)),
-            "CritChance" => Some(AttributeMetadata::new("CritChance").with_min(0.0).with_max(1.0)),
+            "CritChance" => Some(
+                AttributeMetadata::new("CritChance")
+                    .with_min(0.0)
+                    .with_max(1.0),
+            ),
             _ => None,
         }
     }
@@ -76,9 +94,13 @@ struct CriticalDamageCalculator;
 
 impl CustomMagnitudeCalculation for CriticalDamageCalculator {
     fn calculate(&self, ctx: &CalculationContext) -> f32 {
-        let base_damage = ctx.get_source_attribute(&"AttackPower".into()).unwrap_or(10.0);
+        let base_damage = ctx
+            .get_source_attribute(&"AttackPower".into())
+            .unwrap_or(10.0);
         let target_defense = ctx.get_target_attribute(&"Defense".into()).unwrap_or(0.0);
-        let _crit_chance = ctx.get_source_attribute(&"CritChance".into()).unwrap_or(0.0);
+        let _crit_chance = ctx
+            .get_source_attribute(&"CritChance".into())
+            .unwrap_or(0.0);
 
         // Simple damage formula: (AttackPower - Defense/2) * CritMultiplier
         let damage = (base_damage - target_defense / 2.0).max(1.0);
@@ -106,10 +128,7 @@ impl CustomMagnitudeCalculation for CriticalDamageCalculator {
 #[derive(Component)]
 struct CombatTimer(Timer);
 
-fn setup(
-    mut commands: Commands,
-    mut custom_calc_registry: ResMut<CustomCalculationRegistry>,
-) {
+fn setup(mut commands: Commands, mut custom_calc_registry: ResMut<CustomCalculationRegistry>) {
     info!("=== Setting up Comprehensive Combat Example ===\n");
 
     // Register custom calculation
@@ -118,18 +137,16 @@ fn setup(
     // === Create Player ===
     let player = commands.spawn_empty().id();
     CombatAttributes::create_attributes(&mut commands, player);
-    commands.entity(player).insert((
-        OwnedTags::default(),
-        Name::new("Player"),
-    ));
+    commands
+        .entity(player)
+        .insert((OwnedTags::default(), Name::new("Player")));
 
     // === Create Enemy ===
     let enemy = commands.spawn_empty().id();
     CombatAttributes::create_attributes(&mut commands, enemy);
-    commands.entity(enemy).insert((
-        OwnedTags::default(),
-        Name::new("Enemy"),
-    ));
+    commands
+        .entity(enemy)
+        .insert((OwnedTags::default(), Name::new("Enemy")));
 
     // === Apply Equipment Buff (grants temporary ability) ===
     commands.trigger(ApplyGameplayEffectEvent {
@@ -148,7 +165,10 @@ fn setup(
     commands.spawn(CombatTimer(Timer::from_seconds(0.5, TimerMode::Repeating)));
 }
 
-fn register_effects(mut registry: ResMut<GameplayEffectRegistry>, tags_manager: Res<GameplayTagsManager>) {
+fn register_effects(
+    mut registry: ResMut<GameplayEffectRegistry>,
+    tags_manager: Res<GameplayTagsManager>,
+) {
     // 1. Basic damage effect (uses custom critical calculation)
     let basic_damage = GameplayEffectDefinition::new("basic_damage")
         .with_duration_policy(DurationPolicy::Instant)
@@ -261,7 +281,10 @@ fn register_effects(mut registry: ResMut<GameplayEffectRegistry>, tags_manager: 
     registry.register(counter_damage);
 }
 
-fn register_abilities(mut registry: ResMut<AbilityRegistry>, tags_manager: Res<GameplayTagsManager>) {
+fn register_abilities(
+    mut registry: ResMut<AbilityRegistry>,
+    tags_manager: Res<GameplayTagsManager>,
+) {
     // 1. Basic Attack
     let basic_attack = AbilityDefinition::new("ability_basic_attack")
         .with_instancing_policy(InstancingPolicy::InstancedPerExecution)
@@ -298,30 +321,9 @@ fn register_abilities(mut registry: ResMut<AbilityRegistry>, tags_manager: Res<G
     registry.register(counter);
 }
 
-fn grant_abilities(
-    commands: &mut Commands,
-    owner: Entity,
-    registry: &AbilityRegistry,
-    ability_ids: &[&str],
-) {
-    for id in ability_ids {
-        if let Some(def) = registry.get(&Atom::from(*id)) {
-            commands
-                .spawn((
-                    AbilitySpec::new(def.id.clone(), 1),
-                    AbilityOwner(owner),
-                    AbilityActiveState::default(),
-                ))
-                .set_parent_in_place(owner);
-        }
-    }
-}
-
 #[derive(Resource, Default)]
 struct CombatState {
     turn: u32,
-    player_acted: bool,
-    enemy_acted: bool,
 }
 
 fn simulate_combat(
@@ -459,9 +461,17 @@ fn check_results(
 
         info!("\n--- Status Update ---");
         for (data, attr_name, child_of) in attributes.iter() {
-            if attr_name.as_str() == "Health" || attr_name.as_str() == "Mana" || attr_name.as_str() == "Defense" {
+            if attr_name.as_str() == "Health"
+                || attr_name.as_str() == "Mana"
+                || attr_name.as_str() == "Defense"
+            {
                 if let Ok(name) = names.get(child_of.get()) {
-                    info!("{} {}: {:.1}", name.as_str(), attr_name.as_str(), data.current_value);
+                    info!(
+                        "{} {}: {:.1}",
+                        name.as_str(),
+                        attr_name.as_str(),
+                        data.current_value
+                    );
                 }
             }
         }

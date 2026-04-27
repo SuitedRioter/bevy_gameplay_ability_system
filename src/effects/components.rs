@@ -307,15 +307,6 @@ pub struct EffectGrantedTags {
     pub tags: GameplayTagContainer,
 }
 
-/// Component that tracks abilities granted by this effect.
-///
-/// When the effect is removed, these abilities should also be removed.
-#[derive(Component, Debug, Clone, Default)]
-pub struct GrantedAbilities {
-    /// List of ability spec entities that were granted by this effect.
-    pub ability_specs: Vec<Entity>,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

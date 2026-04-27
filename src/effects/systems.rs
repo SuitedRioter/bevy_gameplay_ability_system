@@ -7,6 +7,9 @@ use super::definition::*;
 use crate::attributes::{
     AttributeData, AttributeLifecycleHooks, AttributeModifyContext, AttributeName, AttributeSetId,
 };
+use crate::effects::application_requirement::{
+    ApplicationAttributeSnapshot, ApplicationContext, ApplicationRequirementRegistry,
+};
 use crate::core::OwnedTags;
 use bevy::ecs::relationship::Relationship;
 use bevy::ecs::system::SystemParam;
@@ -93,6 +96,7 @@ pub fn on_apply_gameplay_effect(
     ev: On<ApplyGameplayEffectEvent>,
     mut commands: Commands,
     registry: Res<GameplayEffectRegistry>,
+    application_requirements: Res<ApplicationRequirementRegistry>,
     tags_manager: Res<GameplayTagsManager>,
     time: Res<Time>,
     mut params: ApplyEffectParams,
@@ -158,6 +162,43 @@ pub fn on_apply_gameplay_effect(
             .application_tag_requirements
             .requirements_met(&tag_container.explicit_tags)
         {
+            return;
+        }
+    }
+
+    // Check custom application requirements.
+    let target_tags = params.tag_containers.get(target).ok();
+    let source_tags = event
+        .instigator
+        .and_then(|source| params.tag_containers.get(source).ok());
+
+    let attribute_snapshots: Vec<_> = params
+        .attributes
+        .iter()
+        .map(|(data, name, child_of)| {
+            ApplicationAttributeSnapshot::new(child_of.get(), name, data)
+        })
+        .collect();
+
+    for requirement_name in &definition.application_requirements {
+        let Some(requirement) = application_requirements.get(requirement_name) else {
+            warn!(
+                "Effect '{}' references unknown application requirement '{}'",
+                effect_id, requirement_name
+            );
+            return;
+        };
+
+        let context = ApplicationContext {
+            source: event.instigator,
+            target,
+            level,
+            target_tags: target_tags.as_ref().copied(),
+            source_tags: source_tags.as_ref().copied(),
+            attributes: &attribute_snapshots,
+        };
+
+        if !requirement.can_apply(&context) {
             return;
         }
     }
@@ -293,11 +334,6 @@ pub fn on_apply_gameplay_effect(
                 effect_entity_commands.insert(EffectGrantedTags {
                     tags: definition.granted_tags.clone(),
                 });
-            }
-
-            // Add granted abilities component if needed
-            if !definition.granted_abilities.is_empty() {
-                effect_entity_commands.insert(EffectGrantedAbilities::default());
             }
 
             let effect_entity = effect_entity_commands.id();
@@ -786,6 +822,7 @@ mod tests {
         app.init_resource::<ReceivedApplyEvents>();
         app.init_resource::<ReceivedAppliedEvents>();
         app.init_resource::<GameplayEffectRegistry>();
+        app.init_resource::<ApplicationRequirementRegistry>();
         app.init_resource::<Time>();
         app.add_observer(on_apply_gameplay_effect);
         app.update();

@@ -337,6 +337,8 @@ pub struct GameplayEffectDefinition {
     pub immunity_tags: GameplayTagContainer,
     /// Tag requirements for applying this effect.
     pub application_tag_requirements: GameplayTagRequirements,
+    /// Custom application requirements that must all pass before the effect applies.
+    pub application_requirements: Vec<Atom>,
     /// Stacking policy.
     pub stacking_policy: StackingPolicy,
     /// Abilities granted while this effect is active.
@@ -356,6 +358,7 @@ impl GameplayEffectDefinition {
             asset_tags: GameplayTagContainer::default(),
             immunity_tags: GameplayTagContainer::default(),
             application_tag_requirements: GameplayTagRequirements::default(),
+            application_requirements: Vec::new(),
             stacking_policy: StackingPolicy::Independent,
             granted_abilities: Vec::new(),
         }
@@ -417,6 +420,12 @@ impl GameplayEffectDefinition {
     /// Sets the tag requirements.
     pub fn with_tag_requirements(mut self, requirements: GameplayTagRequirements) -> Self {
         self.application_tag_requirements = requirements;
+        self
+    }
+
+    /// Adds a custom application requirement.
+    pub fn add_application_requirement(mut self, requirement_name: impl Into<Atom>) -> Self {
+        self.application_requirements.push(requirement_name.into());
         self
     }
 

@@ -15,12 +15,14 @@
 //!
 //! # Quick Start
 //!
-//! ```rust
+//! ```no_run
 //! use bevy::prelude::*;
 //! use bevy_gameplay_ability_system::prelude::*;
+//! use bevy_gameplay_tag::GameplayTagsPlugin;
 //!
 //! App::new()
 //!     .add_plugins(DefaultPlugins)
+//!     .add_plugins(GameplayTagsPlugin::with_data_path("assets/gameplay_tags.json".to_string()))
 //!     .add_plugins(GasPlugin)
 //!     .run();
 //! ```
@@ -88,12 +90,14 @@ use bevy::prelude::*;
 ///
 /// # Example
 ///
-/// ```
+/// ```no_run
 /// use bevy::prelude::*;
 /// use bevy_gameplay_ability_system::GasPlugin;
+/// use bevy_gameplay_tag::GameplayTagsPlugin;
 ///
 /// App::new()
 ///     .add_plugins(DefaultPlugins)
+///     .add_plugins(GameplayTagsPlugin::with_data_path("assets/gameplay_tags.json".to_string()))
 ///     .add_plugins(GasPlugin)
 ///     .run();
 /// ```
@@ -101,6 +105,8 @@ pub struct GasPlugin;
 
 impl Plugin for GasPlugin {
     fn build(&self, app: &mut App) {
+        core::configure_gas_system_sets(app);
+
         app.add_plugins(attributes::AttributePlugin)
             .add_plugins(effects::EffectPlugin)
             .add_plugins(abilities::AbilityPlugin)

@@ -4,6 +4,7 @@
 
 use super::manager::GameplayCueManager;
 use super::systems::*;
+use crate::core::system_sets::CueSystemSet;
 use bevy::prelude::*;
 
 /// Plugin for the gameplay cue system.
@@ -34,14 +35,13 @@ impl Plugin for CuePlugin {
         app.add_systems(
             Update,
             (
-                handle_gameplay_cue_system,
-                route_gameplay_cue_system,
-                execute_static_cues_system,
-                manage_cue_actors_system,
-                cleanup_finished_cues_system,
-                update_while_active_cues_system,
-            )
-                .chain(),
+                handle_gameplay_cue_system.in_set(CueSystemSet::Handle),
+                route_gameplay_cue_system.in_set(CueSystemSet::Route),
+                execute_static_cues_system.in_set(CueSystemSet::ExecuteStatic),
+                manage_cue_actors_system.in_set(CueSystemSet::ManageActors),
+                cleanup_finished_cues_system.in_set(CueSystemSet::Cleanup),
+                update_while_active_cues_system.in_set(CueSystemSet::UpdateWhileActive),
+            ),
         );
     }
 }

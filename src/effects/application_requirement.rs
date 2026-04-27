@@ -2,13 +2,31 @@
 //!
 //! Allows custom logic to determine whether an effect should be applied.
 
-use bevy::ecs::relationship::Relationship;
+use crate::attributes::{AttributeData, AttributeName};
+use crate::core::OwnedTags;
 use bevy::prelude::*;
 use std::collections::HashMap;
 use string_cache::DefaultAtom as Atom;
 
-use crate::attributes::{AttributeData, AttributeName};
-use crate::core::OwnedTags;
+/// Attribute value captured for application requirement checks.
+#[derive(Debug, Clone)]
+pub struct ApplicationAttributeSnapshot {
+    pub owner: Entity,
+    pub attribute_name: Atom,
+    pub base_value: f32,
+    pub current_value: f32,
+}
+
+impl ApplicationAttributeSnapshot {
+    pub fn new(owner: Entity, attribute_name: &AttributeName, data: &AttributeData) -> Self {
+        Self {
+            owner,
+            attribute_name: attribute_name.0.clone(),
+            base_value: data.base_value,
+            current_value: data.current_value,
+        }
+    }
+}
 
 /// Context passed to application requirement checks.
 #[derive(Debug)]
@@ -23,16 +41,8 @@ pub struct ApplicationContext<'w> {
     pub target_tags: Option<&'w OwnedTags>,
     /// Query for reading source's tags.
     pub source_tags: Option<&'w OwnedTags>,
-    /// Query for reading attributes.
-    pub attributes: &'w Query<
-        'w,
-        'w,
-        (
-            &'static AttributeData,
-            &'static AttributeName,
-            &'static ChildOf,
-        ),
-    >,
+    /// Snapshot of attributes for source/target checks.
+    pub attributes: &'w [ApplicationAttributeSnapshot],
 }
 
 impl<'w> ApplicationContext<'w> {
@@ -40,12 +50,10 @@ impl<'w> ApplicationContext<'w> {
     pub fn get_target_attribute(&self, attribute_name: &Atom) -> Option<f32> {
         self.attributes
             .iter()
-            .find(
-                |(_, name, child_of): &(&AttributeData, &AttributeName, &ChildOf)| {
-                    child_of.get() == self.target && name.0 == *attribute_name
-                },
-            )
-            .map(|(data, _, _)| data.current_value)
+            .find(|snapshot| {
+                snapshot.owner == self.target && snapshot.attribute_name == *attribute_name
+            })
+            .map(|snapshot| snapshot.current_value)
     }
 
     /// Gets an attribute value from the source entity.
@@ -53,12 +61,8 @@ impl<'w> ApplicationContext<'w> {
         let source = self.source?;
         self.attributes
             .iter()
-            .find(
-                |(_, name, child_of): &(&AttributeData, &AttributeName, &ChildOf)| {
-                    child_of.get() == source && name.0 == *attribute_name
-                },
-            )
-            .map(|(data, _, _)| data.current_value)
+            .find(|snapshot| snapshot.owner == source && snapshot.attribute_name == *attribute_name)
+            .map(|snapshot| snapshot.current_value)
     }
 }
 
