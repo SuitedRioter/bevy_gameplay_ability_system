@@ -801,27 +801,150 @@ app.add_plugins(CuePlugin);
 
 ---
 
-## 12. 参考资料
+## 12. 实施进度跟踪
 
-### 12.1 UE GAS 源码
+### 12.1 已完成的里程碑
+
+#### ✅ Milestone 0 - 系统接线与测试基线
+- ✅ 系统顺序配置完成 (GasSystemSet 层级)
+- ✅ 所有插件系统已注册到正确的 SystemSet
+- ✅ 测试基线建立 (41 个单元测试通过)
+- ✅ Examples 编译通过
+
+#### ✅ Milestone 1 - Attribute Parity (部分完成)
+- ✅ `AttributeData::set_base_value()` 修复 (不覆盖 current_value)
+- ✅ Modifier 聚合顺序实现 (AddBase → AddCurrent → MultiplyAdditive → MultiplyMultiplicative → Override)
+- ✅ `ModifierOperation::AddBase` 已实现
+- ⚠️ `Changed<AttributeData>` 重复事件问题待优化
+
+#### ✅ Milestone 2 - GameplayEffectSpec 与效果生命周期 (大部分完成)
+- ✅ GameplayEffectSpec/Context/SetByCaller 统一
+- ✅ Periodic effects 完全 spec-driven (使用持久化的 context 和 set_by_caller)
+- ✅ Stacking 策略 (RefreshDuration/StackCount) 更新持久化 spec 数据
+- ✅ ApplicationRequirement 系统已接线并测试通过
+- ✅ Instant effects granted tags 泄漏已检测并警告
+- ✅ CustomCalculation 求值路径已统一
+- ✅ 测试覆盖: `gameplay_effect_spec_test`, `periodic_effect_spec_test`, `stacking_reapply_spec_test`, `application_requirement_test`
+
+#### ✅ Milestone 3 - Ability Parity (部分完成)
+- ✅ Ability TargetData/ActivationInfo 统一完成
+- ✅ `GameplayAbilityTargetData` 结构实现
+- ✅ `AbilityActivationInfo` 替代临时资源传参
+- ✅ `AbilityBehavior::activate` 签名更新为接收 `&AbilityActivationInfo`
+- ✅ 移除临时资源传参模式 (AbilityTargets)
+- ⚠️ NonInstanced 策略仍使用 Entity::PLACEHOLDER
+- ⚠️ Commit 语义、End/Cancel 逻辑、输入绑定系统未完成
+
+#### ✅ Milestone 5 - GameplayCue (部分完成)
+- ✅ Cue 自动触发 (OnActive/Executed/Removed) 已实现
+- ✅ Cue parameters 从 effect context 派生
+- ✅ 层级 tag 匹配路由
+- ⚠️ WhileActive cue 更新系统未实现
+- ⚠️ Actor cue 池化与回收未实现
+
+### 12.2 进行中的工作
+
+当前无进行中的工作。
+
+### 12.3 待完成的里程碑
+
+#### ❌ Milestone 3 - Ability Parity (剩余部分)
+**优先级: 高**
+- ❌ 修复 NonInstanced 策略的 Entity::PLACEHOLDER 问题
+- ❌ Commit 语义对齐 UE (可选择何时 commit)
+- ❌ End/Cancel 时移除 activation-owned tags、解除 blocking
+- ❌ 按 tag cancel 其他 active abilities
+- ❌ 输入绑定系统 (input_id 对应 pressed/released/held)
+
+#### ❌ Milestone 4 - Ability Tasks
+**优先级: 高**
+- ❌ ECS task entity/state-machine 替代 UE `UAbilityTask`
+- ❌ WaitDelay - 等待指定时间
+- ❌ WaitGameplayEvent - 等待 gameplay event
+- ❌ WaitAttributeChange - 等待属性变化
+- ❌ WaitEffectApplied/Removed - 等待效果应用/移除
+- ❌ ApplyEffectToTargetData - 对目标数据应用效果
+
+#### ❌ Milestone 5 - GameplayCue Parity (剩余部分)
+**优先级: 中**
+- ❌ WhileActive cue tick 更新逻辑
+- ❌ Actor cue 池化与回收
+- ❌ 批处理 cue 执行顺序稳定性
+
+#### ❌ Milestone 6 - ASC 集成外观
+**优先级: 中**
+- ❌ 轻量 ASC marker/bundle/API 外观
+- ❌ Handle generation tracking (AbilityHandle, EffectHandle, AttributeHandle)
+- ❌ 按 owner 查询 API:
+  - `get_active_effects_on_target()`
+  - `find_ability_by_definition()`
+  - `get_attribute_value()`
+  - `get_tag_count()`
+
+#### ❌ Milestone 7 - 文档、示例、性能
+**优先级: 低**
+- ❌ 更新中文设计文档 (本文档)
+- ❌ 更新 README.md
+- ❌ 完善 examples (ability_activation, comprehensive_rpg 等)
+- ❌ 端到端集成测试
+- ❌ 性能优化 (基于 benchmark)
+- ❌ 修复 criterion benchmarks (Bevy 0.18 兼容性)
+
+### 12.4 已知问题 (Known Issues)
+
+参见 `CLAUDE.md` 的 "Known Issues & Technical Debt" 部分。
+
+**关键问题**:
+1. ✅ **已修复** - `AttributeData::set_base_value()` 不再覆盖 current_value
+2. ✅ **已检测** - Instant effects granted tags 有警告，防止泄漏
+3. ✅ **已修复** - Periodic effects 使用持久化 spec
+4. ✅ **已实现** - AddBase modifier 已在聚合中处理
+5. ⚠️ **非问题** - StackCount 的 modifier 由聚合系统自动处理
+6. ❌ **未处理** - Handle types 未使用或未实现 generation tracking
+7. ❌ **未处理** - NonInstanced 使用 Entity::PLACEHOLDER
+8. ❌ **未处理** - Changed<AttributeData> 可能重复事件
+
+### 12.5 下一步建议
+
+**立即优先级 (影响核心功能)**:
+1. 修复 NonInstanced 策略的 Entity::PLACEHOLDER 问题
+2. 实现 Ability Tasks 基础框架 (WaitDelay, WaitGameplayEvent)
+3. 完善 Ability End/Cancel 逻辑
+
+**短期优先级 (完善现有功能)**:
+4. 实现 WhileActive cue 更新系统
+5. 实现 Ability 输入绑定系统
+6. 修复 Changed<AttributeData> 重复事件
+
+**长期优先级 (优化与扩展)**:
+7. ASC 外观 API
+8. Handle generation tracking
+9. Actor cue 池化
+10. 文档与性能优化
+
+---
+
+## 13. 参考资料
+
+### 13.1 UE GAS 源码
 - AbilitySystemComponent.h
 - GameplayEffect.h
 - GameplayAbility.h
 - AttributeSet.h
 - GameplayCueManager.h
 
-### 12.2 Bevy 文档
+### 13.2 Bevy 文档
 - Bevy ECS 指南
 - Bevy Observer 系统
 - Bevy 层级系统
 
-### 12.3 项目文档
+### 13.3 项目文档
 - CLAUDE.md
 - bevy_gameplay_tag 文档
 
 ---
 
-## 13. 结语
+## 14. 结语
 
 本设计文档提供了将 UE GameplayAbilitySystem 从 OOP 转换为 Bevy ECS 的完整路线图。核心思想:
 

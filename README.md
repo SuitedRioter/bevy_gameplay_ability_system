@@ -489,14 +489,115 @@ app.add_systems(
 - **Cue batching** reduces overhead for visual effects
 - **Handle system** prevents expensive entity lookups
 
+## Project Status
+
+⚠️ **In Active Development** - Core systems are functional but incomplete. See [Implementation Progress](#implementation-progress) below.
+
+### What Works
+- ✅ Attribute system with base/current value separation
+- ✅ Gameplay effects (instant, duration, infinite, periodic)
+- ✅ Effect stacking policies (RefreshDuration, StackCount)
+- ✅ Ability activation with target data and context
+- ✅ Gameplay cues (OnActive, Executed, Removed)
+- ✅ Tag-based requirements and blocking
+- ✅ Application requirements for conditional effects
+- ✅ SetByCaller magnitudes with spec persistence
+
+### What's Missing
+- ❌ Ability tasks (WaitDelay, WaitGameplayEvent, etc.)
+- ❌ NonInstanced ability policy (currently uses placeholder)
+- ❌ WhileActive cue updates
+- ❌ Input binding system for abilities
+- ❌ Handle generation tracking
+- ❌ ASC query API facade
+
+See `docs/design_document_cn.md` for detailed progress tracking.
+
+## Implementation Progress
+
+### Completed Milestones
+
+**Milestone 0 - System Setup** ✅
+- System execution order configured
+- All plugins registered
+- Test baseline established (41 unit tests passing)
+
+**Milestone 1 - Attributes** ✅ (Partial)
+- Base/current value separation working
+- Modifier aggregation order implemented (AddBase → AddCurrent → Multiply → Override)
+- Attribute change events functional
+
+**Milestone 2 - Effects** ✅ (Mostly Complete)
+- GameplayEffectSpec/Context/SetByCaller unified
+- Periodic effects use persisted spec data
+- Stacking policies update persisted context
+- Application requirements integrated
+- Instant effect tag leak detection
+
+**Milestone 3 - Abilities** ✅ (Partial)
+- TargetData/ActivationInfo unified
+- Temporary resource pattern removed
+- Activation flow uses proper context
+
+**Milestone 5 - Cues** ✅ (Partial)
+- Auto-trigger on effect lifecycle (OnActive/Executed/Removed)
+- Cue parameters derived from effect context
+- Hierarchical tag routing
+
+### In Progress
+
+Currently no active work. Next priorities:
+1. Fix NonInstanced ability policy
+2. Implement ability tasks framework
+3. Complete ability End/Cancel logic
+
+### Upcoming Milestones
+
+**Milestone 3 - Abilities (Remaining)**
+- NonInstanced policy fix
+- Commit semantics alignment
+- End/Cancel tag cleanup
+- Tag-based ability cancellation
+- Input binding system
+
+**Milestone 4 - Ability Tasks**
+- ECS task entity/state-machine
+- WaitDelay, WaitGameplayEvent
+- WaitAttributeChange, WaitEffectApplied
+- ApplyEffectToTargetData
+
+**Milestone 5 - Cues (Remaining)**
+- WhileActive cue tick updates
+- Actor cue pooling
+- Batch execution ordering
+
+**Milestone 6 - ASC Facade**
+- Lightweight ASC marker/bundle
+- Handle generation tracking
+- Query API (active effects, abilities, attributes)
+
+**Milestone 7 - Polish**
+- Documentation updates
+- Example improvements
+- Integration tests
+- Performance optimization
+
 ## Roadmap
 
+### Long-term Goals
+- [ ] Complete ability tasks system
 - [ ] Attribute curves for level scaling
-- [ ] Ability tasks for complex multi-frame abilities
-- [ ] Prediction and rollback for networking
-- [ ] Visual editor integration
+- [ ] Prediction and rollback for networking (future)
+- [ ] Visual editor integration (future)
 - [ ] More built-in cue implementations
 - [ ] Performance profiling and optimization
+
+### Known Issues
+See `CLAUDE.md` for detailed technical debt tracking. Key issues:
+- NonInstanced abilities use Entity::PLACEHOLDER
+- Changed<AttributeData> may cause duplicate events
+- Handle types lack generation tracking
+- Test paths hardcoded to "assets/gameplay_tags.json"
 
 ## Contributing
 
