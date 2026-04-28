@@ -378,13 +378,11 @@ fn simulate_combat(
             instigator: Some(player),
             target: Some(enemy),
             magnitude: Some(0.0),
+            target_data: None,
         });
     } else if state.turn == 2 {
         info!("Player uses Power Strike on Enemy");
-        commands.trigger(TryActivateAbilityEvent {
-            owner: player,
-            ability_spec: Entity::PLACEHOLDER, // Will be found by system
-        });
+        // Note: This example doesn't properly set up abilities, just applies effects directly
         commands.trigger(
             ApplyGameplayEffectEvent::new("power_strike_damage", enemy)
                 .with_level(1)
@@ -451,18 +449,17 @@ fn check_results(
 
         info!("\n--- Status Update ---");
         for (data, attr_name, child_of) in attributes.iter() {
-            if attr_name.as_str() == "Health"
+            if (attr_name.as_str() == "Health"
                 || attr_name.as_str() == "Mana"
-                || attr_name.as_str() == "Defense"
+                || attr_name.as_str() == "Defense")
+                && let Ok(name) = names.get(child_of.get())
             {
-                if let Ok(name) = names.get(child_of.get()) {
-                    info!(
-                        "{} {}: {:.1}",
-                        name.as_str(),
-                        attr_name.as_str(),
-                        data.current_value
-                    );
-                }
+                info!(
+                    "{} {}: {:.1}",
+                    name.as_str(),
+                    attr_name.as_str(),
+                    data.current_value
+                );
             }
         }
     }

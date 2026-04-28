@@ -51,10 +51,7 @@ fn activate_ability(
             info!("→ TryActivate: active={}", active_state.is_active);
             if !active_state.is_active {
                 info!("→ TryActivate: {}", spec.definition_id);
-                commands.trigger(TryActivateAbilityEvent {
-                    ability_spec: ability_entity,
-                    owner: owner.0,
-                });
+                commands.trigger(TryActivateAbilityEvent::new(ability_entity, owner.0));
             }
         }
     }

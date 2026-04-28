@@ -11,7 +11,7 @@ use bevy::ecs::relationship::Relationship;
 use bevy::prelude::*;
 use bevy_gameplay_ability_system::{GasPlugin, abilities::*, attributes::*, core::*, effects::*};
 use bevy_gameplay_tag::{GameplayTag, GameplayTagsManager, GameplayTagsPlugin};
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 fn main() {
     App::new()
@@ -84,9 +84,6 @@ struct Enemy;
 #[derive(Resource)]
 struct CombatTimer(Timer);
 
-#[derive(Resource, Default)]
-struct AbilityTargets(HashMap<Entity, Entity>);
-
 struct ApplyEffectBehavior {
     effect_id: &'static str,
 }
@@ -96,23 +93,17 @@ impl AbilityBehavior for ApplyEffectBehavior {
         &self,
         commands: &mut Commands,
         _instance_entity: Entity,
-        spec_entity: Entity,
-        source: Entity,
-        _target: Option<Entity>,
+        _spec_entity: Entity,
+        activation_info: &bevy_gameplay_ability_system::abilities::activation_info::AbilityActivationInfo,
     ) {
         let effect_id = self.effect_id;
-        commands.queue(move |world: &mut World| {
-            let target = world
-                .resource::<AbilityTargets>()
-                .0
-                .get(&spec_entity)
-                .copied()
-                .unwrap_or(source);
-            let level = world
-                .get::<AbilitySpec>(spec_entity)
-                .map(|spec| spec.level)
-                .unwrap_or(1);
+        let target = activation_info
+            .primary_target()
+            .unwrap_or(activation_info.owner);
+        let level = activation_info.level;
+        let source = activation_info.owner;
 
+        commands.queue(move |world: &mut World| {
             world.trigger(
                 ApplyGameplayEffectEvent::new(effect_id, target)
                     .with_level(level)
@@ -156,7 +147,6 @@ fn setup_game(
     register_abilities(&mut ability_registry, &tags_manager);
     grant_player_abilities(&mut commands, player, &ability_registry);
 
-    commands.insert_resource(AbilityTargets::default());
     commands.insert_resource(CombatTimer(Timer::from_seconds(1.0, TimerMode::Repeating)));
 
     info!("Player and Enemy created with full attribute sets");
@@ -355,7 +345,6 @@ fn simulate_combat(
     time: Res<Time>,
     mut timer: ResMut<CombatTimer>,
     mut phase: Local<u32>,
-    mut ability_targets: ResMut<AbilityTargets>,
     player_query: Query<Entity, With<Player>>,
     enemy_query: Query<Entity, With<Enemy>>,
     ability_query: Query<(Entity, &AbilitySpec, &AbilityOwner)>,
@@ -378,7 +367,6 @@ fn simulate_combat(
             info!("\n=== Phase 1: Player uses Berserker Rage (3 stacks) ===");
             activate_ability(
                 &mut commands,
-                &mut ability_targets,
                 &ability_query,
                 player,
                 "ability_berserker_rage",
@@ -388,7 +376,6 @@ fn simulate_combat(
         2 => {
             activate_ability(
                 &mut commands,
-                &mut ability_targets,
                 &ability_query,
                 player,
                 "ability_berserker_rage",
@@ -398,7 +385,6 @@ fn simulate_combat(
         3 => {
             activate_ability(
                 &mut commands,
-                &mut ability_targets,
                 &ability_query,
                 player,
                 "ability_berserker_rage",
@@ -410,7 +396,6 @@ fn simulate_combat(
             info!("\n=== Phase 2: Player attacks Enemy ===");
             activate_ability(
                 &mut commands,
-                &mut ability_targets,
                 &ability_query,
                 player,
                 "ability_basic_attack",
@@ -421,7 +406,6 @@ fn simulate_combat(
             info!("\n=== Phase 3: Player uses Poison Strike on Enemy ===");
             activate_ability(
                 &mut commands,
-                &mut ability_targets,
                 &ability_query,
                 player,
                 "ability_poison_strike",
@@ -435,7 +419,6 @@ fn simulate_combat(
             info!("\n=== Phase 4: Player uses Defensive Stance ===");
             activate_ability(
                 &mut commands,
-                &mut ability_targets,
                 &ability_query,
                 player,
                 "ability_defensive_stance",
@@ -454,7 +437,6 @@ fn simulate_combat(
             info!("\n=== Phase 6: Player heals self ===");
             activate_ability(
                 &mut commands,
-                &mut ability_targets,
                 &ability_query,
                 player,
                 "ability_heal_self",
@@ -470,19 +452,27 @@ fn simulate_combat(
 
 fn activate_ability(
     commands: &mut Commands,
-    ability_targets: &mut AbilityTargets,
     ability_query: &Query<(Entity, &AbilitySpec, &AbilityOwner)>,
     owner: Entity,
     ability_id: &str,
     target: Entity,
 ) {
+    use bevy_gameplay_ability_system::abilities::{
+        activation_context::AbilityActivationContext, target_data::GameplayAbilityTargetData,
+    };
+
     for (spec_entity, spec, ability_owner) in ability_query.iter() {
         if ability_owner.0 == owner && spec.definition_id.as_ref() == ability_id {
-            ability_targets.0.insert(spec_entity, target);
-            commands.trigger(TryActivateAbilityEvent {
+            let target_data = GameplayAbilityTargetData::from_actor(target);
+            let context = AbilityActivationContext::new(owner, owner)
+                .with_target_data(target_data)
+                .with_level(spec.level);
+
+            commands.trigger(TryActivateAbilityEvent::with_context(
+                spec_entity,
                 owner,
-                ability_spec: spec_entity,
-            });
+                context,
+            ));
             info!("Activated ability '{}' targeting {:?}", ability_id, target);
             return;
         }

@@ -103,6 +103,12 @@ pub struct AbilitySpecInstance {
     pub level: i32,
     /// The behavior implementation for this instance.
     pub behavior: Option<Arc<dyn AbilityBehavior>>,
+    /// The entity that owns this ability (the character/actor).
+    pub owner: Entity,
+    /// The entity that initiated the activation (may be different from owner).
+    pub instigator: Option<Entity>,
+    /// Target data for this ability activation.
+    pub target_data: Option<super::target_data::GameplayAbilityTargetData>,
 }
 
 impl std::fmt::Debug for AbilitySpecInstance {
@@ -111,6 +117,9 @@ impl std::fmt::Debug for AbilitySpecInstance {
             .field("definition_id", &self.definition_id)
             .field("level", &self.level)
             .field("behavior", &self.behavior.as_ref().map(|_| "<behavior>"))
+            .field("owner", &self.owner)
+            .field("instigator", &self.instigator)
+            .field("target_data", &self.target_data)
             .finish()
     }
 }

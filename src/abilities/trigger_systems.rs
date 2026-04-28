@@ -31,10 +31,10 @@ pub fn handle_gameplay_event_triggers_system(
             && triggers.has_trigger(&event.event_tag, AbilityTriggerSource::GameplayEvent)
         {
             // Trigger ability activation
-            commands.trigger(super::systems::TryActivateAbilityEvent {
-                owner: owner.0,
-                ability_spec: ability_entity,
-            });
+            commands.trigger(super::systems::TryActivateAbilityEvent::new(
+                ability_entity,
+                owner.0,
+            ));
         }
     }
 }
@@ -68,10 +68,10 @@ pub fn handle_owned_tag_added_triggers_system(
                         // Check if the trigger tag is present in owner's tags
                         if owner_tags.0.explicit_tags.has_tag(&trigger.trigger_tag) {
                             // Trigger ability activation
-                            commands.trigger(super::systems::TryActivateAbilityEvent {
-                                owner: owner_entity,
-                                ability_spec: ability_entity,
-                            });
+                            commands.trigger(super::systems::TryActivateAbilityEvent::new(
+                                ability_entity,
+                                owner_entity,
+                            ));
                         }
                     }
                 }
@@ -109,10 +109,10 @@ pub fn handle_owned_tag_present_triggers_system(
 
                         if has_tag && !active_state.is_active {
                             // Tag is present and ability is not active - activate it
-                            commands.trigger(super::systems::TryActivateAbilityEvent {
-                                owner: owner_entity,
-                                ability_spec: ability_entity,
-                            });
+                            commands.trigger(super::systems::TryActivateAbilityEvent::new(
+                                ability_entity,
+                                owner_entity,
+                            ));
                         } else if !has_tag && active_state.is_active {
                             // Tag is removed and ability is active - cancel all instances
                             // Note: We don't have instance entity here, so we'll need to query for it

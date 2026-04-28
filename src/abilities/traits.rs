@@ -151,8 +151,7 @@ pub trait AbilityBehavior: Send + Sync + 'static {
         _world: &mut Commands,
         _instance_entity: Entity,
         _spec_entity: Entity,
-        _source: Entity,
-        _target: Option<Entity>,
+        _activation_info: &super::activation_info::AbilityActivationInfo,
     ) {
     }
 

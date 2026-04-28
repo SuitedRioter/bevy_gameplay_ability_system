@@ -5,6 +5,8 @@
 use bevy::prelude::*;
 use bevy_gameplay_tag::gameplay_tag::GameplayTag;
 
+use super::target_data::GameplayAbilityTargetData;
+
 /// A gameplay event that can trigger abilities.
 ///
 /// This is a generic event system that carries a tag and optional payload.
@@ -19,6 +21,8 @@ pub struct GameplayEvent {
     pub target: Option<Entity>,
     /// Optional magnitude value (e.g., damage amount, heal amount).
     pub magnitude: Option<f32>,
+    /// Optional targeting data.
+    pub target_data: Option<GameplayAbilityTargetData>,
 }
 
 impl GameplayEvent {
@@ -29,6 +33,7 @@ impl GameplayEvent {
             instigator: None,
             target: None,
             magnitude: None,
+            target_data: None,
         }
     }
 
@@ -47,6 +52,12 @@ impl GameplayEvent {
     /// Sets the magnitude.
     pub fn with_magnitude(mut self, magnitude: f32) -> Self {
         self.magnitude = Some(magnitude);
+        self
+    }
+
+    /// Sets the target data.
+    pub fn with_target_data(mut self, target_data: GameplayAbilityTargetData) -> Self {
+        self.target_data = Some(target_data);
         self
     }
 }

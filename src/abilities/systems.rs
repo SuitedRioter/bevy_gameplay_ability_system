@@ -83,6 +83,32 @@ pub struct TryActivateAbilityEvent {
     pub ability_spec: Entity,
     /// The owner entity.
     pub owner: Entity,
+    /// Optional activation context (target data, instigator, etc.).
+    pub context: Option<super::activation_context::AbilityActivationContext>,
+}
+
+impl TryActivateAbilityEvent {
+    /// Creates a new activation event with just spec and owner.
+    pub fn new(ability_spec: Entity, owner: Entity) -> Self {
+        Self {
+            ability_spec,
+            owner,
+            context: None,
+        }
+    }
+
+    /// Creates an activation event with full context.
+    pub fn with_context(
+        ability_spec: Entity,
+        owner: Entity,
+        context: super::activation_context::AbilityActivationContext,
+    ) -> Self {
+        Self {
+            ability_spec,
+            owner,
+            context: Some(context),
+        }
+    }
 }
 
 /// Event triggered when an ability is successfully activated.
@@ -180,17 +206,19 @@ pub enum ActivationFailureReason {
 
 /// Marker component inserted by the observer when activation checks pass.
 /// The first system picks this up to spawn the instance entity.
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone)]
 pub struct PendingActivation {
     pub owner: Entity,
+    pub activation_info: super::activation_info::AbilityActivationInfo,
 }
 
 /// Marker component inserted after instance spawn, before activation.
 /// The second system picks this up to call behavior methods.
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone)]
 pub struct ReadyToActivate {
     pub owner: Entity,
     pub instance: Entity,
+    pub activation_info: super::activation_info::AbilityActivationInfo,
 }
 
 /// First system: spawns AbilitySpecInstance entities for pending activations based on instancing policy.
@@ -243,6 +271,9 @@ pub fn spawn_pending_ability_instances_system(
                                 definition_id: spec.definition_id.clone(),
                                 level: spec.level,
                                 behavior: def.behavior.clone(),
+                                owner: pending.owner,
+                                instigator: Some(pending.activation_info.instigator),
+                                target_data: Some(pending.activation_info.target_data.clone()),
                             },
                             InstanceControlState {
                                 is_active: true,
@@ -262,6 +293,9 @@ pub fn spawn_pending_ability_instances_system(
                             definition_id: spec.definition_id.clone(),
                             level: spec.level,
                             behavior: def.behavior.clone(),
+                            owner: pending.owner,
+                            instigator: Some(pending.activation_info.instigator),
+                            target_data: Some(pending.activation_info.target_data.clone()),
                         },
                         InstanceControlState {
                             is_active: true,
@@ -278,6 +312,7 @@ pub fn spawn_pending_ability_instances_system(
         commands.entity(spec_entity).insert(ReadyToActivate {
             owner: pending.owner,
             instance: instance_entity,
+            activation_info: pending.activation_info.clone(),
         });
 
         // Remove pending marker.
@@ -345,8 +380,7 @@ pub fn call_activate_ability_system(
             &mut commands,
             ready.instance,
             spec_entity,
-            ready.owner,
-            None,
+            &ready.activation_info,
         );
 
         // Trigger events.
@@ -428,9 +462,30 @@ pub fn on_try_activate_ability(
     }
 
     // Mark for deferred activation.
-    commands
-        .entity(spec_entity)
-        .insert(PendingActivation { owner });
+    let activation_info = if let Some(ctx) = &event.context {
+        // Convert AbilityActivationContext to AbilityActivationInfo
+        super::activation_info::AbilityActivationInfo {
+            owner: ctx.owner,
+            instigator: ctx.activator,
+            target_data: ctx
+                .target_data
+                .clone()
+                .unwrap_or_else(super::target_data::GameplayAbilityTargetData::empty),
+            level: ctx.level,
+            event_payload: None,
+        }
+    } else {
+        // No context provided, create minimal activation info
+        super::activation_info::AbilityActivationInfo::new(
+            owner,
+            super::target_data::GameplayAbilityTargetData::empty(),
+        )
+    };
+
+    commands.entity(spec_entity).insert(PendingActivation {
+        owner,
+        activation_info,
+    });
 }
 
 /// Observer for CommitAbilityEvent.
