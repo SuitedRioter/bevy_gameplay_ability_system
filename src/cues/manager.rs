@@ -22,7 +22,7 @@ pub enum GameplayCueEvent {
 }
 
 /// Parameters passed to gameplay cue handlers.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct GameplayCueParameters {
     /// Normalized magnitude (0.0 to 1.0).
     pub normalized_magnitude: f32,

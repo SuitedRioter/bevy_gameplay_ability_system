@@ -8,6 +8,8 @@ use crate::attributes::{
     AttributeData, AttributeLifecycleHooks, AttributeModifyContext, AttributeName, AttributeSetId,
 };
 use crate::core::OwnedTags;
+use crate::cues::manager::{GameplayCueEvent, GameplayCueParameters};
+use crate::cues::systems::TriggerGameplayCueEvent;
 use crate::effects::application_requirement::{
     ApplicationAttributeSnapshot, ApplicationContext, ApplicationRequirementRegistry,
 };
@@ -148,6 +150,97 @@ pub struct GameplayEffectBlockedByImmunityEvent {
     pub instigator: Option<Entity>,
     /// The immunity tag that blocked the effect.
     pub immunity_tag: bevy_gameplay_tag::gameplay_tag::GameplayTag,
+}
+
+fn build_cue_parameters(spec: &GameplayEffectSpec) -> GameplayCueParameters {
+    let mut parameters = GameplayCueParameters::new().with_target(spec.target);
+
+    if let Some(instigator) = spec.context.instigator {
+        parameters = parameters.with_instigator(instigator);
+    }
+    if let Some(effect_causer) = spec.context.source {
+        parameters = parameters.with_effect_causer(effect_causer);
+    }
+    if let Some(location) = spec.context.hit_location {
+        parameters = parameters.with_location(location);
+    }
+    if let Some(normal) = spec.context.hit_normal {
+        parameters = parameters.with_normal(normal);
+    }
+
+    parameters
+}
+
+fn merge_cue_parameters(
+    base: GameplayCueParameters,
+    override_parameters: &GameplayCueParameters,
+) -> GameplayCueParameters {
+    GameplayCueParameters {
+        normalized_magnitude: if override_parameters.normalized_magnitude != 0.0 {
+            override_parameters.normalized_magnitude
+        } else {
+            base.normalized_magnitude
+        },
+        raw_magnitude: if override_parameters.raw_magnitude != 0.0 {
+            override_parameters.raw_magnitude
+        } else {
+            base.raw_magnitude
+        },
+        location: if override_parameters.location != Vec3::ZERO {
+            override_parameters.location
+        } else {
+            base.location
+        },
+        normal: if override_parameters.normal != Vec3::Y {
+            override_parameters.normal
+        } else {
+            base.normal
+        },
+        instigator: override_parameters.instigator.or(base.instigator),
+        effect_causer: override_parameters.effect_causer.or(base.effect_causer),
+        target: override_parameters.target.or(base.target),
+    }
+}
+
+fn trigger_effect_cues(
+    commands: &mut Commands,
+    definition: &GameplayEffectDefinition,
+    event_type: GameplayCueEvent,
+    spec: &GameplayEffectSpec,
+) {
+    let base_parameters = build_cue_parameters(spec);
+
+    for cue in &definition.gameplay_cues {
+        if !cue.applies_to_level(spec.level) {
+            continue;
+        }
+
+        commands.trigger(TriggerGameplayCueEvent {
+            cue_tag: cue.cue_tag.clone(),
+            event_type,
+            parameters: merge_cue_parameters(base_parameters.clone(), &cue.parameters),
+        });
+    }
+}
+
+fn trigger_effect_cues_from_components(
+    commands: &mut Commands,
+    definition: &GameplayEffectDefinition,
+    event_type: GameplayCueEvent,
+    effect_id: &Atom,
+    target: Entity,
+    level: i32,
+    context: Option<&GameplayEffectContext>,
+) {
+    let spec = GameplayEffectSpec {
+        effect_id: effect_id.clone(),
+        target,
+        level,
+        context: context.cloned().unwrap_or_default(),
+        set_by_caller_magnitudes: SetByCallerMagnitudes::new(),
+    };
+
+    trigger_effect_cues(commands, definition, event_type, &spec);
 }
 
 fn calculate_modifier_magnitude(
@@ -497,6 +590,8 @@ pub fn on_apply_gameplay_effect(
                 // Do NOT add tags - they would never be removed
             }
 
+            trigger_effect_cues(&mut commands, definition, GameplayCueEvent::Executed, spec);
+
             // Use PLACEHOLDER since no entity is spawned for instant effects
             commands.trigger(GameplayEffectAppliedEvent {
                 effect: Entity::PLACEHOLDER,
@@ -548,6 +643,8 @@ pub fn on_apply_gameplay_effect(
                     target,
                 );
             }
+
+            trigger_effect_cues(&mut commands, definition, GameplayCueEvent::OnActive, spec);
 
             commands.trigger(GameplayEffectAppliedEvent {
                 effect: effect_entity,
@@ -793,6 +890,7 @@ pub fn update_effect_durations_system(mut effects: Query<&mut EffectDuration>, t
 /// System that removes expired effects and cleans up granted tags.
 pub fn remove_expired_effects_system(
     mut commands: Commands,
+    registry: Res<GameplayEffectRegistry>,
     tags_manager: Res<GameplayTagsManager>,
     effects: Query<(
         Entity,
@@ -800,11 +898,12 @@ pub fn remove_expired_effects_system(
         &ActiveGameplayEffect,
         &EffectTarget,
         Option<&EffectGrantedTags>,
+        Option<&GameplayEffectContext>,
     )>,
     modifiers: Query<(Entity, &ModifierSource)>,
     mut tag_containers: Query<&mut OwnedTags>,
 ) {
-    for (effect_entity, duration, active_effect, target, granted_tags) in effects.iter() {
+    for (effect_entity, duration, active_effect, target, granted_tags, context) in effects.iter() {
         if duration.is_expired() {
             // Remove granted_tags from target's OwnedTags
             if let Some(granted) = granted_tags
@@ -832,6 +931,17 @@ pub fn remove_expired_effects_system(
                 target: target.0,
                 effect_id: active_effect.definition_id.clone(),
             });
+            if let Some(definition) = registry.get(&active_effect.definition_id) {
+                trigger_effect_cues_from_components(
+                    &mut commands,
+                    definition,
+                    GameplayCueEvent::Removed,
+                    &active_effect.definition_id,
+                    target.0,
+                    active_effect.level,
+                    context,
+                );
+            }
 
             // Remove the effect
             commands.entity(effect_entity).despawn();
@@ -849,6 +959,7 @@ pub fn remove_expired_effects_system(
 /// This is consistent with UE GAS behavior where periodic damage/healing
 /// permanently changes the attribute.
 pub fn execute_periodic_effects_system(
+    mut commands: Commands,
     mut effects: Query<(
         &mut PeriodicEffect,
         &ActiveGameplayEffect,
@@ -888,6 +999,18 @@ pub fn execute_periodic_effects_system(
         let source_entity = context
             .and_then(|context| context.source.or(context.instigator))
             .or_else(|| instigator.and_then(|instigator| instigator.0));
+
+        if let Some(context) = context {
+            trigger_effect_cues_from_components(
+                &mut commands,
+                definition,
+                GameplayCueEvent::Executed,
+                &active_effect.definition_id,
+                target.0,
+                active_effect.level,
+                Some(context),
+            );
+        }
 
         // Apply modifiers for each execution
         for _ in 0..executions {

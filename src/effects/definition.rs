@@ -3,6 +3,7 @@
 //! This module defines the structure of gameplay effects and their properties.
 
 use super::components::ModifierOperation;
+use crate::cues::manager::GameplayCueParameters;
 use bevy::prelude::*;
 use bevy_gameplay_tag::{
     GameplayTagContainer, GameplayTagRequirements, GameplayTagsManager, gameplay_tag::GameplayTag,
@@ -311,6 +312,52 @@ impl ModifierInfo {
     }
 }
 
+/// GameplayCue configuration attached to an effect definition.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GameplayEffectCue {
+    /// Tag routed through the cue system.
+    pub cue_tag: GameplayTag,
+    /// Minimum effect level for this cue to fire.
+    pub min_level: i32,
+    /// Maximum effect level for this cue to fire.
+    pub max_level: Option<i32>,
+    /// Override parameters merged onto those derived from the effect spec/context.
+    pub parameters: GameplayCueParameters,
+}
+
+impl GameplayEffectCue {
+    pub fn new(cue_tag: GameplayTag) -> Self {
+        Self {
+            cue_tag,
+            min_level: 0,
+            max_level: None,
+            parameters: GameplayCueParameters::new(),
+        }
+    }
+
+    pub fn with_level_range(mut self, min_level: i32, max_level: Option<i32>) -> Self {
+        self.min_level = min_level;
+        self.max_level = max_level;
+        self
+    }
+
+    pub fn with_parameters(mut self, parameters: GameplayCueParameters) -> Self {
+        self.parameters = parameters;
+        self
+    }
+
+    pub fn applies_to_level(&self, level: i32) -> bool {
+        if level < self.min_level {
+            return false;
+        }
+        if let Some(max_level) = self.max_level {
+            level <= max_level
+        } else {
+            true
+        }
+    }
+}
+
 /// Definition of a gameplay effect.
 ///
 /// This is the template for creating active effect instances.
@@ -343,6 +390,8 @@ pub struct GameplayEffectDefinition {
     pub stacking_policy: StackingPolicy,
     /// Abilities granted while this effect is active.
     pub granted_abilities: Vec<GrantedAbilityConfig>,
+    /// Gameplay cues triggered by this effect.
+    pub gameplay_cues: Vec<GameplayEffectCue>,
 }
 
 impl GameplayEffectDefinition {
@@ -361,6 +410,7 @@ impl GameplayEffectDefinition {
             application_requirements: Vec::new(),
             stacking_policy: StackingPolicy::Independent,
             granted_abilities: Vec::new(),
+            gameplay_cues: Vec::new(),
         }
     }
 
@@ -432,6 +482,12 @@ impl GameplayEffectDefinition {
     /// Sets the stacking policy.
     pub fn with_stacking_policy(mut self, policy: StackingPolicy) -> Self {
         self.stacking_policy = policy;
+        self
+    }
+
+    /// Adds a gameplay cue triggered by this effect.
+    pub fn add_gameplay_cue(mut self, cue: GameplayEffectCue) -> Self {
+        self.gameplay_cues.push(cue);
         self
     }
 
