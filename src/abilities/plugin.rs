@@ -40,7 +40,10 @@ impl Plugin for AbilityPlugin {
             // Task systems
             .add_systems(
                 Update,
-                (tasks::tick_wait_delay_tasks_system, tasks::cleanup_finished_tasks_system)
+                (
+                    tasks::tick_wait_delay_tasks_system,
+                    tasks::cleanup_finished_tasks_system,
+                )
                     .chain()
                     .in_set(GasSystemSet::Abilities),
             )

@@ -144,7 +144,11 @@ pub struct WaitAttributeChangeTask {
 
 impl WaitAttributeChangeTask {
     /// Create a new wait attribute change task.
-    pub fn new(attribute_name: impl Into<String>, comparison: AttributeComparison, threshold: f32) -> Self {
+    pub fn new(
+        attribute_name: impl Into<String>,
+        comparison: AttributeComparison,
+        threshold: f32,
+    ) -> Self {
         Self {
             attribute_name: attribute_name.into(),
             comparison,
@@ -408,7 +412,11 @@ pub fn check_wait_attribute_change_tasks_system(
         &mut TaskState,
     )>,
     attributes: Query<
-        (Entity, &crate::attributes::AttributeData, &crate::attributes::AttributeName),
+        (
+            Entity,
+            &crate::attributes::AttributeData,
+            &crate::attributes::AttributeName,
+        ),
         Changed<crate::attributes::AttributeData>,
     >,
     child_of: Query<&ChildOf>,

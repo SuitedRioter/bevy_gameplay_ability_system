@@ -527,7 +527,9 @@ impl GameplayEffectRegistry {
     /// Panics if an Instant effect has `granted_tags`, since there is no persistent
     /// entity to hold them and remove them later. Use `HasDuration` or `Infinite` instead.
     pub fn register(&mut self, definition: GameplayEffectDefinition) {
-        if definition.duration_policy == DurationPolicy::Instant && !definition.granted_tags.is_empty() {
+        if definition.duration_policy == DurationPolicy::Instant
+            && !definition.granted_tags.is_empty()
+        {
             panic!(
                 "Instant effect '{}' has granted_tags, which cannot be cleaned up. \
                  Use DurationPolicy::HasDuration or DurationPolicy::Infinite instead.",
