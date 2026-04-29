@@ -670,7 +670,10 @@ pub fn create_effect_modifiers_system(
             Option<&SetByCallerMagnitudes>,
             Option<&GameplayEffectContext>,
         ),
-        Or<(Added<ActiveGameplayEffect>, Changed<ActiveGameplayEffect>)>,
+        (
+            Or<(Added<ActiveGameplayEffect>, Changed<ActiveGameplayEffect>)>,
+            Without<PeriodicEffect>,
+        ),
     >,
     existing_modifiers: Query<(Entity, &ModifierSource)>,
     attributes: Query<(&AttributeData, &AttributeName, &ChildOf)>,
@@ -945,13 +948,18 @@ pub fn remove_expired_effects_system(
 
 /// System that executes periodic effects.
 ///
-/// Periodic effects apply their modifiers at regular intervals. This system:
-/// 1. Ticks the periodic timer
-/// 2. For each execution, re-applies the effect's modifiers to the target's base value
+/// Periodic effects fire their modifiers at discrete intervals (e.g., poison that
+/// ticks every 2 seconds). Unlike duration-based effects whose modifiers apply
+/// continuously every frame, periodic modifiers only apply on each period tick.
 ///
-/// Note: Periodic effects modify the base value permanently on each tick.
-/// This is consistent with UE GAS behavior where periodic damage/healing
-/// permanently changes the attribute.
+/// To prevent double-counting, `create_effect_modifiers_system` skips periodic
+/// effects — no persistent `AttributeModifier` entities are created for them.
+/// This system handles all modifier application directly.
+///
+/// Modifier semantics:
+/// - `AddBase`: Permanently modifies `base_value` (rare for periodic effects).
+/// - `AddCurrent`, `Multiply*`, `Override`: Modify `current_value` directly
+///   as discrete events (e.g., "deal 10 damage now").
 pub fn execute_periodic_effects_system(
     mut commands: Commands,
     mut effects: Query<(
@@ -1024,18 +1032,22 @@ pub fn execute_periodic_effects_system(
                     let owner = child_of.get();
                     if owner == target.0 && attr_name.0 == modifier.attribute_name {
                         match modifier.operation {
-                            ModifierOperation::AddBase | ModifierOperation::AddCurrent => {
+                            // AddBase permanently modifies the base value
+                            ModifierOperation::AddBase => {
                                 attr_data.base_value += magnitude;
+                            }
+                            // All other operations are discrete events applied to current_value
+                            ModifierOperation::AddCurrent => {
+                                attr_data.current_value += magnitude;
                             }
                             ModifierOperation::MultiplyAdditive
                             | ModifierOperation::MultiplyMultiplicative => {
-                                attr_data.base_value *= 1.0 + magnitude;
+                                attr_data.current_value *= 1.0 + magnitude;
                             }
                             ModifierOperation::Override => {
-                                attr_data.base_value = magnitude;
+                                attr_data.current_value = magnitude;
                             }
                         }
-                        // Aggregation system will recalculate current_value
                     }
                 }
             }

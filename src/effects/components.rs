@@ -306,10 +306,13 @@ pub struct PeriodicEffect {
 
 impl PeriodicEffect {
     /// Creates a new periodic effect.
+    ///
+    /// `time_until_next` starts at 0.0 so the first execution happens
+    /// immediately when the effect is applied (matching UE GAS behavior).
     pub fn new(period: f32) -> Self {
         Self {
             period,
-            time_until_next: period,
+            time_until_next: 0.0,
         }
     }
 
@@ -411,23 +414,26 @@ mod tests {
     #[test]
     fn test_periodic_effect() {
         let mut periodic = PeriodicEffect::new(1.0);
-        assert_eq!(periodic.time_until_next, 1.0);
-        assert!(!periodic.should_execute());
+        assert_eq!(periodic.time_until_next, 0.0);
+        assert!(periodic.should_execute());
 
+        // First frame: immediate execution
+        assert_eq!(periodic.tick(0.016), 1);
+        // time_until_next = 0.0 - 0.016 + 1.0 = 0.984
+        assert!((periodic.time_until_next - 0.984).abs() < 0.001);
+
+        // Partial period elapsed, no execution
         assert_eq!(periodic.tick(0.5), 0);
-        assert_eq!(periodic.time_until_next, 0.5);
-
-        assert_eq!(periodic.tick(0.6), 1);
-        assert_eq!(periodic.time_until_next, 0.9);
+        assert!((periodic.time_until_next - 0.484).abs() < 0.001);
     }
 
     #[test]
     fn test_periodic_effect_large_delta() {
         let mut periodic = PeriodicEffect::new(1.0);
 
-        // Large delta should trigger multiple executions
-        assert_eq!(periodic.tick(2.5), 2);
-        assert_eq!(periodic.time_until_next, 0.5);
+        // First execution at t=0 (time_until_next=0) + 2 more from the large delta
+        assert_eq!(periodic.tick(2.5), 3);
+        assert!((periodic.time_until_next - 0.5).abs() < 0.001);
     }
 
     #[test]

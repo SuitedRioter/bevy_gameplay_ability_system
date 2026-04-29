@@ -94,7 +94,7 @@ Integration tests in `tests/` (`ability_activation_flow.rs`, `effect_application
 **Critical:**
 1. ✅ **已修复** - `set_base_value()` 不再覆盖 `current_value`，aggregation 系统正确地重新计算。
 2. ✅ **已修复** - Instant effect + `granted_tags` 组合现在在 `GameplayEffectRegistry::register()` 时 panic，使非法状态不可表示。
-3. `execute_periodic_effects_system` has TODO — periodic effects tick but don't execute modifiers.
+3. ✅ **已修复** - Periodic effects 现在正确地按周期执行 modifier，不再和持久 modifier 重复计算。
 4. `ModifierOperation::AddBase` is skipped in aggregation (line 309 in effects/systems.rs) — semantic unclear.
 
 **Design:**
