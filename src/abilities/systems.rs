@@ -118,8 +118,8 @@ pub struct AbilityActivatedEvent {
     pub ability_spec: Entity,
     /// The owner entity.
     pub owner: Entity,
-    /// The spawned instance entity.
-    pub instance: Entity,
+    /// The spawned instance entity (None for NonInstanced abilities).
+    pub instance: Option<Entity>,
 }
 
 /// Event for requesting ability end.
@@ -138,8 +138,8 @@ pub struct EndAbilityEvent {
 pub struct CommitAbilityEvent {
     /// The ability spec entity.
     pub ability_spec: Entity,
-    /// The instance entity.
-    pub instance: Entity,
+    /// The instance entity (None for NonInstanced abilities).
+    pub instance: Option<Entity>,
     /// The owner entity.
     pub owner: Entity,
 }
@@ -171,8 +171,8 @@ pub struct AbilityActivationFailedEvent {
 pub struct CommitAbilityResultEvent {
     /// The ability spec entity.
     pub ability_spec: Entity,
-    /// The instance entity.
-    pub instance: Entity,
+    /// The instance entity (None for NonInstanced abilities).
+    pub instance: Option<Entity>,
     /// The owner entity.
     pub owner: Entity,
     /// Whether the commit succeeded.
@@ -217,7 +217,8 @@ pub struct PendingActivation {
 #[derive(Component, Debug, Clone)]
 pub struct ReadyToActivate {
     pub owner: Entity,
-    pub instance: Entity,
+    /// Instance entity for instanced abilities, or None for NonInstanced
+    pub instance: Option<Entity>,
     pub activation_info: super::activation_info::AbilityActivationInfo,
 }
 
@@ -246,7 +247,7 @@ pub fn spawn_pending_ability_instances_system(
         let instance_entity = match def.instancing_policy {
             super::definition::InstancingPolicy::NonInstanced => {
                 // No instance entity - logic executes directly from definition
-                Entity::PLACEHOLDER
+                None
             }
             super::definition::InstancingPolicy::InstancedPerActor => {
                 // Check if an instance already exists for this spec
@@ -262,9 +263,34 @@ pub fn spawn_pending_ability_instances_system(
 
                 if let Some(existing_entity) = existing {
                     // Reuse existing instance
-                    existing_entity
+                    Some(existing_entity)
                 } else {
                     // Create new instance (first activation)
+                    Some(
+                        commands
+                            .spawn((
+                                AbilitySpecInstance {
+                                    definition_id: spec.definition_id.clone(),
+                                    level: spec.level,
+                                    behavior: def.behavior.clone(),
+                                    owner: pending.owner,
+                                    instigator: Some(pending.activation_info.instigator),
+                                    target_data: Some(pending.activation_info.target_data.clone()),
+                                },
+                                InstanceControlState {
+                                    is_active: true,
+                                    is_blocking_other_abilities: def.default_blocks_other_abilities,
+                                    is_cancelable: def.default_is_cancelable,
+                                },
+                            ))
+                            .set_parent_in_place(spec_entity)
+                            .id(),
+                    )
+                }
+            }
+            super::definition::InstancingPolicy::InstancedPerExecution => {
+                // Always create new instance (current default behavior)
+                Some(
                     commands
                         .spawn((
                             AbilitySpecInstance {
@@ -282,29 +308,8 @@ pub fn spawn_pending_ability_instances_system(
                             },
                         ))
                         .set_parent_in_place(spec_entity)
-                        .id()
-                }
-            }
-            super::definition::InstancingPolicy::InstancedPerExecution => {
-                // Always create new instance (current default behavior)
-                commands
-                    .spawn((
-                        AbilitySpecInstance {
-                            definition_id: spec.definition_id.clone(),
-                            level: spec.level,
-                            behavior: def.behavior.clone(),
-                            owner: pending.owner,
-                            instigator: Some(pending.activation_info.instigator),
-                            target_data: Some(pending.activation_info.target_data.clone()),
-                        },
-                        InstanceControlState {
-                            is_active: true,
-                            is_blocking_other_abilities: def.default_blocks_other_abilities,
-                            is_cancelable: def.default_is_cancelable,
-                        },
-                    ))
-                    .set_parent_in_place(spec_entity)
-                    .id()
+                        .id(),
+                )
             }
         };
 
@@ -346,29 +351,40 @@ pub fn call_activate_ability_system(
     mut blocked_ability_tags: Query<&mut BlockedAbilityTags>,
 ) {
     for (spec_entity, ready, spec, mut active_state) in ready_query.iter_mut() {
-        let Ok(instance) = instances.get(ready.instance) else {
-            // Instance not found, skip.
+        let Some(definition) = ability_registry.get(&spec.definition_id) else {
             commands.entity(spec_entity).remove::<ReadyToActivate>();
             continue;
         };
 
-        let Some(definition) = ability_registry.get(&spec.definition_id) else {
-            commands.entity(spec_entity).remove::<ReadyToActivate>();
-            continue;
+        // Get behavior and instance data
+        let (behavior, instance_entity) = if let Some(instance_entity) = ready.instance {
+            // Instanced ability - get behavior from instance
+            let Ok(instance) = instances.get(instance_entity) else {
+                // Instance not found, skip.
+                commands.entity(spec_entity).remove::<ReadyToActivate>();
+                continue;
+            };
+            let b: &dyn super::traits::AbilityBehavior = match instance.behavior.as_deref() {
+                Some(b) => b,
+                None => &super::traits::DefaultAbilityBehavior,
+            };
+            (b, Some(instance_entity))
+        } else {
+            // NonInstanced ability - get behavior from definition
+            let b: &dyn super::traits::AbilityBehavior = match definition.behavior.as_deref() {
+                Some(b) => b,
+                None => &super::traits::DefaultAbilityBehavior,
+            };
+            (b, None)
         };
 
         // Increment active state.
         active_state.increment();
 
         // Call behavior lifecycle methods.
-        let b: &dyn super::traits::AbilityBehavior = match instance.behavior.as_deref() {
-            Some(b) => b,
-            None => &super::traits::DefaultAbilityBehavior,
-        };
-
-        b.pre_activate(
+        behavior.pre_activate(
             &mut commands,
-            ready.instance,
+            instance_entity,
             spec_entity,
             ready.owner,
             definition,
@@ -376,9 +392,9 @@ pub fn call_activate_ability_system(
             &mut tag_containers,
             &mut blocked_ability_tags,
         );
-        b.activate(
+        behavior.activate(
             &mut commands,
-            ready.instance,
+            instance_entity,
             spec_entity,
             &ready.activation_info,
         );
@@ -386,19 +402,19 @@ pub fn call_activate_ability_system(
         // Trigger events.
         commands.trigger(CommitAbilityEvent {
             ability_spec: spec_entity,
-            instance: ready.instance,
+            instance: instance_entity,
             owner: ready.owner,
         });
 
         commands.trigger(AbilityActivatedEvent {
             ability_spec: spec_entity,
             owner: ready.owner,
-            instance: ready.instance,
+            instance: instance_entity,
         });
 
         info!(
             "Ability {:?} activated: spec={:?} instance={:?}",
-            instance.definition_id, spec_entity, ready.instance
+            spec.definition_id, spec_entity, instance_entity
         );
 
         // Remove ready marker.
@@ -630,7 +646,7 @@ fn end_ability_internal(
             Some(b) => b,
             None => &super::traits::DefaultAbilityBehavior,
         };
-        b.end(commands, *inst_entity, was_cancelled);
+        b.end(commands, Some(*inst_entity), was_cancelled);
 
         // Remove activation_owned_tags from owner.
         if let Ok(mut owner_tags) = params.tag_containers.get_mut(owner) {
@@ -677,7 +693,7 @@ pub fn on_instance_removed(
             Some(b) => b,
             None => &super::traits::DefaultAbilityBehavior,
         };
-        b.end(&mut commands, entity, true);
+        b.end(&mut commands, Some(entity), true);
     }
 }
 

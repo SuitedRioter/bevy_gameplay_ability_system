@@ -92,15 +92,15 @@ Integration tests in `tests/` (`ability_activation_flow.rs`, `effect_application
 ## Known Issues & Technical Debt
 
 **Critical:**
-1. `AttributeData::set_base_value()` overwrites `current_value`, losing all active modifiers. Should only set `base_value` and let aggregation recalculate.
-2. Instant effects with `granted_tags` cause tag leaks (tags added but never removed since no entity exists).
+1. ✅ **已修复** - `set_base_value()` 不再覆盖 `current_value`，aggregation 系统正确地重新计算。
+2. ✅ **已修复** - Instant effect + `granted_tags` 组合现在在 `GameplayEffectRegistry::register()` 时 panic，使非法状态不可表示。
 3. `execute_periodic_effects_system` has TODO — periodic effects tick but don't execute modifiers.
 4. `ModifierOperation::AddBase` is skipped in aggregation (line 309 in effects/systems.rs) — semantic unclear.
 
 **Design:**
 5. `StackCount` policy spawns duplicate modifiers on each stack without cleanup.
 6. Handle types (`AbilityHandle`, `EffectHandle`, `AttributeHandle`) defined but unused. Delete or implement generation tracking.
-7. String IDs (`definition_id`, `attribute_name`) used everywhere despite `string_cache` dependency. Consider using `Atom` for performance.
+7. ✅ **已修复** - NonInstanced 策略现在使用 `Option<Entity>` 而非 `Entity::PLACEHOLDER`。
 
 **Code Quality:**
 8. `Changed<AttributeData>` filter used in both clamp and event systems — may cause duplicate events in same frame.

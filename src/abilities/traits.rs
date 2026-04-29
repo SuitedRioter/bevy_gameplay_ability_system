@@ -114,7 +114,7 @@ pub trait AbilityBehavior: Send + Sync + 'static {
     fn pre_activate(
         &self,
         commands: &mut Commands,
-        _instance_entity: Entity,
+        _instance_entity: Option<Entity>,
         _spec_entity: Entity,
         source: Entity,
         definition: &AbilityDefinition,
@@ -149,7 +149,7 @@ pub trait AbilityBehavior: Send + Sync + 'static {
     fn activate(
         &self,
         _world: &mut Commands,
-        _instance_entity: Entity,
+        _instance_entity: Option<Entity>,
         _spec_entity: Entity,
         _activation_info: &super::activation_info::AbilityActivationInfo,
     ) {
@@ -230,11 +230,13 @@ pub trait AbilityBehavior: Send + Sync + 'static {
     }
 
     /// Called when the ability instance ends. Cleanup logic goes here.
-    fn end(&self, commands: &mut Commands, instance_entity: Entity, was_cancelled: bool) {
-        commands.trigger(OnGameplayAbilityEnded {
-            ability_instance: instance_entity,
-            was_cancelled,
-        });
+    fn end(&self, commands: &mut Commands, instance_entity: Option<Entity>, was_cancelled: bool) {
+        if let Some(instance) = instance_entity {
+            commands.trigger(OnGameplayAbilityEnded {
+                ability_instance: instance,
+                was_cancelled,
+            });
+        }
     }
 }
 

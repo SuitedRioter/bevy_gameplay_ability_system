@@ -832,8 +832,18 @@ app.add_plugins(CuePlugin);
 - ✅ `AbilityActivationInfo` 替代临时资源传参
 - ✅ `AbilityBehavior::activate` 签名更新为接收 `&AbilityActivationInfo`
 - ✅ 移除临时资源传参模式 (AbilityTargets)
-- ⚠️ NonInstanced 策略仍使用 Entity::PLACEHOLDER
+- ✅ NonInstanced 策略修复 (使用 `Option<Entity>` 替代 `Entity::PLACEHOLDER`)
 - ⚠️ Commit 语义、End/Cancel 逻辑、输入绑定系统未完成
+
+#### ✅ Milestone 4 - Ability Tasks (基础完成)
+- ✅ ECS 基础任务系统实现 (Entity/Component 模式)
+- ✅ WaitDelay 任务实现 (等待指定时间)
+- ✅ WaitGameplayEvent 任务实现 (等待特定事件)
+- ✅ 任务状态管理 (Running → Completed/Cancelled)
+- ✅ 自动清理系统 (完成/取消的任务自动 despawn)
+- ✅ 实例关联取消 (instance 移除时任务自动取消)
+- ✅ 测试覆盖: `ability_task_test` (5 个集成测试通过)
+- ⚠️ 更多任务类型未实现 (WaitAttributeChange, WaitEffectApplied, ApplyEffectToTargetData)
 
 #### ✅ Milestone 5 - GameplayCue (部分完成)
 - ✅ Cue 自动触发 (OnActive/Executed/Removed) 已实现
@@ -844,23 +854,24 @@ app.add_plugins(CuePlugin);
 
 ### 12.2 进行中的工作
 
-当前无进行中的工作。
+**当前任务**: 完善 Ability End/Cancel 逻辑
+- 实现 activation-owned tags 的移除
+- 实现 block_abilities_with_tags 的解除
+- 确保 End/Cancel 时正确清理状态
 
 ### 12.3 待完成的里程碑
 
 #### ❌ Milestone 3 - Ability Parity (剩余部分)
 **优先级: 高**
-- ❌ 修复 NonInstanced 策略的 Entity::PLACEHOLDER 问题
+- ✅ 修复 NonInstanced 策略的 Entity::PLACEHOLDER 问题
+- 🔄 End/Cancel 时移除 activation-owned tags、解除 blocking (进行中)
 - ❌ Commit 语义对齐 UE (可选择何时 commit)
-- ❌ End/Cancel 时移除 activation-owned tags、解除 blocking
 - ❌ 按 tag cancel 其他 active abilities
 - ❌ 输入绑定系统 (input_id 对应 pressed/released/held)
 
-#### ❌ Milestone 4 - Ability Tasks
+#### ❌ Milestone 4 - Ability Tasks (剩余部分)
 **优先级: 高**
-- ❌ ECS task entity/state-machine 替代 UE `UAbilityTask`
-- ❌ WaitDelay - 等待指定时间
-- ❌ WaitGameplayEvent - 等待 gameplay event
+- ✅ WaitDelay 和 WaitGameplayEvent 基础实现
 - ❌ WaitAttributeChange - 等待属性变化
 - ❌ WaitEffectApplied/Removed - 等待效果应用/移除
 - ❌ ApplyEffectToTargetData - 对目标数据应用效果

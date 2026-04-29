@@ -92,7 +92,7 @@ impl AbilityBehavior for ApplyEffectBehavior {
     fn activate(
         &self,
         commands: &mut Commands,
-        _instance_entity: Entity,
+        _instance_entity: Option<Entity>,
         _spec_entity: Entity,
         activation_info: &bevy_gameplay_ability_system::abilities::activation_info::AbilityActivationInfo,
     ) {

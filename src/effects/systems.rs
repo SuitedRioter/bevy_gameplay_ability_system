@@ -576,19 +576,13 @@ pub fn on_apply_gameplay_effect(
                 }
             }
 
-            // WARNING: Instant effects with granted_tags cause tag leaks!
-            // Tags are added but never removed since no entity persists.
-            // Solution: Either forbid granted_tags on instant effects, or
-            // spawn a temporary entity that despawns after one frame.
-            // For now, we log a warning and skip adding tags.
-            if !definition.granted_tags.is_empty() {
-                warn!(
-                    "Instant effect '{}' has granted_tags, which will leak. \
-                     Instant effects should not grant tags. Use HasDuration instead.",
-                    effect_id
-                );
-                // Do NOT add tags - they would never be removed
-            }
+            // Defense-in-depth: registration validates this, but skip tags anyway.
+            // Instant effects have no persistent entity, so tags would never be removed.
+            debug_assert!(
+                definition.granted_tags.is_empty(),
+                "Instant effect '{}' has granted_tags — this should have been rejected at registration",
+                effect_id
+            );
 
             trigger_effect_cues(&mut commands, definition, GameplayCueEvent::Executed, spec);
 
