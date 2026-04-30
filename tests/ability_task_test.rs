@@ -597,18 +597,7 @@ fn test_wait_effect_removed_task() {
             registry.register(def);
         });
 
-    // Apply effect
-    app.world_mut()
-        .run_system_once(move |mut commands: Commands| {
-            commands.trigger(
-                ApplyGameplayEffectEvent::new(effect_id_clone1.clone(), player)
-                    .with_instigator(player)
-                    .with_level(1),
-            );
-        });
-    app.update();
-
-    // Register and grant ability
+    // Register and grant ability FIRST
     let ability_id = Atom::from("test_ability");
     let ability_id_clone = ability_id.clone();
     app.world_mut()
@@ -647,7 +636,7 @@ fn test_wait_effect_removed_task() {
         query.iter(app.world()).next().unwrap()
     };
 
-    // Spawn WaitEffectRemoved task
+    // Spawn WaitEffectRemoved task BEFORE applying effect
     let task = app
         .world_mut()
         .spawn((
@@ -663,15 +652,36 @@ fn test_wait_effect_removed_task() {
 
     app.update();
 
+    // Now apply effect AFTER task is created
+    app.world_mut()
+        .run_system_once(move |mut commands: Commands| {
+            commands.trigger(
+                ApplyGameplayEffectEvent::new(effect_id_clone1.clone(), player)
+                    .with_instigator(player)
+                    .with_level(1),
+            );
+        });
+    app.update();
+
+    // Need another update for effect to be applied (observer triggers in Effects)
+    app.update();
+
     // Task should still be running (effect is active)
     let state = app.world().get::<TaskState>(task).unwrap();
     assert_eq!(*state, TaskState::Running);
 
     // Wait for effect to expire (duration = 1.0s)
+    // Manually update the effect duration since Time::advance_by doesn't affect delta_secs
     {
-        let mut time = app.world_mut().resource_mut::<Time>();
-        time.advance_by(Duration::from_secs_f32(1.1));
+        let mut query = app
+            .world_mut()
+            .query::<&mut bevy_gameplay_ability_system::effects::EffectDuration>();
+        for mut duration in query.iter_mut(app.world_mut()) {
+            duration.tick(1.1);  // Manually tick the duration
+        }
     }
+
+    // Update to process the expired effect
     app.update();
 
     // Task should complete and be despawned
@@ -705,7 +715,13 @@ fn test_apply_effect_to_target_data_task() {
         ))
         .id();
 
-    let enemy = app.world_mut().spawn(Name::new("Enemy")).id();
+    let enemy = app
+        .world_mut()
+        .spawn((
+            Name::new("Enemy"),
+            bevy_gameplay_ability_system::core::OwnedTags::default(),
+        ))
+        .id();
 
     app.world_mut().run_system_once(
         move |mut commands: Commands, tags: Res<GameplayTagsManager>| {
@@ -790,6 +806,9 @@ fn test_apply_effect_to_target_data_task() {
         ))
         .id();
 
+    app.update();
+
+    // Need another update for effect to be applied (task triggers in Abilities, effect applies in Effects next frame)
     app.update();
 
     // Check enemy Health was reduced
