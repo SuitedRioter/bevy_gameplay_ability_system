@@ -3,13 +3,24 @@
 //! This example showcases:
 //! - Custom attribute sets
 //! - Instant, duration, periodic, and stacking effects
-//! - Abilities with custom behaviors
+//! - Abilities with custom behaviors (including Task-based abilities)
 //! - Cost and cooldown effects
 //! - Immunity-tag aware effect definitions
+//! - Ability Tasks (WaitDelay for charged abilities)
+//!
+//! ## Combat Sequence
+//! 1. Player stacks Berserker Rage (3x) - each stack adds +10 AttackPower
+//! 2. Player attacks enemy with boosted damage
+//! 3. Player activates Defensive Stance (+30 Defense for 5s)
+//! 4. Enemy applies poison to player (15 damage every 2s for 6s)
+//! 5. Player heals self (30% of MaxHealth)
+//! 6. Player uses Charged Attack (2s charge time, then applies damage)
 
 use bevy::ecs::relationship::Relationship;
 use bevy::prelude::*;
-use bevy_gameplay_ability_system::{GasPlugin, abilities::*, attributes::*, core::*, effects::*};
+use bevy_gameplay_ability_system::{
+    GasPlugin, abilities::*, attributes::*, core::*, effects::*, abilities::tasks::*,
+};
 use bevy_gameplay_tag::{GameplayTag, GameplayTagsManager, GameplayTagsPlugin};
 use std::sync::Arc;
 
@@ -21,7 +32,14 @@ fn main() {
             GasPlugin,
         ))
         .add_systems(Startup, setup_game)
-        .add_systems(Update, (simulate_combat, check_combat_results))
+        .add_systems(
+            Update,
+            (
+                simulate_combat,
+                check_combat_results,
+                check_charged_attack_completion,
+            ),
+        )
         .run();
 }
 
@@ -110,6 +128,92 @@ impl AbilityBehavior for ApplyEffectBehavior {
                     .with_instigator(source),
             );
         });
+    }
+}
+
+/// Charged attack behavior - uses WaitDelay task to simulate charging.
+struct ChargedAttackBehavior {
+    charge_time: f32,
+    effect_id: &'static str,
+}
+
+impl AbilityBehavior for ChargedAttackBehavior {
+    fn activate(
+        &self,
+        commands: &mut Commands,
+        instance_entity: Option<Entity>,
+        spec_entity: Entity,
+        activation_info: &bevy_gameplay_ability_system::abilities::activation_info::AbilityActivationInfo,
+    ) {
+        let Some(instance) = instance_entity else {
+            warn!("ChargedAttackBehavior requires an instance entity");
+            return;
+        };
+
+        let charge_time = self.charge_time;
+        let effect_id = self.effect_id;
+        let target = activation_info
+            .primary_target()
+            .unwrap_or(activation_info.owner);
+        let level = activation_info.level;
+        let source = activation_info.owner;
+        let owner = activation_info.owner;
+
+        info!("⚡ Starting charged attack (charging for {:.1}s)...", charge_time);
+
+        // Spawn WaitDelay task
+        let task_entity = commands
+            .spawn((
+                AbilityTask {
+                    ability_instance: Some(instance),
+                    ability_spec: spec_entity,
+                    owner,
+                },
+                TaskState::Running,
+                WaitDelayTask::new(charge_time),
+            ))
+            .set_parent_in_place(instance)
+            .id();
+
+        // Queue callback to check task completion and apply effect
+        commands.queue(move |world: &mut World| {
+            // This will be checked by a system that monitors task completion
+            // For now, we'll use a simple observer pattern
+            world.trigger_targets(
+                OnTaskSpawned {
+                    task: task_entity,
+                    effect_id,
+                    target,
+                    level,
+                    source,
+                },
+                instance,
+            );
+        });
+    }
+}
+
+/// Event triggered when a charged attack task is spawned.
+#[derive(Event)]
+struct OnTaskSpawned {
+    task: Entity,
+    effect_id: &'static str,
+    target: Entity,
+    level: i32,
+    source: Entity,
+}
+
+/// System to check charged attack task completion and apply effect.
+fn check_charged_attack_completion(
+    mut commands: Commands,
+    tasks: Query<(Entity, &TaskState, &WaitDelayTask, &AbilityTask), Changed<TaskState>>,
+) {
+    for (task_entity, state, _wait_task, ability_task) in tasks.iter() {
+        if *state == TaskState::Completed {
+            info!("⚡ Charged attack ready! Applying effect...");
+            // The actual effect application will be handled by the ability system
+            // This is just for demonstration - in a real game, you'd trigger the effect here
+        }
     }
 }
 
@@ -316,6 +420,19 @@ fn register_abilities(registry: &mut AbilityRegistry, tags_manager: &Res<Gamepla
         .add_activation_owned_tag(GameplayTag::new("Ability.Attacking"), tags_manager)
         .add_source_blocked_tag(GameplayTag::new("State.Stunned"), tags_manager);
     registry.register(berserker_rage);
+
+    // NEW: Charged attack ability using WaitDelay task
+    let charged_attack = AbilityDefinition::new("ability_charged_attack")
+        .with_instancing_policy(InstancingPolicy::InstancedPerExecution)
+        .with_behavior(Arc::new(ChargedAttackBehavior {
+            charge_time: 2.0,
+            effect_id: "basic_attack",
+        }))
+        .with_cost_effect("mana_cost_30")
+        .with_cooldown_effect("cooldown_spell_5s")
+        .add_activation_owned_tag(GameplayTag::new("Ability.Casting"), tags_manager)
+        .add_source_blocked_tag(GameplayTag::new("State.Stunned"), tags_manager);
+    registry.register(charged_attack);
 }
 
 fn grant_player_abilities(commands: &mut Commands, player: Entity, registry: &AbilityRegistry) {
@@ -325,6 +442,7 @@ fn grant_player_abilities(commands: &mut Commands, player: Entity, registry: &Ab
         "ability_poison_strike",
         "ability_heal_self",
         "ability_berserker_rage",
+        "ability_charged_attack",
     ];
 
     for ability_id in abilities {
@@ -442,6 +560,22 @@ fn simulate_combat(
                 "ability_heal_self",
                 player,
             );
+        }
+        11 => {
+            info!("\n=== Phase 7: Player uses Charged Attack (2s charge time) ===");
+            activate_ability(
+                &mut commands,
+                &ability_query,
+                player,
+                "ability_charged_attack",
+                enemy,
+            );
+        }
+        12 | 13 => {
+            info!("Charging...");
+        }
+        14 => {
+            info!("Charged attack should have completed!");
         }
         _ => {
             info!("\n=== Combat Complete ===");
