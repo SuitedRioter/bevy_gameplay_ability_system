@@ -201,6 +201,9 @@ pub struct GameplayEffectSpec {
     pub context: GameplayEffectContext,
     /// Magnitudes supplied by the caller for SetByCaller calculations.
     pub set_by_caller_magnitudes: SetByCallerMagnitudes,
+    /// Captured attribute values for Snapshot mode calculations.
+    /// Key: (entity, attribute_name), Value: captured value
+    pub captured_attributes: std::collections::HashMap<(Entity, Atom), f32>,
 }
 
 impl GameplayEffectSpec {
@@ -212,6 +215,7 @@ impl GameplayEffectSpec {
             level: 1,
             context: GameplayEffectContext::new(),
             set_by_caller_magnitudes: SetByCallerMagnitudes::new(),
+            captured_attributes: std::collections::HashMap::new(),
         }
     }
 
@@ -259,6 +263,18 @@ impl GameplayEffectSpec {
     /// Returns the legacy instigator field used by existing events/components.
     pub fn instigator(&self) -> Option<Entity> {
         self.context.instigator.or(self.context.source)
+    }
+
+    /// Captures an attribute value for Snapshot mode.
+    pub fn capture_attribute(&mut self, entity: Entity, attribute_name: Atom, value: f32) {
+        self.captured_attributes.insert((entity, attribute_name), value);
+    }
+
+    /// Gets a captured attribute value for Snapshot mode.
+    pub fn get_captured_attribute(&self, entity: Entity, attribute_name: &Atom) -> Option<f32> {
+        self.captured_attributes
+            .get(&(entity, attribute_name.clone()))
+            .copied()
     }
 }
 

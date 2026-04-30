@@ -95,6 +95,31 @@ pub enum AttributeCaptureSource {
     Target,
 }
 
+/// Attribute capture mode.
+///
+/// Defines when the attribute value is captured for magnitude calculation.
+/// Matches UE GAS's snapshot vs dynamic evaluation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AttributeCaptureMode {
+    /// Capture attribute value when the effect is created (snapshot).
+    /// The captured value never changes, even if the source attribute changes.
+    /// Useful for: damage based on caster's attack power at cast time,
+    /// DOT effects that scale with spell power at application time.
+    Snapshot,
+
+    /// Re-evaluate attribute value each time the magnitude is calculated (dynamic).
+    /// The value updates if the source attribute changes.
+    /// Useful for: effects that should scale with current stats,
+    /// buffs that update when the source's power changes.
+    Dynamic,
+}
+
+impl Default for AttributeCaptureMode {
+    fn default() -> Self {
+        Self::Snapshot
+    }
+}
+
 /// Magnitude calculation type.
 ///
 /// Defines how the magnitude of a modifier is calculated.
@@ -122,6 +147,8 @@ pub enum MagnitudeCalculation {
         capture_source: AttributeCaptureSource,
         /// Which value to use from the attribute.
         calculation_type: AttributeCalculationType,
+        /// When to capture the attribute value (Snapshot or Dynamic).
+        capture_mode: AttributeCaptureMode,
         /// Coefficient to multiply the attribute value by.
         coefficient: f32,
         /// Value added before multiplication.
@@ -174,12 +201,13 @@ impl MagnitudeCalculation {
 
     /// Creates an attribute-based magnitude from the source entity.
     ///
-    /// Uses the current value (AttributeMagnitude) by default.
+    /// Uses the current value (AttributeMagnitude) and Snapshot mode by default.
     pub fn from_source_attribute(attribute_name: impl Into<Atom>, coefficient: f32) -> Self {
         Self::AttributeBased {
             attribute_name: attribute_name.into(),
             capture_source: AttributeCaptureSource::Source,
             calculation_type: AttributeCalculationType::AttributeMagnitude,
+            capture_mode: AttributeCaptureMode::Snapshot,
             coefficient,
             pre_multiply_additive: 0.0,
             post_multiply_additive: 0.0,
@@ -188,12 +216,13 @@ impl MagnitudeCalculation {
 
     /// Creates an attribute-based magnitude from the target entity.
     ///
-    /// Uses the current value (AttributeMagnitude) by default.
+    /// Uses the current value (AttributeMagnitude) and Snapshot mode by default.
     pub fn from_target_attribute(attribute_name: impl Into<Atom>, coefficient: f32) -> Self {
         Self::AttributeBased {
             attribute_name: attribute_name.into(),
             capture_source: AttributeCaptureSource::Target,
             calculation_type: AttributeCalculationType::AttributeMagnitude,
+            capture_mode: AttributeCaptureMode::Snapshot,
             coefficient,
             pre_multiply_additive: 0.0,
             post_multiply_additive: 0.0,
@@ -207,6 +236,14 @@ impl MagnitudeCalculation {
         } = &mut self
         {
             *calculation_type = calc_type;
+        }
+        self
+    }
+
+    /// Builder method to set the capture mode for AttributeBased.
+    pub fn with_capture_mode(mut self, mode: AttributeCaptureMode) -> Self {
+        if let Self::AttributeBased { capture_mode, .. } = &mut self {
+            *capture_mode = mode;
         }
         self
     }

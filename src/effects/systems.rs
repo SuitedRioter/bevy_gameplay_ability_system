@@ -238,6 +238,7 @@ fn trigger_effect_cues_from_components(
         level,
         context: context.cloned().unwrap_or_default(),
         set_by_caller_magnitudes: SetByCallerMagnitudes::new(),
+        captured_attributes: std::collections::HashMap::new(),
     };
 
     trigger_effect_cues(commands, definition, event_type, &spec);
