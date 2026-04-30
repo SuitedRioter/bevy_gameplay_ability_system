@@ -87,17 +87,33 @@ Integration tests in `tests/` (`ability_activation_flow.rs`, `effect_application
 
 ## Project Status
 
-**✅ Core Systems Complete** — All four modules (Attributes, Effects, Abilities, Cues) fully implemented with comprehensive tests. Ability Tasks system complete with 9 task types.
+**✅ Core Systems Complete** — All four modules (Attributes, Effects, Abilities, Cues) fully implemented with comprehensive tests. Ability Tasks system complete with 12 task types.
 
 **Test Coverage:**
-- Unit tests: All core components and systems
-- Integration tests: Full lifecycle tests for effects, abilities, and tasks (48 tests passing)
+- Unit tests: 41/41 passed ✅
+- Integration tests: 71/71 passed ✅
+  - `ability_granting_lifecycle_test`: 1 test
+  - `ability_task_test`: 12 tests (all task types)
+  - `application_requirement_test`: 2 tests
+  - `attribute_aggregation_test`: 2 tests
+  - `gameplay_effect_spec_test`: 2 tests
+  - `periodic_effect_spec_test`: 2 tests
+  - `stack_count_test`: 2 tests
+  - `stacking_reapply_spec_test`: 2 tests
+- Doc tests: 5/5 passed ✅
 - Examples: `basic_attributes`, `ability_activation`, `gameplay_effects`, `complete_rpg`, `stress_test`
+
+**Total: 117/117 tests passing (100% pass rate) ✅**
 
 **Known Limitations:**
 - Single-player only (no networking/replication)
 - Performance optimization deferred (current design handles <50 entities with <10 attributes each)
 - Benchmark suite broken for Bevy 0.18 (criterion compatibility issue)
+
+**Important Testing Notes:**
+- Tests that spawn player entities must include `OwnedTags` and `BlockedAbilityTags` components for ability activation to work
+- Effect duration tests should manually call `duration.tick()` instead of relying on `Time::advance_by()`, as the latter doesn't affect `Time::delta_secs()`
+- Task completion tests should check `TaskCompletedEvent` in the `TaskEvents` resource, as tasks are automatically despawned after completion
 
 ## Known Issues & Technical Debt
 

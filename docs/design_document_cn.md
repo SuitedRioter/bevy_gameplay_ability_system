@@ -1116,7 +1116,7 @@ Observers (事件驱动):
 - ✅ 任务状态管理 (Running → Completed/Cancelled)
 - ✅ 自动清理系统 (完成/取消的任务自动 despawn)
 - ✅ 实例关联取消 (instance 移除时任务自动取消)
-- ✅ 测试覆盖: `ability_task_test` (9 个任务类型，48 个集成测试通过)
+- ✅ 测试覆盖: `ability_task_test` (12 个任务类型，12 个集成测试通过)
 - ✅ 示例演示: `comprehensive_rpg.rs` 包含 ChargedAttackBehavior (使用 WaitDelay)
 
 #### ✅ Milestone 5 - GameplayCue (部分完成)
@@ -1129,6 +1129,13 @@ Observers (事件驱动):
 ### 12.2 进行中的工作
 
 **当前任务**: 无
+
+**最近完成** (2026-04-30):
+- ✅ 修复所有 ability task 测试 (12/12 passing)
+- ✅ 修复 `test_wait_effect_removed_task` - 发现 `Time::advance_by()` 不影响 `delta_secs()` 的问题
+- ✅ 修复 `test_apply_effect_to_target_data_task` - 添加额外的 `app.update()` 以处理系统执行顺序
+- ✅ 为测试中的 player 实体添加必需的 `OwnedTags` 和 `BlockedAbilityTags` 组件
+- ✅ 所有测试通过: 117/117 (100% pass rate)
 
 ### 12.3 待完成的里程碑
 
