@@ -8,6 +8,7 @@ use std::sync::Arc;
 use string_cache::DefaultAtom as Atom;
 
 use super::traits::AbilityBehavior;
+use super::triggers::AbilityTriggerData;
 
 /// Instancing policy for abilities.
 ///
@@ -79,6 +80,12 @@ pub struct AbilityDefinition {
     pub block_abilities_with_tags: GameplayTagContainer,
     /// Tags to cancel when this ability activates.
     pub cancel_abilities_with_tags: GameplayTagContainer,
+    /// Triggers that can automatically activate this ability.
+    ///
+    /// Matches UE GAS's `FAbilityTriggerData` array.
+    /// When an ability is granted with triggers, the system will automatically
+    /// activate it when the trigger conditions are met.
+    pub triggers: Vec<AbilityTriggerData>,
     /// Custom behavior implementation.
     pub behavior: Option<Arc<dyn AbilityBehavior>>,
     /// Whether instances of this ability block other abilities by default.
@@ -107,6 +114,7 @@ impl std::fmt::Debug for AbilityDefinition {
                 "cancel_abilities_with_tags",
                 &self.cancel_abilities_with_tags,
             )
+            .field("triggers", &self.triggers)
             .field("behavior", &self.behavior.as_ref().map(|_| "<behavior>"))
             .finish()
     }
@@ -138,6 +146,7 @@ impl AbilityDefinition {
             target_blocked_tags: GameplayTagContainer::default(),
             block_abilities_with_tags: GameplayTagContainer::default(),
             cancel_abilities_with_tags: GameplayTagContainer::default(),
+            triggers: Vec::new(),
             behavior: None,
             default_blocks_other_abilities: true,
             default_is_cancelable: true,
@@ -177,6 +186,29 @@ impl AbilityDefinition {
     /// Sets whether instances are cancelable by default.
     pub fn with_cancelable(mut self, cancelable: bool) -> Self {
         self.default_is_cancelable = cancelable;
+        self
+    }
+
+    /// Adds a trigger to this ability.
+    ///
+    /// When the ability is granted, it will automatically activate when the
+    /// trigger conditions are met.
+    ///
+    /// # Example
+    /// ```ignore
+    /// let ability = AbilityDefinition::new("counter_attack")
+    ///     .add_trigger(AbilityTriggerData::owned_tag_added(
+    ///         GameplayTag::new("Event.TookDamage")
+    ///     ));
+    /// ```
+    pub fn add_trigger(mut self, trigger: AbilityTriggerData) -> Self {
+        self.triggers.push(trigger);
+        self
+    }
+
+    /// Adds multiple triggers to this ability.
+    pub fn with_triggers(mut self, triggers: Vec<AbilityTriggerData>) -> Self {
+        self.triggers = triggers;
         self
     }
 
