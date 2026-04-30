@@ -26,7 +26,7 @@ Six modules. Effects, abilities, and cues follow `components.rs`/`definition.rs`
 
 **Attributes** (`src/attributes/`) — Dual-value model (BaseValue/CurrentValue). Each attribute is a separate entity linked to its owner via Bevy's `ChildOf` relationship (using `set_parent_in_place`). Custom attribute sets implement the `AttributeSetDefinition` trait (in `traits.rs`). Modifiers applied in order: Add → Multiply → Override.
 
-**Effects** (`src/effects/`) — Modify attributes via `GameplayEffectDefinition` templates stored in `GameplayEffectRegistry`. Each active effect is its own entity with `ActiveGameplayEffect` + `EffectTarget` components. Supports three duration policies (Instant, HasDuration, Infinite), periodic execution, and stacking (Independent, RefreshDuration, StackCount). Tag requirements gate application.
+**Effects** (`src/effects/`) — Modify attributes via `GameplayEffectDefinition` templates stored in `GameplayEffectRegistry`. Each active effect is its own entity with `ActiveGameplayEffect` + `EffectTarget` components. Supports three duration policies (Instant, HasDuration, Infinite), periodic execution, and stacking (Independent, RefreshDuration, StackCount). Tag requirements gate application. Modifiers are evaluated in channel order (Channel0-Channel9), with each channel's output becoming the next channel's input, enabling complex buff/debuff stacking rules.
 
 **Abilities** (`src/abilities/`) — Activated actions defined via `AbilityDefinition` templates in `AbilityRegistry`. Each granted ability is an entity with `AbilitySpec` + `AbilityOwner`. Activation flow: TryActivate → Commit (costs/cooldowns) → End/Cancel. Tag-based requirements, blocking, and cancellation. Supports three instancing policies: NonInstanced (no instance entity, logic from definition), InstancedPerActor (reused instance across activations), InstancedPerExecution (new instance per activation, default).
 
@@ -87,15 +87,16 @@ Integration tests in `tests/` (`ability_activation_flow.rs`, `effect_application
 
 ## Project Status
 
-**✅ Core Systems Complete** — All four modules (Attributes, Effects, Abilities, Cues) fully implemented with comprehensive tests. Ability Tasks system complete with 12 task types.
+**✅ Core Systems Complete** — All four modules (Attributes, Effects, Abilities, Cues) fully implemented with comprehensive tests. Ability Tasks system complete with 12 task types. Advanced features: Instancing policies (3 types), Evaluation channels (10 channels), Custom application requirements.
 
 **Test Coverage:**
 - Unit tests: 41/41 passed ✅
-- Integration tests: 74/74 passed ✅
+- Integration tests: 77/77 passed ✅
   - `ability_granting_lifecycle_test`: 1 test
   - `ability_task_test`: 12 tests (all task types)
-  - `application_requirement_test`: 2 tests
+  - `application_requirement_test`: 2 tests (custom requirements)
   - `attribute_aggregation_test`: 2 tests
+  - `evaluation_channel_test`: 3 tests (channel evaluation order, same-channel combination, complex stacking)
   - `gameplay_effect_spec_test`: 2 tests
   - `instancing_policy_test`: 3 tests (NonInstanced, InstancedPerActor, InstancedPerExecution)
   - `periodic_effect_spec_test`: 2 tests
@@ -104,7 +105,7 @@ Integration tests in `tests/` (`ability_activation_flow.rs`, `effect_application
 - Doc tests: 5/5 passed ✅
 - Examples: `basic_attributes`, `ability_activation`, `gameplay_effects`, `complete_rpg`, `stress_test`
 
-**Total: 120/120 tests passing (100% pass rate) ✅**
+**Total: 123/123 tests passing (100% pass rate) ✅**
 
 **Known Limitations:**
 - Single-player only (no networking/replication)

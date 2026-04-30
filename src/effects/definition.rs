@@ -2,7 +2,7 @@
 //!
 //! This module defines the structure of gameplay effects and their properties.
 
-use super::components::ModifierOperation;
+use super::components::{EvaluationChannel, ModifierOperation};
 use crate::cues::manager::GameplayCueParameters;
 use bevy::prelude::*;
 use bevy_gameplay_tag::{
@@ -295,10 +295,12 @@ pub struct ModifierInfo {
     pub operation: ModifierOperation,
     /// How to calculate the magnitude.
     pub magnitude: MagnitudeCalculation,
+    /// The evaluation channel for this modifier.
+    pub channel: EvaluationChannel,
 }
 
 impl ModifierInfo {
-    /// Creates a new modifier info.
+    /// Creates a new modifier info with default channel (Channel0).
     pub fn new(
         attribute_name: impl Into<Atom>,
         operation: ModifierOperation,
@@ -308,7 +310,14 @@ impl ModifierInfo {
             attribute_name: attribute_name.into(),
             operation,
             magnitude,
+            channel: EvaluationChannel::default(),
         }
+    }
+
+    /// Sets the evaluation channel for this modifier.
+    pub fn with_channel(mut self, channel: EvaluationChannel) -> Self {
+        self.channel = channel;
+        self
     }
 }
 

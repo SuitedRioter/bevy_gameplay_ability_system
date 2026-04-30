@@ -347,11 +347,69 @@ pub struct AttributeModifier {
     pub operation: ModifierOperation,
     /// The magnitude of the modification.
     pub magnitude: f32,
+    /// The evaluation channel for this modifier.
+    pub channel: EvaluationChannel,
 }
 
 /// The source of a modifier (which effect created it).
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ModifierSource(pub Entity);
+
+/// Evaluation channel for modifier application.
+///
+/// Channels control the order in which modifiers are applied to attributes.
+/// Each channel is evaluated in sequence (Channel0 → Channel1 → ... → Channel9),
+/// with the output of one channel becoming the input to the next.
+///
+/// This allows complex buff/debuff stacking rules. For example:
+/// - Channel0: Base additive bonuses (equipment, passive skills)
+/// - Channel1: Percentage multipliers (buffs, debuffs)
+/// - Channel2: Final additive bonuses (temporary effects)
+///
+/// Matches UE GAS's `EGameplayModEvaluationChannel`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum EvaluationChannel {
+    Channel0 = 0,
+    Channel1 = 1,
+    Channel2 = 2,
+    Channel3 = 3,
+    Channel4 = 4,
+    Channel5 = 5,
+    Channel6 = 6,
+    Channel7 = 7,
+    Channel8 = 8,
+    Channel9 = 9,
+}
+
+impl Default for EvaluationChannel {
+    fn default() -> Self {
+        Self::Channel0
+    }
+}
+
+impl EvaluationChannel {
+    /// Returns the channel as an integer for ordering.
+    pub fn as_u8(self) -> u8 {
+        self as u8
+    }
+
+    /// Creates a channel from an integer (0-9).
+    pub fn from_u8(value: u8) -> Option<Self> {
+        match value {
+            0 => Some(Self::Channel0),
+            1 => Some(Self::Channel1),
+            2 => Some(Self::Channel2),
+            3 => Some(Self::Channel3),
+            4 => Some(Self::Channel4),
+            5 => Some(Self::Channel5),
+            6 => Some(Self::Channel6),
+            7 => Some(Self::Channel7),
+            8 => Some(Self::Channel8),
+            9 => Some(Self::Channel9),
+            _ => None,
+        }
+    }
+}
 
 /// The type of modification operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -360,16 +418,16 @@ pub enum ModifierOperation {
     AddBase,
     /// Add to the current value (temporary).
     AddCurrent,
-    /// Multiply the current value.
+    /// Multiply the current value (additive stacking: 1.0 + sum of all multipliers).
     MultiplyAdditive,
-    /// Multiply the current value (multiplicative stacking).
+    /// Multiply the current value (multiplicative stacking: product of all multipliers).
     MultiplyMultiplicative,
-    /// Override the current value.
+    /// Override the current value (highest priority, short-circuits other modifiers).
     Override,
 }
 
 impl ModifierOperation {
-    /// Returns the priority order for applying modifiers.
+    /// Returns the priority order for applying modifiers within a channel.
     ///
     /// Override has highest priority (checked first, short-circuits).
     /// Lower values are applied first for other operations.

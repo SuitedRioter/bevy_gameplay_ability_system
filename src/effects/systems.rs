@@ -745,6 +745,7 @@ pub fn create_effect_modifiers_system(
                         target_attribute: modifier_info.attribute_name.clone(),
                         operation: modifier_info.operation,
                         magnitude,
+                        channel: modifier_info.channel,
                     },
                     ModifierSource(effect_entity),
                 ));
@@ -754,6 +755,10 @@ pub fn create_effect_modifiers_system(
 }
 
 /// System that aggregates attribute modifiers and applies them to attributes.
+///
+/// Modifiers are evaluated in channel order (Channel0 → Channel1 → ... → Channel9).
+/// Within each channel, modifiers are applied in operation priority order.
+/// The output of one channel becomes the input to the next channel.
 pub fn aggregate_attribute_modifiers_system(
     mut attributes: Query<(
         Entity,
@@ -767,88 +772,30 @@ pub fn aggregate_attribute_modifiers_system(
 ) {
     for (attr_entity, mut attr_data, attr_name, child_of, set_id) in attributes.iter_mut() {
         let owner = child_of.get();
-        let mut applicable_modifiers: Vec<_> = modifiers
+        let applicable_modifiers: Vec<_> = modifiers
             .iter()
             .filter(|m| m.target_entity == owner && m.target_attribute == attr_name.0)
             .collect();
 
-        applicable_modifiers.sort_by_key(|m| m.operation.priority());
-
-        // Check for Override first (short-circuit)
-        if let Some(override_mod) = applicable_modifiers
-            .iter()
-            .find(|m| matches!(m.operation, ModifierOperation::Override))
-        {
-            let old_value = attr_data.current_value;
-            let new_value = override_mod.magnitude;
-            if (old_value - new_value).abs() > f32::EPSILON {
-                let mut context = AttributeModifyContext {
-                    owner,
-                    attribute: attr_entity,
-                    attribute_name: attr_name.0.clone(),
-                    old_value,
-                    new_value,
-                    source_effect: None,
-                };
-
-                // Call pre hook for this AttributeSet
-                if let Some(hooks_res) = &hooks
-                    && let Some(set_hooks) = hooks_res.get(set_id.0)
-                {
-                    (set_hooks.pre_change)(&mut context);
-                }
-
-                attr_data.current_value = context.new_value;
-
-                // Call post hook
-                if let Some(hooks_res) = &hooks
-                    && let Some(set_hooks) = hooks_res.get(set_id.0)
-                {
-                    (set_hooks.post_change)(&context);
-                }
-            }
-            continue;
+        // Group modifiers by channel
+        let mut channels: std::collections::BTreeMap<EvaluationChannel, Vec<&AttributeModifier>> =
+            std::collections::BTreeMap::new();
+        for modifier in applicable_modifiers {
+            channels
+                .entry(modifier.channel)
+                .or_insert_with(Vec::new)
+                .push(modifier);
         }
 
-        // UE aggregation formula: ((BaseValue + AddBase) * MultiplyAdditive * MultiplyCompound) + AddFinal
-        // Note: We don't have DivideAdditive or AddFinal yet, but the structure is here
-
+        // Start with base value
         let mut current = attr_data.base_value;
 
-        // Step 1: AddBase - adds to base value (from持续效果的修改器)
-        for modifier in applicable_modifiers
-            .iter()
-            .filter(|m| matches!(m.operation, ModifierOperation::AddBase))
-        {
-            current += modifier.magnitude;
+        // Evaluate each channel in order
+        for (_channel, channel_modifiers) in channels.iter() {
+            current = evaluate_channel(current, channel_modifiers);
         }
 
-        // Step 2: AddCurrent - adds to current value
-        for modifier in applicable_modifiers
-            .iter()
-            .filter(|m| matches!(m.operation, ModifierOperation::AddCurrent))
-        {
-            current += modifier.magnitude;
-        }
-
-        // Step 3: MultiplyAdditive - multipliers are summed then applied: (1 + sum)
-        // E.g. 50% + 50% = 100% bonus = 1.5 + 1.5 = 2.0 multiplier
-        let additive_multiplier: f32 = applicable_modifiers
-            .iter()
-            .filter(|m| matches!(m.operation, ModifierOperation::MultiplyAdditive))
-            .map(|m| m.magnitude)
-            .sum();
-        current *= 1.0 + additive_multiplier;
-
-        // Step 4: MultiplyMultiplicative (Compound) - each multiplier is applied separately: prod(1 + m)
-        // E.g. 50% * 50% = 1.5 * 1.5 = 2.25 multiplier
-        for modifier in applicable_modifiers
-            .iter()
-            .filter(|m| matches!(m.operation, ModifierOperation::MultiplyMultiplicative))
-        {
-            current *= 1.0 + modifier.magnitude;
-        }
-
+        // Apply the final value with hooks
         let old_value = attr_data.current_value;
         if (current - old_value).abs() > f32::EPSILON {
             let mut context = AttributeModifyContext {
@@ -875,6 +822,59 @@ pub fn aggregate_attribute_modifiers_system(
             }
         }
     }
+}
+
+/// Evaluates modifiers within a single channel.
+///
+/// Formula: ((input + AddBase + AddCurrent) * (1 + sum(MultiplyAdditive)) * prod(1 + MultiplyMultiplicative))
+///
+/// Override short-circuits and returns immediately.
+fn evaluate_channel(input: f32, modifiers: &[&AttributeModifier]) -> f32 {
+    // Check for Override first (short-circuit)
+    if let Some(override_mod) = modifiers
+        .iter()
+        .find(|m| matches!(m.operation, ModifierOperation::Override))
+    {
+        return override_mod.magnitude;
+    }
+
+    let mut current = input;
+
+    // Step 1: AddBase - adds to base value
+    for modifier in modifiers
+        .iter()
+        .filter(|m| matches!(m.operation, ModifierOperation::AddBase))
+    {
+        current += modifier.magnitude;
+    }
+
+    // Step 2: AddCurrent - adds to current value
+    for modifier in modifiers
+        .iter()
+        .filter(|m| matches!(m.operation, ModifierOperation::AddCurrent))
+    {
+        current += modifier.magnitude;
+    }
+
+    // Step 3: MultiplyAdditive - multipliers are summed then applied: (1 + sum)
+    // E.g. 50% + 50% = 100% bonus = 2.0 multiplier
+    let additive_multiplier: f32 = modifiers
+        .iter()
+        .filter(|m| matches!(m.operation, ModifierOperation::MultiplyAdditive))
+        .map(|m| m.magnitude)
+        .sum();
+    current *= 1.0 + additive_multiplier;
+
+    // Step 4: MultiplyMultiplicative (Compound) - each multiplier is applied separately: prod(1 + m)
+    // E.g. 50% * 50% = 1.5 * 1.5 = 2.25 multiplier
+    for modifier in modifiers
+        .iter()
+        .filter(|m| matches!(m.operation, ModifierOperation::MultiplyMultiplicative))
+    {
+        current *= 1.0 + modifier.magnitude;
+    }
+
+    current
 }
 
 /// System that updates effect durations.
