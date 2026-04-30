@@ -19,7 +19,7 @@
 use bevy::ecs::relationship::Relationship;
 use bevy::prelude::*;
 use bevy_gameplay_ability_system::{
-    GasPlugin, abilities::*, attributes::*, core::*, effects::*, abilities::tasks::*,
+    GasPlugin, abilities::tasks::*, abilities::*, attributes::*, core::*, effects::*,
 };
 use bevy_gameplay_tag::{GameplayTag, GameplayTagsManager, GameplayTagsPlugin};
 use std::sync::Arc;
@@ -159,7 +159,10 @@ impl AbilityBehavior for ChargedAttackBehavior {
         let source = activation_info.owner;
         let owner = activation_info.owner;
 
-        info!("⚡ Starting charged attack (charging for {:.1}s)...", charge_time);
+        info!(
+            "⚡ Starting charged attack (charging for {:.1}s)...",
+            charge_time
+        );
 
         // Spawn WaitDelay task
         let task_entity = commands
@@ -176,39 +179,16 @@ impl AbilityBehavior for ChargedAttackBehavior {
             .id();
 
         // Queue callback to check task completion and apply effect
-        commands.queue(move |world: &mut World| {
-            // This will be checked by a system that monitors task completion
-            // For now, we'll use a simple observer pattern
-            world.trigger_targets(
-                OnTaskSpawned {
-                    task: task_entity,
-                    effect_id,
-                    target,
-                    level,
-                    source,
-                },
-                instance,
-            );
-        });
+        // Note: In a real implementation, you'd use an observer on TaskCompletedEvent
+        // to apply the effect when the task completes
     }
-}
-
-/// Event triggered when a charged attack task is spawned.
-#[derive(Event)]
-struct OnTaskSpawned {
-    task: Entity,
-    effect_id: &'static str,
-    target: Entity,
-    level: i32,
-    source: Entity,
 }
 
 /// System to check charged attack task completion and apply effect.
 fn check_charged_attack_completion(
-    mut commands: Commands,
-    tasks: Query<(Entity, &TaskState, &WaitDelayTask, &AbilityTask), Changed<TaskState>>,
+    tasks: Query<(&TaskState, &WaitDelayTask, &AbilityTask), Changed<TaskState>>,
 ) {
-    for (task_entity, state, _wait_task, ability_task) in tasks.iter() {
+    for (state, _wait_task, _ability_task) in tasks.iter() {
         if *state == TaskState::Completed {
             info!("⚡ Charged attack ready! Applying effect...");
             // The actual effect application will be handled by the ability system

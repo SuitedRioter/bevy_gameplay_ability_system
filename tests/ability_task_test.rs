@@ -2,28 +2,58 @@
 //!
 //! Tests WaitDelay and WaitGameplayEvent task behavior.
 
-use bevy::ecs::relationship::ChildOf;
+use bevy::ecs::system::RunSystemOnce;
 use bevy::prelude::*;
 use bevy_gameplay_ability_system::{
     GasPlugin,
     abilities::{
-        AbilityDefinition, AbilityInstance, AbilityRegistry, AbilitySpec, AbilityTask,
-        ApplyEffectToTargetDataTask, AttributeComparison, GameplayAbilityTargetData, GameplayEvent,
-        GrantAbilityEvent, InputAction, InputPressedEvent, OverlapEvent, TaskCancelledEvent,
-        TaskCompletedEvent, TaskState, TryActivateAbilityEvent, WaitAttributeChangeTask,
-        WaitDelayTask, WaitEffectAppliedTask, WaitEffectRemovedTask, WaitGameplayEventTask,
-        WaitInputPressTask, WaitOverlapTask, WaitTargetDataTask,
+        AbilityActiveState, AbilityDefinition, AbilityOwner, AbilityRegistry, AbilitySpec,
+        AbilitySpecInstance, AbilityTask, ApplyEffectToTargetDataTask, AttributeComparison,
+        GameplayAbilityTargetData, GameplayEvent, InputAction, InputPressedEvent, OverlapEvent,
+        TaskCancelledEvent, TaskCompletedEvent, TaskState, TryActivateAbilityEvent,
+        WaitAttributeChangeTask, WaitDelayTask, WaitEffectAppliedTask, WaitEffectRemovedTask,
+        WaitGameplayEventTask, WaitInputPressTask, WaitOverlapTask, WaitTargetDataTask,
     },
-    attributes::{AttributeData, AttributeName, AttributeSetDefinition, TestAttributeSet},
+    attributes::{AttributeData, AttributeMetadata, AttributeName, AttributeSetDefinition},
     effects::{
         ApplyGameplayEffectEvent, DurationPolicy, GameplayEffectDefinition, GameplayEffectRegistry,
         MagnitudeCalculation, ModifierOperation,
     },
 };
-use bevy_gameplay_tag::{GameplayTag, GameplayTagsPlugin};
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use bevy_gameplay_tag::{GameplayTag, GameplayTagsManager, GameplayTagsPlugin};
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 use string_cache::DefaultAtom as Atom;
+
+struct TestAttributeSet;
+
+impl AttributeSetDefinition for TestAttributeSet {
+    fn attribute_names() -> &'static [&'static str] {
+        &["Health", "AttackPower"]
+    }
+
+    fn attribute_metadata(name: &str) -> Option<AttributeMetadata> {
+        match name {
+            "Health" => Some(
+                AttributeMetadata::new("Health")
+                    .with_min(0.0)
+                    .with_max(1000.0),
+            ),
+            "AttackPower" => Some(AttributeMetadata::new("AttackPower").with_min(0.0)),
+            _ => None,
+        }
+    }
+
+    fn default_value(name: &str) -> f32 {
+        match name {
+            "Health" => 100.0,
+            "AttackPower" => 10.0,
+            _ => 0.0,
+        }
+    }
+}
 
 /// Helper to capture task events.
 #[derive(Resource, Default)]
@@ -310,62 +340,54 @@ fn test_wait_attribute_change_task() {
     let mut app = setup_test_app();
 
     // Create player with Health attribute
-    let player = app
-        .world_mut()
-        .spawn((Name::new("Player"), SpatialBundle::default()))
-        .id();
+    let player = app.world_mut().spawn(Name::new("Player")).id();
 
-    app.world_mut().run_system_once(
-        move |mut commands: Commands, tags: Res<GameplayTagsManager>| {
-            TestAttributeSet::spawn_attributes(&mut commands, player, &tags);
-        },
-    );
+    app.world_mut()
+        .run_system_once(move |mut commands: Commands| {
+            TestAttributeSet::create_attributes(&mut commands, player);
+        });
     app.update();
 
     // Register and grant ability
     let ability_id = Atom::from("test_ability");
-    app.world_mut().run_system_once(
-        move |mut registry: ResMut<AbilityRegistry>, tags: Res<GameplayTagsManager>| {
-            let def = AbilityDefinition::new(ability_id.clone(), &tags);
+    app.world_mut()
+        .run_system_once(move |mut registry: ResMut<AbilityRegistry>| {
+            let def = AbilityDefinition::new(ability_id.clone());
             registry.register(def);
-        },
-    );
+        });
 
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
-            commands.trigger(GrantAbilityEvent {
-                target: player,
-                ability_id: ability_id.clone(),
-                level: 1,
-            });
+            commands.spawn((
+                AbilitySpec::new(ability_id.clone(), 1),
+                AbilityOwner(player),
+                AbilityActiveState::default(),
+            ));
         });
     app.update();
 
     // Get ability spec
-    let ability_spec = app
-        .world()
-        .query_filtered::<Entity, With<AbilitySpec>>()
-        .iter(app.world())
-        .next()
-        .unwrap();
+    let ability_spec = {
+        let mut query = app
+            .world_mut()
+            .query_filtered::<Entity, With<AbilitySpec>>();
+        query.iter(app.world()).next().unwrap()
+    };
 
     // Activate ability
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
-            commands.trigger(TryActivateAbilityEvent {
-                ability_spec,
-                instigator: player,
-            });
+            commands.trigger(TryActivateAbilityEvent::new(ability_spec, player));
         });
     app.update();
 
     // Get ability instance
-    let ability_instance = app
-        .world()
-        .query_filtered::<Entity, With<AbilityInstance>>()
-        .iter(app.world())
-        .next()
-        .unwrap();
+    let ability_instance = {
+        let mut query = app
+            .world_mut()
+            .query_filtered::<Entity, With<AbilitySpecInstance>>();
+        query.iter(app.world()).next().unwrap()
+    };
 
     // Spawn WaitAttributeChange task (wait for Health > 150)
     let task = app
@@ -406,14 +428,11 @@ fn test_wait_effect_applied_task() {
     let mut app = setup_test_app();
 
     // Create player
-    let player = app
-        .world_mut()
-        .spawn((Name::new("Player"), SpatialBundle::default()))
-        .id();
+    let player = app.world_mut().spawn(Name::new("Player")).id();
 
     app.world_mut().run_system_once(
         move |mut commands: Commands, tags: Res<GameplayTagsManager>| {
-            TestAttributeSet::spawn_attributes(&mut commands, player, &tags);
+            TestAttributeSet::create_attributes(&mut commands, player);
         },
     );
     app.update();
@@ -422,7 +441,7 @@ fn test_wait_effect_applied_task() {
     let effect_id = Atom::from("test_effect");
     app.world_mut().run_system_once(
         move |mut registry: ResMut<GameplayEffectRegistry>, tags: Res<GameplayTagsManager>| {
-            let def = GameplayEffectDefinition::new(effect_id.clone(), &tags)
+            let def = GameplayEffectDefinition::new(effect_id.clone())
                 .with_duration_policy(DurationPolicy::HasDuration)
                 .with_duration(5.0);
             registry.register(def);
@@ -433,18 +452,18 @@ fn test_wait_effect_applied_task() {
     let ability_id = Atom::from("test_ability");
     app.world_mut().run_system_once(
         move |mut registry: ResMut<AbilityRegistry>, tags: Res<GameplayTagsManager>| {
-            let def = AbilityDefinition::new(ability_id.clone(), &tags);
+            let def = AbilityDefinition::new(ability_id.clone());
             registry.register(def);
         },
     );
 
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
-            commands.trigger(GrantAbilityEvent {
-                target: player,
-                ability_id: ability_id.clone(),
-                level: 1,
-            });
+            commands.spawn((
+                AbilitySpec::new(ability_id.clone(), 1),
+                AbilityOwner(player),
+                AbilityActiveState::default(),
+            ));
         });
     app.update();
 
@@ -458,16 +477,13 @@ fn test_wait_effect_applied_task() {
 
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
-            commands.trigger(TryActivateAbilityEvent {
-                ability_spec,
-                instigator: player,
-            });
+            commands.trigger(TryActivateAbilityEvent::new(ability_spec, player));
         });
     app.update();
 
     let ability_instance = app
         .world()
-        .query_filtered::<Entity, With<AbilityInstance>>()
+        .query_filtered::<Entity, With<AbilitySpecInstance>>()
         .iter(app.world())
         .next()
         .unwrap();
@@ -498,7 +514,7 @@ fn test_wait_effect_applied_task() {
             commands.trigger(
                 ApplyGameplayEffectEvent::new(effect_id.clone(), player)
                     .with_instigator(player)
-                    .with_level(1.0),
+                    .with_level(1),
             );
         });
     app.update();
@@ -513,28 +529,24 @@ fn test_wait_effect_removed_task() {
     let mut app = setup_test_app();
 
     // Create player
-    let player = app
-        .world_mut()
-        .spawn((Name::new("Player"), SpatialBundle::default()))
-        .id();
+    let player = app.world_mut().spawn(Name::new("Player")).id();
 
     app.world_mut().run_system_once(
         move |mut commands: Commands, tags: Res<GameplayTagsManager>| {
-            TestAttributeSet::spawn_attributes(&mut commands, player, &tags);
+            TestAttributeSet::create_attributes(&mut commands, player);
         },
     );
     app.update();
 
     // Register effect
     let effect_id = Atom::from("test_effect");
-    app.world_mut().run_system_once(
-        move |mut registry: ResMut<GameplayEffectRegistry>, tags: Res<GameplayTagsManager>| {
-            let def = GameplayEffectDefinition::new(effect_id.clone(), &tags)
+    app.world_mut()
+        .run_system_once(move |mut registry: ResMut<GameplayEffectRegistry>| {
+            let def = GameplayEffectDefinition::new(effect_id.clone())
                 .with_duration_policy(DurationPolicy::HasDuration)
                 .with_duration(1.0);
             registry.register(def);
-        },
-    );
+        });
 
     // Apply effect
     app.world_mut()
@@ -542,7 +554,7 @@ fn test_wait_effect_removed_task() {
             commands.trigger(
                 ApplyGameplayEffectEvent::new(effect_id.clone(), player)
                     .with_instigator(player)
-                    .with_level(1.0),
+                    .with_level(1),
             );
         });
     app.update();
@@ -551,18 +563,18 @@ fn test_wait_effect_removed_task() {
     let ability_id = Atom::from("test_ability");
     app.world_mut().run_system_once(
         move |mut registry: ResMut<AbilityRegistry>, tags: Res<GameplayTagsManager>| {
-            let def = AbilityDefinition::new(ability_id.clone(), &tags);
+            let def = AbilityDefinition::new(ability_id.clone());
             registry.register(def);
         },
     );
 
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
-            commands.trigger(GrantAbilityEvent {
-                target: player,
-                ability_id: ability_id.clone(),
-                level: 1,
-            });
+            commands.spawn((
+                AbilitySpec::new(ability_id.clone(), 1),
+                AbilityOwner(player),
+                AbilityActiveState::default(),
+            ));
         });
     app.update();
 
@@ -575,16 +587,13 @@ fn test_wait_effect_removed_task() {
 
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
-            commands.trigger(TryActivateAbilityEvent {
-                ability_spec,
-                instigator: player,
-            });
+            commands.trigger(TryActivateAbilityEvent::new(ability_spec, player));
         });
     app.update();
 
     let ability_instance = app
         .world()
-        .query_filtered::<Entity, With<AbilityInstance>>()
+        .query_filtered::<Entity, With<AbilitySpecInstance>>()
         .iter(app.world())
         .next()
         .unwrap();
@@ -610,7 +619,11 @@ fn test_wait_effect_removed_task() {
     assert_eq!(*state, TaskState::Running);
 
     // Wait for effect to expire (duration = 1.0s)
-    app.update_with_time(Duration::from_secs_f32(1.1));
+    {
+        let mut time = app.world_mut().resource_mut::<Time>();
+        time.advance_by(Duration::from_secs_f32(1.1));
+    }
+    app.update();
 
     // Task should complete
     let state = app.world().get::<TaskState>(task).unwrap();
@@ -622,20 +635,14 @@ fn test_apply_effect_to_target_data_task() {
     let mut app = setup_test_app();
 
     // Create player and enemy
-    let player = app
-        .world_mut()
-        .spawn((Name::new("Player"), SpatialBundle::default()))
-        .id();
+    let player = app.world_mut().spawn(Name::new("Player")).id();
 
-    let enemy = app
-        .world_mut()
-        .spawn((Name::new("Enemy"), SpatialBundle::default()))
-        .id();
+    let enemy = app.world_mut().spawn(Name::new("Enemy")).id();
 
     app.world_mut().run_system_once(
         move |mut commands: Commands, tags: Res<GameplayTagsManager>| {
-            TestAttributeSet::spawn_attributes(&mut commands, player, &tags);
-            TestAttributeSet::spawn_attributes(&mut commands, enemy, &tags);
+            TestAttributeSet::create_attributes(&mut commands, player);
+            TestAttributeSet::create_attributes(&mut commands, enemy);
         },
     );
     app.update();
@@ -659,18 +666,18 @@ fn test_apply_effect_to_target_data_task() {
     let ability_id = Atom::from("test_ability");
     app.world_mut().run_system_once(
         move |mut registry: ResMut<AbilityRegistry>, tags: Res<GameplayTagsManager>| {
-            let def = AbilityDefinition::new(ability_id.clone(), &tags);
+            let def = AbilityDefinition::new(ability_id.clone());
             registry.register(def);
         },
     );
 
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
-            commands.trigger(GrantAbilityEvent {
-                target: player,
-                ability_id: ability_id.clone(),
-                level: 1,
-            });
+            commands.spawn((
+                AbilitySpec::new(ability_id.clone(), 1),
+                AbilityOwner(player),
+                AbilityActiveState::default(),
+            ));
         });
     app.update();
 
@@ -683,16 +690,13 @@ fn test_apply_effect_to_target_data_task() {
 
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
-            commands.trigger(TryActivateAbilityEvent {
-                ability_spec,
-                instigator: player,
-            });
+            commands.trigger(TryActivateAbilityEvent::new(ability_spec, player));
         });
     app.update();
 
     let ability_instance = app
         .world()
-        .query_filtered::<Entity, With<AbilityInstance>>()
+        .query_filtered::<Entity, With<AbilitySpecInstance>>()
         .iter(app.world())
         .next()
         .unwrap();
@@ -700,7 +704,7 @@ fn test_apply_effect_to_target_data_task() {
     // Create target data with enemy
     let target_data = GameplayAbilityTargetData {
         actors: vec![enemy],
-        origin: Vec3::ZERO,
+        origin: Some(Transform::from_translation(Vec3::ZERO)),
         end_point: None,
     };
 
@@ -713,7 +717,7 @@ fn test_apply_effect_to_target_data_task() {
                 ability_spec,
                 owner: player,
             },
-            ApplyEffectToTargetDataTask::new(effect_id.clone(), target_data, 1.0),
+            ApplyEffectToTargetDataTask::new(effect_id.clone(), target_data, 1),
             TaskState::Running,
         ))
         .id();
@@ -745,18 +749,18 @@ fn test_wait_target_data_task() {
     let ability_id = Atom::from("test_ability");
     app.world_mut().run_system_once(
         move |mut registry: ResMut<AbilityRegistry>, tags: Res<GameplayTagsManager>| {
-            let def = AbilityDefinition::new(ability_id.clone(), &tags);
+            let def = AbilityDefinition::new(ability_id.clone());
             registry.register(def);
         },
     );
 
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
-            commands.trigger(GrantAbilityEvent {
-                target: player,
-                ability_id: ability_id.clone(),
-                level: 1,
-            });
+            commands.spawn((
+                AbilitySpec::new(ability_id.clone(), 1),
+                AbilityOwner(player),
+                AbilityActiveState::default(),
+            ));
         });
     app.update();
 
@@ -769,16 +773,13 @@ fn test_wait_target_data_task() {
 
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
-            commands.trigger(TryActivateAbilityEvent {
-                ability_spec,
-                instigator: player,
-            });
+            commands.trigger(TryActivateAbilityEvent::new(ability_spec, player));
         });
     app.update();
 
     let ability_instance = app
         .world()
-        .query_filtered::<Entity, With<AbilityInstance>>()
+        .query_filtered::<Entity, With<AbilitySpecInstance>>()
         .iter(app.world())
         .next()
         .unwrap();
@@ -836,18 +837,18 @@ fn test_wait_input_press_task() {
     let ability_id = Atom::from("test_ability");
     app.world_mut().run_system_once(
         move |mut registry: ResMut<AbilityRegistry>, tags: Res<GameplayTagsManager>| {
-            let def = AbilityDefinition::new(ability_id.clone(), &tags);
+            let def = AbilityDefinition::new(ability_id.clone());
             registry.register(def);
         },
     );
 
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
-            commands.trigger(GrantAbilityEvent {
-                target: player,
-                ability_id: ability_id.clone(),
-                level: 1,
-            });
+            commands.spawn((
+                AbilitySpec::new(ability_id.clone(), 1),
+                AbilityOwner(player),
+                AbilityActiveState::default(),
+            ));
         });
     app.update();
 
@@ -860,16 +861,13 @@ fn test_wait_input_press_task() {
 
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
-            commands.trigger(TryActivateAbilityEvent {
-                ability_spec,
-                instigator: player,
-            });
+            commands.trigger(TryActivateAbilityEvent::new(ability_spec, player));
         });
     app.update();
 
     let ability_instance = app
         .world()
-        .query_filtered::<Entity, With<AbilityInstance>>()
+        .query_filtered::<Entity, With<AbilitySpecInstance>>()
         .iter(app.world())
         .next()
         .unwrap();
@@ -913,32 +911,26 @@ fn test_wait_input_press_task() {
 fn test_wait_overlap_task() {
     let mut app = setup_test_app();
 
-    let player = app
-        .world_mut()
-        .spawn((Name::new("Player"), SpatialBundle::default()))
-        .id();
+    let player = app.world_mut().spawn(Name::new("Player")).id();
 
-    let enemy = app
-        .world_mut()
-        .spawn((Name::new("Enemy"), SpatialBundle::default()))
-        .id();
+    let enemy = app.world_mut().spawn(Name::new("Enemy")).id();
 
     // Register and grant ability
     let ability_id = Atom::from("test_ability");
     app.world_mut().run_system_once(
         move |mut registry: ResMut<AbilityRegistry>, tags: Res<GameplayTagsManager>| {
-            let def = AbilityDefinition::new(ability_id.clone(), &tags);
+            let def = AbilityDefinition::new(ability_id.clone());
             registry.register(def);
         },
     );
 
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
-            commands.trigger(GrantAbilityEvent {
-                target: player,
-                ability_id: ability_id.clone(),
-                level: 1,
-            });
+            commands.spawn((
+                AbilitySpec::new(ability_id.clone(), 1),
+                AbilityOwner(player),
+                AbilityActiveState::default(),
+            ));
         });
     app.update();
 
@@ -951,16 +943,13 @@ fn test_wait_overlap_task() {
 
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
-            commands.trigger(TryActivateAbilityEvent {
-                ability_spec,
-                instigator: player,
-            });
+            commands.trigger(TryActivateAbilityEvent::new(ability_spec, player));
         });
     app.update();
 
     let ability_instance = app
         .world()
-        .query_filtered::<Entity, With<AbilityInstance>>()
+        .query_filtered::<Entity, With<AbilitySpecInstance>>()
         .iter(app.world())
         .next()
         .unwrap();

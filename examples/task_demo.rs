@@ -9,7 +9,7 @@
 
 use bevy::prelude::*;
 use bevy_gameplay_ability_system::{
-    GasPlugin, abilities::*, attributes::*, core::*, effects::*, abilities::tasks::*,
+    GasPlugin, abilities::tasks::*, abilities::*, attributes::*, core::*, effects::*,
 };
 use bevy_gameplay_tag::{GameplayTag, GameplayTagsManager, GameplayTagsPlugin};
 use std::sync::Arc;
@@ -22,11 +22,10 @@ fn main() {
             GasPlugin,
         ))
         .add_systems(Startup, setup)
-        .add_systems(Update, (
-            simulate_input,
-            simulate_damage,
-            log_task_completion,
-        ))
+        .add_systems(
+            Update,
+            (simulate_input, simulate_damage, log_task_completion),
+        )
         .run();
 }
 
@@ -42,7 +41,11 @@ impl AttributeSetDefinition for SimpleAttributeSet {
 
     fn attribute_metadata(name: &str) -> Option<AttributeMetadata> {
         match name {
-            "Health" => Some(AttributeMetadata::new("Health").with_min(0.0).with_max(100.0)),
+            "Health" => Some(
+                AttributeMetadata::new("Health")
+                    .with_min(0.0)
+                    .with_max(100.0),
+            ),
             "MaxHealth" => Some(AttributeMetadata::new("MaxHealth").with_min(1.0)),
             "Mana" => Some(AttributeMetadata::new("Mana").with_min(0.0).with_max(100.0)),
             "MaxMana" => Some(AttributeMetadata::new("MaxMana").with_min(1.0)),
@@ -68,7 +71,7 @@ fn setup(
     info!("=== Ability Task Demo ===\n");
 
     let player = commands.spawn((Player, Name::new("Player"))).id();
-    SimpleAttributeSet::spawn_attributes(&mut commands, player);
+    SimpleAttributeSet::create_attributes(&mut commands, player);
 
     setup_effects(&mut effect_registry, &tags_manager);
     setup_abilities(&mut ability_registry, &tags_manager);
@@ -85,29 +88,29 @@ fn setup(
 fn setup_effects(registry: &mut GameplayEffectRegistry, tags_manager: &GameplayTagsManager) {
     let damage = GameplayEffectDefinition::new("damage_20")
         .with_duration_policy(DurationPolicy::Instant)
-        .add_modifier(
+        .add_modifier(ModifierInfo::new(
             "Health",
             ModifierOperation::AddCurrent,
             MagnitudeCalculation::scalar(-20.0),
-        );
+        ));
     registry.register(damage);
 
     let heal = GameplayEffectDefinition::new("heal_30")
         .with_duration_policy(DurationPolicy::Instant)
-        .add_modifier(
+        .add_modifier(ModifierInfo::new(
             "Health",
             ModifierOperation::AddCurrent,
             MagnitudeCalculation::scalar(30.0),
-        );
+        ));
     registry.register(heal);
 
     let mana_cost = GameplayEffectDefinition::new("mana_cost_20")
         .with_duration_policy(DurationPolicy::Instant)
-        .add_modifier(
+        .add_modifier(ModifierInfo::new(
             "Mana",
             ModifierOperation::AddCurrent,
             MagnitudeCalculation::scalar(-20.0),
-        );
+        ));
     registry.register(mana_cost);
 }
 
@@ -184,28 +187,35 @@ struct ChargedAttackBehavior {
 }
 
 impl AbilityBehavior for ChargedAttackBehavior {
-    fn on_activate(
+    fn activate(
         &self,
         commands: &mut Commands,
-        ability_spec: Entity,
-        instance: Entity,
-        owner: Entity,
-        _target: Entity,
-        _level: i32,
-        _tags_manager: &GameplayTagsManager,
+        instance_entity: Option<Entity>,
+        spec_entity: Entity,
+        activation_info: &bevy_gameplay_ability_system::abilities::activation_info::AbilityActivationInfo,
     ) {
-        info!("[ChargedAttack] Starting {} second charge...", self.charge_time);
+        let Some(instance) = instance_entity else {
+            warn!("ChargedAttackBehavior requires an instance entity");
+            return;
+        };
 
-        commands.spawn((
-            WaitDelayTask::new(self.charge_time),
-            TaskState::Running,
-            AbilityTask {
-                ability_instance: Some(instance),
-                ability_spec,
-                owner,
-            },
-            Name::new("ChargeTask"),
-        )).set_parent(instance);
+        info!(
+            "[ChargedAttack] Starting {} second charge...",
+            self.charge_time
+        );
+
+        commands
+            .spawn((
+                WaitDelayTask::new(self.charge_time),
+                TaskState::Running,
+                AbilityTask {
+                    ability_instance: Some(instance),
+                    ability_spec: spec_entity,
+                    owner: activation_info.owner,
+                },
+                Name::new("ChargeTask"),
+            ))
+            .set_parent_in_place(instance);
     }
 }
 
@@ -215,32 +225,39 @@ struct AutoHealBehavior {
 }
 
 impl AbilityBehavior for AutoHealBehavior {
-    fn on_activate(
+    fn activate(
         &self,
         commands: &mut Commands,
-        ability_spec: Entity,
-        instance: Entity,
-        owner: Entity,
-        _target: Entity,
-        _level: i32,
-        _tags_manager: &GameplayTagsManager,
+        instance_entity: Option<Entity>,
+        spec_entity: Entity,
+        activation_info: &bevy_gameplay_ability_system::abilities::activation_info::AbilityActivationInfo,
     ) {
-        info!("[AutoHeal] Monitoring health, will heal when < {}", self.threshold);
+        let Some(instance) = instance_entity else {
+            warn!("AutoHealBehavior requires an instance entity");
+            return;
+        };
 
-        commands.spawn((
-            WaitAttributeChangeTask::new(
-                "Health",
-                AttributeComparison::LessThan,
-                self.threshold,
-            ),
-            TaskState::Running,
-            AbilityTask {
-                ability_instance: Some(instance),
-                ability_spec,
-                owner,
-            },
-            Name::new("HealthMonitorTask"),
-        )).set_parent(instance);
+        info!(
+            "[AutoHeal] Monitoring health, will heal when < {}",
+            self.threshold
+        );
+
+        commands
+            .spawn((
+                WaitAttributeChangeTask::new(
+                    "Health",
+                    AttributeComparison::LessThan,
+                    self.threshold,
+                ),
+                TaskState::Running,
+                AbilityTask {
+                    ability_instance: Some(instance),
+                    ability_spec: spec_entity,
+                    owner: activation_info.owner,
+                },
+                Name::new("HealthMonitorTask"),
+            ))
+            .set_parent_in_place(instance);
     }
 }
 
@@ -249,28 +266,32 @@ struct ChanneledSpellBehavior {
 }
 
 impl AbilityBehavior for ChanneledSpellBehavior {
-    fn on_activate(
+    fn activate(
         &self,
         commands: &mut Commands,
-        ability_spec: Entity,
-        instance: Entity,
-        owner: Entity,
-        _target: Entity,
-        _level: i32,
-        _tags_manager: &GameplayTagsManager,
+        instance_entity: Option<Entity>,
+        spec_entity: Entity,
+        activation_info: &bevy_gameplay_ability_system::abilities::activation_info::AbilityActivationInfo,
     ) {
+        let Some(instance) = instance_entity else {
+            warn!("ChanneledSpellBehavior requires an instance entity");
+            return;
+        };
+
         info!("[ChanneledSpell] Channeling... Press Confirm to release or Cancel to abort");
 
-        commands.spawn((
-            WaitInputPressTask::confirm(),
-            TaskState::Running,
-            AbilityTask {
-                ability_instance: Some(instance),
-                ability_spec,
-                owner,
-            },
-            Name::new("ChannelTask"),
-        )).set_parent(instance);
+        commands
+            .spawn((
+                WaitInputPressTask::confirm(),
+                TaskState::Running,
+                AbilityTask {
+                    ability_instance: Some(instance),
+                    ability_spec: spec_entity,
+                    owner: activation_info.owner,
+                },
+                Name::new("ChannelTask"),
+            ))
+            .set_parent_in_place(instance);
     }
 }
 
@@ -279,28 +300,32 @@ struct AreaBlastBehavior {
 }
 
 impl AbilityBehavior for AreaBlastBehavior {
-    fn on_activate(
+    fn activate(
         &self,
         commands: &mut Commands,
-        ability_spec: Entity,
-        instance: Entity,
-        owner: Entity,
-        _target: Entity,
-        _level: i32,
-        _tags_manager: &GameplayTagsManager,
+        instance_entity: Option<Entity>,
+        spec_entity: Entity,
+        activation_info: &bevy_gameplay_ability_system::abilities::activation_info::AbilityActivationInfo,
     ) {
+        let Some(instance) = instance_entity else {
+            warn!("AreaBlastBehavior requires an instance entity");
+            return;
+        };
+
         info!("[AreaBlast] Waiting for target selection...");
 
-        commands.spawn((
-            WaitTargetDataTask::new(),
-            TaskState::Running,
-            AbilityTask {
-                ability_instance: Some(instance),
-                ability_spec,
-                owner,
-            },
-            Name::new("TargetSelectionTask"),
-        )).set_parent(instance);
+        commands
+            .spawn((
+                WaitTargetDataTask::new(),
+                TaskState::Running,
+                AbilityTask {
+                    ability_instance: Some(instance),
+                    ability_spec: spec_entity,
+                    owner: activation_info.owner,
+                },
+                Name::new("TargetSelectionTask"),
+            ))
+            .set_parent_in_place(instance);
     }
 }
 
@@ -309,28 +334,32 @@ struct CounterAttackBehavior {
 }
 
 impl AbilityBehavior for CounterAttackBehavior {
-    fn on_activate(
+    fn activate(
         &self,
         commands: &mut Commands,
-        ability_spec: Entity,
-        instance: Entity,
-        owner: Entity,
-        _target: Entity,
-        _level: i32,
-        tags_manager: &GameplayTagsManager,
+        instance_entity: Option<Entity>,
+        spec_entity: Entity,
+        activation_info: &bevy_gameplay_ability_system::abilities::activation_info::AbilityActivationInfo,
     ) {
+        let Some(instance) = instance_entity else {
+            warn!("CounterAttackBehavior requires an instance entity");
+            return;
+        };
+
         info!("[CounterAttack] Ready to counter on damage taken");
 
-        commands.spawn((
-            WaitGameplayEventTask::new(GameplayTag::new("Event.Damage.Taken")),
-            TaskState::Running,
-            AbilityTask {
-                ability_instance: Some(instance),
-                ability_spec,
-                owner,
-            },
-            Name::new("DamageListenerTask"),
-        )).set_parent(instance);
+        commands
+            .spawn((
+                WaitGameplayEventTask::new(GameplayTag::new("Event.Damage.Taken")),
+                TaskState::Running,
+                AbilityTask {
+                    ability_instance: Some(instance),
+                    ability_spec: spec_entity,
+                    owner: activation_info.owner,
+                },
+                Name::new("DamageListenerTask"),
+            ))
+            .set_parent_in_place(instance);
     }
 }
 
@@ -341,12 +370,14 @@ fn simulate_input(
     keyboard: Res<ButtonInput<KeyCode>>,
     player_query: Query<Entity, With<Player>>,
 ) {
-    let Ok(player) = player_query.single() else { return };
+    let Ok(player) = player_query.single() else {
+        return;
+    };
 
     if keyboard.just_pressed(KeyCode::Space) {
         info!("\n[Input] Confirm pressed");
         commands.trigger(InputPressedEvent {
-            owner: player,
+            entity: player,
             action: InputAction::Confirm,
         });
     }
@@ -354,7 +385,7 @@ fn simulate_input(
     if keyboard.just_pressed(KeyCode::Escape) {
         info!("\n[Input] Cancel pressed");
         commands.trigger(InputPressedEvent {
-            owner: player,
+            entity: player,
             action: InputAction::Cancel,
         });
     }
@@ -366,22 +397,23 @@ fn simulate_damage(
     player_query: Query<Entity, With<Player>>,
     tags_manager: Res<GameplayTagsManager>,
 ) {
-    let Ok(player) = player_query.single() else { return };
+    let Ok(player) = player_query.single() else {
+        return;
+    };
 
     if keyboard.just_pressed(KeyCode::KeyD) {
         info!("\n[Simulation] Player takes damage!");
         commands.trigger(GameplayEvent {
             event_tag: GameplayTag::new("Event.Damage.Taken"),
-            target: player,
+            target: Some(player),
             instigator: None,
-            magnitude: 20.0,
+            magnitude: Some(20.0),
+            target_data: None,
         });
     }
 }
 
-fn log_task_completion(
-    task_query: Query<(&Name, &TaskState), Changed<TaskState>>,
-) {
+fn log_task_completion(task_query: Query<(&Name, &TaskState), Changed<TaskState>>) {
     for (name, state) in task_query.iter() {
         if *state == TaskState::Completed {
             info!("[Task] {} completed!", name);
