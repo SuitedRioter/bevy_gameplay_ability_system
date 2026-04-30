@@ -196,9 +196,28 @@ fn merge_cue_parameters(
         } else {
             base.normal
         },
+        normal_impact_normal: override_parameters
+            .normal_impact_normal
+            .or(base.normal_impact_normal),
         instigator: override_parameters.instigator.or(base.instigator),
         effect_causer: override_parameters.effect_causer.or(base.effect_causer),
         target: override_parameters.target.or(base.target),
+        physical_material: override_parameters
+            .physical_material
+            .clone()
+            .or(base.physical_material),
+        gameplay_effect_level: if override_parameters.gameplay_effect_level != 1.0 {
+            override_parameters.gameplay_effect_level
+        } else {
+            base.gameplay_effect_level
+        },
+        ability_level: if override_parameters.ability_level != 1.0 {
+            override_parameters.ability_level
+        } else {
+            base.ability_level
+        },
+        source_tags: override_parameters.source_tags.clone().or(base.source_tags),
+        target_tags: override_parameters.target_tags.clone().or(base.target_tags),
     }
 }
 

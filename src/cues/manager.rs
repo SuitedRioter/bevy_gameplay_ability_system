@@ -22,6 +22,8 @@ pub enum GameplayCueEvent {
 }
 
 /// Parameters passed to gameplay cue handlers.
+///
+/// Matches UE GAS's `FGameplayCueParameters` with comprehensive context information.
 #[derive(Debug, Clone, PartialEq)]
 pub struct GameplayCueParameters {
     /// Normalized magnitude (0.0 to 1.0).
@@ -32,12 +34,26 @@ pub struct GameplayCueParameters {
     pub location: Vec3,
     /// Normal vector (for surface effects).
     pub normal: Vec3,
+    /// Normal vector at the point of impact (for hit reactions).
+    pub normal_impact_normal: Option<Vec3>,
     /// The entity that instigated this cue.
     pub instigator: Option<Entity>,
     /// The entity that caused the effect (e.g., projectile).
     pub effect_causer: Option<Entity>,
     /// The target entity.
     pub target: Option<Entity>,
+    /// Physical material identifier (for surface-specific effects).
+    ///
+    /// Example: "Metal", "Wood", "Flesh", "Stone"
+    pub physical_material: Option<String>,
+    /// The level of the gameplay effect that triggered this cue.
+    pub gameplay_effect_level: f32,
+    /// The level of the ability that triggered this cue.
+    pub ability_level: f32,
+    /// Source tags from the effect/ability that triggered this cue.
+    pub source_tags: Option<bevy_gameplay_tag::GameplayTagContainer>,
+    /// Target tags at the time the cue was triggered.
+    pub target_tags: Option<bevy_gameplay_tag::GameplayTagContainer>,
 }
 
 impl Default for GameplayCueParameters {
@@ -47,9 +63,15 @@ impl Default for GameplayCueParameters {
             raw_magnitude: 0.0,
             location: Vec3::ZERO,
             normal: Vec3::Y,
+            normal_impact_normal: None,
             instigator: None,
             effect_causer: None,
             target: None,
+            physical_material: None,
+            gameplay_effect_level: 1.0,
+            ability_level: 1.0,
+            source_tags: None,
+            target_tags: None,
         }
     }
 }
@@ -79,6 +101,12 @@ impl GameplayCueParameters {
         self
     }
 
+    /// Sets the impact normal (for hit reactions).
+    pub fn with_impact_normal(mut self, normal: Vec3) -> Self {
+        self.normal_impact_normal = Some(normal);
+        self
+    }
+
     /// Sets the instigator.
     pub fn with_instigator(mut self, instigator: Entity) -> Self {
         self.instigator = Some(instigator);
@@ -94,6 +122,36 @@ impl GameplayCueParameters {
     /// Sets the target.
     pub fn with_target(mut self, target: Entity) -> Self {
         self.target = Some(target);
+        self
+    }
+
+    /// Sets the physical material.
+    pub fn with_physical_material(mut self, material: impl Into<String>) -> Self {
+        self.physical_material = Some(material.into());
+        self
+    }
+
+    /// Sets the gameplay effect level.
+    pub fn with_effect_level(mut self, level: f32) -> Self {
+        self.gameplay_effect_level = level;
+        self
+    }
+
+    /// Sets the ability level.
+    pub fn with_ability_level(mut self, level: f32) -> Self {
+        self.ability_level = level;
+        self
+    }
+
+    /// Sets the source tags.
+    pub fn with_source_tags(mut self, tags: bevy_gameplay_tag::GameplayTagContainer) -> Self {
+        self.source_tags = Some(tags);
+        self
+    }
+
+    /// Sets the target tags.
+    pub fn with_target_tags(mut self, tags: bevy_gameplay_tag::GameplayTagContainer) -> Self {
+        self.target_tags = Some(tags);
         self
     }
 }
