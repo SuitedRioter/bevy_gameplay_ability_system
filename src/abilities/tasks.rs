@@ -286,6 +286,151 @@ impl ApplyEffectToTargetDataTask {
     }
 }
 
+/// WaitTargetData task - waits for target data to be provided.
+///
+/// Completes when target data is set via `provide_target_data()`.
+/// This is typically used for abilities that need player input to select targets.
+#[derive(Component, Debug, Clone)]
+pub struct WaitTargetDataTask {
+    /// The target data once provided (None = waiting).
+    pub target_data: Option<crate::abilities::GameplayAbilityTargetData>,
+}
+
+impl WaitTargetDataTask {
+    /// Create a new wait target data task.
+    pub fn new() -> Self {
+        Self { target_data: None }
+    }
+
+    /// Provide target data to complete the task.
+    pub fn provide_target_data(
+        &mut self,
+        target_data: crate::abilities::GameplayAbilityTargetData,
+    ) {
+        self.target_data = Some(target_data);
+    }
+}
+
+impl Default for WaitTargetDataTask {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Input action for WaitInputPress task.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum InputAction {
+    /// Primary action button (e.g., left mouse, gamepad A).
+    Confirm,
+    /// Secondary action button (e.g., right mouse, gamepad B).
+    Cancel,
+    /// Custom action identified by index.
+    Custom(u32),
+}
+
+/// WaitInputPress task - waits for a specific input action.
+///
+/// Completes when the specified input action is pressed.
+#[derive(Component, Debug, Clone)]
+pub struct WaitInputPressTask {
+    /// The input action to wait for.
+    pub action: InputAction,
+    /// Whether the input has been pressed.
+    pub pressed: bool,
+}
+
+impl WaitInputPressTask {
+    /// Create a new wait input press task.
+    pub fn new(action: InputAction) -> Self {
+        Self {
+            action,
+            pressed: false,
+        }
+    }
+
+    /// Create a task waiting for confirm input.
+    pub fn confirm() -> Self {
+        Self::new(InputAction::Confirm)
+    }
+
+    /// Create a task waiting for cancel input.
+    pub fn cancel() -> Self {
+        Self::new(InputAction::Cancel)
+    }
+}
+
+/// Event sent when an input action is pressed.
+///
+/// User code should send this event when input is detected.
+#[derive(Event, Debug, Clone, Copy)]
+pub struct InputPressedEvent {
+    /// The entity that triggered the input (usually the player character).
+    pub entity: Entity,
+    /// The input action that was pressed.
+    pub action: InputAction,
+}
+
+/// WaitOverlap task - waits for collision overlap with entities matching a filter.
+///
+/// Completes when the owner overlaps with an entity that has the specified component.
+/// This is a simplified version - real collision detection would integrate with
+/// a physics engine like bevy_rapier or avian.
+#[derive(Component, Debug, Clone)]
+pub struct WaitOverlapTask {
+    /// Type name of the component to filter by (e.g., "Enemy", "Projectile").
+    /// Empty string = any entity.
+    pub filter_component: String,
+    /// Whether to trigger only once.
+    pub only_trigger_once: bool,
+    /// The overlapping entity once detected.
+    pub overlapping_entity: Option<Entity>,
+}
+
+impl WaitOverlapTask {
+    /// Create a new wait overlap task for any entity.
+    pub fn new() -> Self {
+        Self {
+            filter_component: String::new(),
+            only_trigger_once: true,
+            overlapping_entity: None,
+        }
+    }
+
+    /// Create a task that waits for overlap with entities having a specific component.
+    pub fn with_filter(filter_component: impl Into<String>) -> Self {
+        Self {
+            filter_component: filter_component.into(),
+            only_trigger_once: true,
+            overlapping_entity: None,
+        }
+    }
+
+    /// Set whether to trigger only once.
+    pub fn with_only_trigger_once(mut self, only_once: bool) -> Self {
+        self.only_trigger_once = only_once;
+        self
+    }
+}
+
+impl Default for WaitOverlapTask {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Event sent when two entities overlap.
+///
+/// User code should send this event from collision detection systems.
+#[derive(Event, Debug, Clone, Copy)]
+pub struct OverlapEvent {
+    /// The first entity in the overlap.
+    pub entity_a: Entity,
+    /// The second entity in the overlap.
+    pub entity_b: Entity,
+    /// Optional component type name for filtering (e.g., "Enemy").
+    pub component_type: Option<&'static str>,
+}
+
 /// Event triggered when a task completes.
 #[derive(Event, Debug, Clone)]
 pub struct TaskCompletedEvent {
@@ -597,6 +742,128 @@ pub fn execute_apply_effect_to_target_data_tasks_system(
             ability_spec: ability_task.ability_spec,
             owner: ability_task.owner,
         });
+    }
+}
+
+/// System that checks WaitTargetData tasks for completion.
+pub fn check_wait_target_data_tasks_system(
+    mut commands: Commands,
+    mut tasks: Query<(
+        Entity,
+        &AbilityTask,
+        &mut WaitTargetDataTask,
+        &mut TaskState,
+    )>,
+) {
+    for (task_entity, ability_task, wait_target, mut state) in tasks.iter_mut() {
+        if *state != TaskState::Running {
+            continue;
+        }
+
+        if wait_target.target_data.is_some() {
+            *state = TaskState::Completed;
+            commands.trigger(TaskCompletedEvent {
+                task: task_entity,
+                ability_instance: ability_task.ability_instance,
+                ability_spec: ability_task.ability_spec,
+                owner: ability_task.owner,
+            });
+        }
+    }
+}
+
+/// Observer that handles input pressed events for WaitInputPress tasks.
+pub fn handle_input_pressed_for_tasks_system(
+    trigger: On<InputPressedEvent>,
+    mut commands: Commands,
+    mut tasks: Query<(
+        Entity,
+        &AbilityTask,
+        &mut WaitInputPressTask,
+        &mut TaskState,
+    )>,
+) {
+    let event = trigger.event();
+
+    for (task_entity, ability_task, mut wait_input, mut state) in tasks.iter_mut() {
+        if *state != TaskState::Running || wait_input.pressed {
+            continue;
+        }
+
+        // Check if this task belongs to the entity that triggered the input
+        if ability_task.owner != event.entity {
+            continue;
+        }
+
+        // Check if the input action matches
+        if wait_input.action != event.action {
+            continue;
+        }
+
+        wait_input.pressed = true;
+        *state = TaskState::Completed;
+        commands.trigger(TaskCompletedEvent {
+            task: task_entity,
+            ability_instance: ability_task.ability_instance,
+            ability_spec: ability_task.ability_spec,
+            owner: ability_task.owner,
+        });
+    }
+}
+
+/// Observer that handles overlap events for WaitOverlap tasks.
+pub fn handle_overlap_for_tasks_system(
+    trigger: On<OverlapEvent>,
+    mut commands: Commands,
+    mut tasks: Query<(Entity, &AbilityTask, &mut WaitOverlapTask, &mut TaskState)>,
+) {
+    let event = trigger.event();
+
+    for (task_entity, ability_task, mut wait_overlap, mut state) in tasks.iter_mut() {
+        if *state != TaskState::Running {
+            continue;
+        }
+
+        if wait_overlap.only_trigger_once && wait_overlap.overlapping_entity.is_some() {
+            continue;
+        }
+
+        // Check if the owner is involved in the overlap
+        let other_entity = if ability_task.owner == event.entity_a {
+            Some(event.entity_b)
+        } else if ability_task.owner == event.entity_b {
+            Some(event.entity_a)
+        } else {
+            None
+        };
+
+        let Some(other) = other_entity else {
+            continue;
+        };
+
+        // Check component filter if specified
+        if !wait_overlap.filter_component.is_empty() {
+            if let Some(component_type) = event.component_type {
+                if component_type != wait_overlap.filter_component {
+                    continue;
+                }
+            } else {
+                // Filter specified but event has no component type
+                continue;
+            }
+        }
+
+        wait_overlap.overlapping_entity = Some(other);
+
+        if wait_overlap.only_trigger_once {
+            *state = TaskState::Completed;
+            commands.trigger(TaskCompletedEvent {
+                task: task_entity,
+                ability_instance: ability_task.ability_instance,
+                ability_spec: ability_task.ability_spec,
+                owner: ability_task.owner,
+            });
+        }
     }
 }
 

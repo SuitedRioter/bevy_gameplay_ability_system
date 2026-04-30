@@ -95,14 +95,14 @@ Integration tests in `tests/` (`ability_activation_flow.rs`, `effect_application
 1. ✅ **已修复** - `set_base_value()` 不再覆盖 `current_value`，aggregation 系统正确地重新计算。
 2. ✅ **已修复** - Instant effect + `granted_tags` 组合现在在 `GameplayEffectRegistry::register()` 时 panic，使非法状态不可表示。
 3. ✅ **已修复** - Periodic effects 现在正确地按周期执行 modifier，不再和持久 modifier 重复计算。
-4. `ModifierOperation::AddBase` is skipped in aggregation (line 309 in effects/systems.rs) — semantic unclear.
+4. ✅ **已修复** - `ModifierOperation::AddBase` 已在 aggregation 的三个路径中全部实现（aggregation、instant、periodic）。语义：加在 base_value 之上，参与后续乘法计算。与 `AddCurrent` 的区别：`AddCurrent` 在 aggregation 中也参与乘法，这在语义上可能不符 UE（UE 的 Add 是 flat bonus 不参与乘法），但作为独立设计选择保留。
 
 **Design:**
-5. `StackCount` policy spawns duplicate modifiers on each stack without cleanup.
-6. Handle types (`AbilityHandle`, `EffectHandle`, `AttributeHandle`) defined but unused. Delete or implement generation tracking.
+5. ✅ **已修复** - `StackCount` 的 `create_effect_modifiers_system` 正确处理增删：stack 增加时只创建缺失的 modifier，stack 减少时删除多余的 modifier。测试 `test_stack_count_spawns_correct_modifiers` 和 `test_stack_count_removes_modifiers_on_decrease` 验证了此行为。
+6. ✅ **已清理** - Handle 类型（`AbilityHandle`、`EffectHandle`、`AttributeHandle`）已从 `src/core/handles.rs` 中删除。Bevy 的 `Entity` 类型提供足够的安全性。
 7. ✅ **已修复** - NonInstanced 策略现在使用 `Option<Entity>` 而非 `Entity::PLACEHOLDER`。
 
 **Code Quality:**
-8. `Changed<AttributeData>` filter used in both clamp and event systems — may cause duplicate events in same frame.
-9. Tests use hardcoded `"assets/gameplay_tags.json"` path — fails in CI/different environments.
-10. Registry lookup failures use `warn!` + early return — callers can't detect failures. Consider error events.
+8. ✅ **不存在** - `Changed<AttributeData>` 过滤器未在多个系统中使用。此条目已过期。
+9. ✅ **无需修改** - 测试硬编码 `"assets/gameplay_tags.json"` 路径。该文件存在于项目仓库中，CI 环境直接可用。
+10. Registry 查找失败使用 `error!`/`warn!` + 早期返回。这是正确的设计选择：注册表查找失败是**程序员错误**（构建时问题），不是运行时错误，调用者无法有意义地恢复。error events 适用于游戏逻辑错误（如 "技能在冷却中"），而不是配置错误。
