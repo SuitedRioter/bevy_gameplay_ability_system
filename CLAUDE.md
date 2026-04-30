@@ -28,7 +28,7 @@ Six modules. Effects, abilities, and cues follow `components.rs`/`definition.rs`
 
 **Effects** (`src/effects/`) — Modify attributes via `GameplayEffectDefinition` templates stored in `GameplayEffectRegistry`. Each active effect is its own entity with `ActiveGameplayEffect` + `EffectTarget` components. Supports three duration policies (Instant, HasDuration, Infinite), periodic execution, and stacking (Independent, RefreshDuration, StackCount). Tag requirements gate application.
 
-**Abilities** (`src/abilities/`) — Activated actions defined via `AbilityDefinition` templates in `AbilityRegistry`. Each granted ability is an entity with `AbilitySpec` + `AbilityOwner`. Activation flow: TryActivate → Commit (costs/cooldowns) → End/Cancel. Tag-based requirements, blocking, and cancellation.
+**Abilities** (`src/abilities/`) — Activated actions defined via `AbilityDefinition` templates in `AbilityRegistry`. Each granted ability is an entity with `AbilitySpec` + `AbilityOwner`. Activation flow: TryActivate → Commit (costs/cooldowns) → End/Cancel. Tag-based requirements, blocking, and cancellation. Supports three instancing policies: NonInstanced (no instance entity, logic from definition), InstancedPerActor (reused instance across activations), InstancedPerExecution (new instance per activation, default).
 
 **Cues** (`src/cues/`) — Visual/audio feedback. `GameplayCueManager` resource routes cue events to static (trait-based, no entity) or actor (spawned entity) handlers via hierarchical tag matching.
 
@@ -91,19 +91,20 @@ Integration tests in `tests/` (`ability_activation_flow.rs`, `effect_application
 
 **Test Coverage:**
 - Unit tests: 41/41 passed ✅
-- Integration tests: 71/71 passed ✅
+- Integration tests: 74/74 passed ✅
   - `ability_granting_lifecycle_test`: 1 test
   - `ability_task_test`: 12 tests (all task types)
   - `application_requirement_test`: 2 tests
   - `attribute_aggregation_test`: 2 tests
   - `gameplay_effect_spec_test`: 2 tests
+  - `instancing_policy_test`: 3 tests (NonInstanced, InstancedPerActor, InstancedPerExecution)
   - `periodic_effect_spec_test`: 2 tests
   - `stack_count_test`: 2 tests
   - `stacking_reapply_spec_test`: 2 tests
 - Doc tests: 5/5 passed ✅
 - Examples: `basic_attributes`, `ability_activation`, `gameplay_effects`, `complete_rpg`, `stress_test`
 
-**Total: 117/117 tests passing (100% pass rate) ✅**
+**Total: 120/120 tests passing (100% pass rate) ✅**
 
 **Known Limitations:**
 - Single-player only (no networking/replication)

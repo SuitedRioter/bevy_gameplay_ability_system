@@ -66,7 +66,7 @@ pub struct EndAbilityParams<'w, 's> {
         (
             Entity,
             &'static AbilitySpecInstance,
-            &'static InstanceControlState,
+            &'static mut InstanceControlState,
             &'static ChildOf,
         ),
     >,
@@ -262,7 +262,12 @@ pub fn spawn_pending_ability_instances_system(
                     .map(|(entity, _, _)| entity);
 
                 if let Some(existing_entity) = existing {
-                    // Reuse existing instance
+                    // Reuse existing instance - mark it as active again
+                    commands.entity(existing_entity).insert(InstanceControlState {
+                        is_active: true,
+                        is_blocking_other_abilities: def.default_blocks_other_abilities,
+                        is_cancelable: def.default_is_cancelable,
+                    });
                     Some(existing_entity)
                 } else {
                     // Create new instance (first activation)
@@ -670,8 +675,26 @@ fn end_ability_internal(
             );
         }
 
-        // Despawn the instance entity.
-        commands.entity(*inst_entity).despawn();
+        // Mark instance as inactive.
+        if let Ok((_, _, mut ctrl, _)) = params.instances.get_mut(*inst_entity) {
+            ctrl.is_active = false;
+        }
+
+        // Despawn the instance entity based on instancing policy.
+        // InstancedPerActor instances are reused, so we don't despawn them.
+        // InstancedPerExecution instances are despawned after each activation.
+        // NonInstanced abilities have no instance entity.
+        match definition.instancing_policy {
+            super::definition::InstancingPolicy::InstancedPerExecution => {
+                commands.entity(*inst_entity).despawn();
+            }
+            super::definition::InstancingPolicy::InstancedPerActor => {
+                // Keep the instance alive for reuse on next activation.
+            }
+            super::definition::InstancingPolicy::NonInstanced => {
+                // No instance entity to despawn.
+            }
+        }
 
         // Decrement active state on the spec.
         if let Ok((_, mut active_state, _)) = params.ability_specs.get_mut(spec_entity) {
