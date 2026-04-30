@@ -252,9 +252,15 @@ impl GameplayEffectQuery {
                 if let Some(ref tags_all) = self.source_tags_all {
                     // Check if source has all of the required tags
                     let has_all = tags_all.gameplay_tags.iter().all(|query_tag| {
-                        source_tags.0.explicit_tags.gameplay_tags.iter().any(|source_tag| {
-                            source_tag == query_tag || source_tags.0.explicit_tags.parent_tags.contains(query_tag)
-                        })
+                        source_tags
+                            .0
+                            .explicit_tags
+                            .gameplay_tags
+                            .iter()
+                            .any(|source_tag| {
+                                source_tag == query_tag
+                                    || source_tags.0.explicit_tags.parent_tags.contains(query_tag)
+                            })
                     });
                     if !has_all {
                         return false;
@@ -264,9 +270,15 @@ impl GameplayEffectQuery {
                 if let Some(ref tags_any) = self.source_tags_any {
                     // Check if source has any of the required tags
                     let has_match = tags_any.gameplay_tags.iter().any(|query_tag| {
-                        source_tags.0.explicit_tags.gameplay_tags.iter().any(|source_tag| {
-                            source_tag == query_tag || source_tags.0.explicit_tags.parent_tags.contains(query_tag)
-                        })
+                        source_tags
+                            .0
+                            .explicit_tags
+                            .gameplay_tags
+                            .iter()
+                            .any(|source_tag| {
+                                source_tag == query_tag
+                                    || source_tags.0.explicit_tags.parent_tags.contains(query_tag)
+                            })
                     });
                     if !has_match {
                         return false;
@@ -276,9 +288,15 @@ impl GameplayEffectQuery {
                 if let Some(ref tags_none) = self.source_tags_none {
                     // Check if source has none of the forbidden tags
                     let has_forbidden = tags_none.gameplay_tags.iter().any(|query_tag| {
-                        source_tags.0.explicit_tags.gameplay_tags.iter().any(|source_tag| {
-                            source_tag == query_tag || source_tags.0.explicit_tags.parent_tags.contains(query_tag)
-                        })
+                        source_tags
+                            .0
+                            .explicit_tags
+                            .gameplay_tags
+                            .iter()
+                            .any(|source_tag| {
+                                source_tag == query_tag
+                                    || source_tags.0.explicit_tags.parent_tags.contains(query_tag)
+                            })
                     });
                     if has_forbidden {
                         return false;
@@ -316,14 +334,12 @@ impl GameplayEffectQuery {
     pub fn find_matching_effects(&self, target: Entity, world: &mut World) -> Vec<Entity> {
         // Collect all effects using run_system_once
         let all_effects: Vec<(Entity, ActiveGameplayEffect)> = world
-            .run_system_once(
-                |effects: Query<(Entity, &ActiveGameplayEffect)>| {
-                    effects
-                        .iter()
-                        .map(|(e, a)| (e, a.clone()))
-                        .collect::<Vec<_>>()
-                },
-            )
+            .run_system_once(|effects: Query<(Entity, &ActiveGameplayEffect)>| {
+                effects
+                    .iter()
+                    .map(|(e, a)| (e, a.clone()))
+                    .collect::<Vec<_>>()
+            })
             .unwrap_or_default();
 
         // Filter effects that match the query

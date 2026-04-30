@@ -6,11 +6,13 @@
 use bevy::ecs::system::RunSystemOnce;
 use bevy::prelude::*;
 use bevy_gameplay_ability_system::{
+    GasPlugin,
     core::components::OwnedTags,
     effects::{ActiveGameplayEffect, EffectTarget, GameplayEffectQuery},
-    GasPlugin,
 };
-use bevy_gameplay_tag::{GameplayTag, GameplayTagContainer, GameplayTagsManager, GameplayTagsPlugin};
+use bevy_gameplay_tag::{
+    GameplayTag, GameplayTagContainer, GameplayTagsManager, GameplayTagsPlugin,
+};
 
 /// Helper to create a test app with all necessary plugins.
 fn setup_test_app() -> App {
@@ -26,7 +28,9 @@ fn setup_test_app() -> App {
 
 /// Helper to spawn a test entity with tags.
 fn spawn_entity_with_tags(world: &mut World, tag_names: Vec<&str>) -> Entity {
-    let entity = world.spawn((OwnedTags::default(), Name::new("TestEntity"))).id();
+    let entity = world
+        .spawn((OwnedTags::default(), Name::new("TestEntity")))
+        .id();
 
     // Add tags using a system to get proper access to Commands
     let tag_names_owned: Vec<String> = tag_names.iter().map(|s| s.to_string()).collect();
@@ -38,7 +42,13 @@ fn spawn_entity_with_tags(world: &mut World, tag_names: Vec<&str>) -> Entity {
                 for tag_name in &tag_names_owned {
                     let mut container = GameplayTagContainer::default();
                     container.add_tag(GameplayTag::new(tag_name), &tags_manager);
-                    tags.0.update_tag_container_count(&container, 1, &tags_manager, &mut commands, entity);
+                    tags.0.update_tag_container_count(
+                        &container,
+                        1,
+                        &tags_manager,
+                        &mut commands,
+                        entity,
+                    );
                 }
             }
         },
@@ -113,20 +123,9 @@ fn test_query_by_owning_tags_any() {
         target,
         vec!["Effect.Debuff.Poison"],
     );
-    let burn_effect = spawn_active_effect(
-        world,
-        "burn",
-        source,
-        target,
-        vec!["Effect.Debuff.Burn"],
-    );
-    let heal_effect = spawn_active_effect(
-        world,
-        "heal",
-        source,
-        target,
-        vec!["Effect.Buff.Heal"],
-    );
+    let burn_effect =
+        spawn_active_effect(world, "burn", source, target, vec!["Effect.Debuff.Burn"]);
+    let heal_effect = spawn_active_effect(world, "heal", source, target, vec!["Effect.Buff.Heal"]);
 
     // Query for any debuff
     let manager = world.resource::<GameplayTagsManager>();
@@ -203,13 +202,7 @@ fn test_query_by_owning_tags_none() {
         target,
         vec!["Effect.Debuff.Poison"],
     );
-    let heal_effect = spawn_active_effect(
-        world,
-        "heal",
-        source,
-        target,
-        vec!["Effect.Buff.Heal"],
-    );
+    let heal_effect = spawn_active_effect(world, "heal", source, target, vec!["Effect.Buff.Heal"]);
 
     // Query for effects that are NOT debuffs
     let manager = world.resource::<GameplayTagsManager>();
@@ -258,8 +251,8 @@ fn test_query_by_source_tags_all() {
 
     // Query for effects from elite enemies
     let manager = world.resource::<GameplayTagsManager>();
-    let query =
-        GameplayEffectQuery::new().with_source_tags_all(vec!["Actor.Enemy", "Actor.Elite"], manager);
+    let query = GameplayEffectQuery::new()
+        .with_source_tags_all(vec!["Actor.Enemy", "Actor.Elite"], manager);
     let matching = query.find_matching_effects(target, world);
 
     assert_eq!(matching.len(), 1);
@@ -427,7 +420,8 @@ fn test_query_no_matches() {
 
     // Query for fire effects (none exist)
     let manager = world.resource::<GameplayTagsManager>();
-    let query = GameplayEffectQuery::new().with_owning_tags_any(vec!["Effect.Debuff.Burn"], manager);
+    let query =
+        GameplayEffectQuery::new().with_owning_tags_any(vec!["Effect.Debuff.Burn"], manager);
     let matching = query.find_matching_effects(target, world);
 
     assert_eq!(matching.len(), 0);

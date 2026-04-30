@@ -337,6 +337,12 @@ fn calculate_modifier_magnitude(
                 None
             }
         }
+        MagnitudeCalculation::CustomExecution { .. } => {
+            // CustomExecution is handled separately in the effect application flow
+            // It produces multiple modifiers, not a single magnitude value
+            warn!("CustomExecution should not be evaluated as a simple magnitude");
+            None
+        }
         MagnitudeCalculation::ScalableFloat { .. } => None,
     };
 

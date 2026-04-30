@@ -3,11 +3,13 @@
 //! This module defines the structure of gameplay effects and their properties.
 
 use super::components::{EvaluationChannel, ModifierOperation};
+use super::execution::GameplayEffectExecutionCalculation;
 use crate::cues::manager::GameplayCueParameters;
 use bevy::prelude::*;
 use bevy_gameplay_tag::{
     GameplayTagContainer, GameplayTagRequirements, GameplayTagsManager, gameplay_tag::GameplayTag,
 };
+use std::sync::Arc;
 use string_cache::DefaultAtom as Atom;
 
 /// Policy for handling granted abilities when the effect is removed.
@@ -124,7 +126,7 @@ impl Default for AttributeCaptureMode {
 ///
 /// Defines how the magnitude of a modifier is calculated.
 /// Follows UE GAS's magnitude calculation system.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone)]
 pub enum MagnitudeCalculation {
     /// A fixed scalar value (optionally scaled by level).
     ///
@@ -166,6 +168,26 @@ pub enum MagnitudeCalculation {
         calculator_name: Atom,
     },
 
+    /// Custom execution calculation.
+    ///
+    /// Provides the most flexibility by allowing custom logic that can
+    /// capture multiple attributes and produce multiple modifiers.
+    /// Matches UE GAS's `UGameplayEffectExecutionCalculation`.
+    ///
+    /// # Example
+    /// ```ignore
+    /// struct DamageCalculation;
+    /// impl GameplayEffectExecutionCalculation for DamageCalculation {
+    ///     // ... implementation
+    /// }
+    ///
+    /// MagnitudeCalculation::execution(Arc::new(DamageCalculation))
+    /// ```
+    CustomExecution {
+        /// The execution calculation to use.
+        calculation: Arc<dyn GameplayEffectExecutionCalculation>,
+    },
+
     /// Magnitude set at runtime by the caller.
     ///
     /// The caller must provide a value for this tag when applying the effect.
@@ -174,6 +196,106 @@ pub enum MagnitudeCalculation {
         /// Tag identifying this magnitude value.
         data_tag: GameplayTag,
     },
+}
+
+impl std::fmt::Debug for MagnitudeCalculation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ScalableFloat {
+                base_value,
+                level_multiplier,
+            } => f
+                .debug_struct("ScalableFloat")
+                .field("base_value", base_value)
+                .field("level_multiplier", level_multiplier)
+                .finish(),
+            Self::AttributeBased {
+                attribute_name,
+                capture_source,
+                calculation_type,
+                capture_mode,
+                coefficient,
+                pre_multiply_additive,
+                post_multiply_additive,
+            } => f
+                .debug_struct("AttributeBased")
+                .field("attribute_name", attribute_name)
+                .field("capture_source", capture_source)
+                .field("calculation_type", calculation_type)
+                .field("capture_mode", capture_mode)
+                .field("coefficient", coefficient)
+                .field("pre_multiply_additive", pre_multiply_additive)
+                .field("post_multiply_additive", post_multiply_additive)
+                .finish(),
+            Self::CustomClass { calculator_name } => f
+                .debug_struct("CustomClass")
+                .field("calculator_name", calculator_name)
+                .finish(),
+            Self::CustomExecution { calculation } => f
+                .debug_struct("CustomExecution")
+                .field("calculation", calculation)
+                .finish(),
+            Self::SetByCaller { data_tag } => f
+                .debug_struct("SetByCaller")
+                .field("data_tag", data_tag)
+                .finish(),
+        }
+    }
+}
+
+impl PartialEq for MagnitudeCalculation {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (
+                Self::ScalableFloat {
+                    base_value: l_base,
+                    level_multiplier: l_mult,
+                },
+                Self::ScalableFloat {
+                    base_value: r_base,
+                    level_multiplier: r_mult,
+                },
+            ) => l_base == r_base && l_mult == r_mult,
+            (
+                Self::AttributeBased {
+                    attribute_name: l_name,
+                    capture_source: l_source,
+                    calculation_type: l_calc,
+                    capture_mode: l_mode,
+                    coefficient: l_coef,
+                    pre_multiply_additive: l_pre,
+                    post_multiply_additive: l_post,
+                },
+                Self::AttributeBased {
+                    attribute_name: r_name,
+                    capture_source: r_source,
+                    calculation_type: r_calc,
+                    capture_mode: r_mode,
+                    coefficient: r_coef,
+                    pre_multiply_additive: r_pre,
+                    post_multiply_additive: r_post,
+                },
+            ) => {
+                l_name == r_name
+                    && l_source == r_source
+                    && l_calc == r_calc
+                    && l_mode == r_mode
+                    && l_coef == r_coef
+                    && l_pre == r_pre
+                    && l_post == r_post
+            }
+            (
+                Self::CustomClass { calculator_name: l },
+                Self::CustomClass { calculator_name: r },
+            ) => l == r,
+            (Self::CustomExecution { .. }, Self::CustomExecution { .. }) => {
+                // Cannot compare trait objects, so always return false
+                false
+            }
+            (Self::SetByCaller { data_tag: l }, Self::SetByCaller { data_tag: r }) => l == r,
+            _ => false,
+        }
+    }
 }
 
 impl MagnitudeCalculation {
@@ -227,6 +349,20 @@ impl MagnitudeCalculation {
             pre_multiply_additive: 0.0,
             post_multiply_additive: 0.0,
         }
+    }
+
+    /// Creates a custom execution calculation magnitude.
+    ///
+    /// This is the most flexible option, allowing complex calculations
+    /// that capture multiple attributes and produce multiple modifiers.
+    ///
+    /// # Example
+    /// ```ignore
+    /// let damage_calc = Arc::new(DamageCalculation);
+    /// MagnitudeCalculation::execution(damage_calc)
+    /// ```
+    pub fn execution(calculation: Arc<dyn GameplayEffectExecutionCalculation>) -> Self {
+        Self::CustomExecution { calculation }
     }
 
     /// Builder method to set the calculation type for AttributeBased.
@@ -317,6 +453,12 @@ impl MagnitudeCalculation {
                 // Custom calculators are looked up from a registry
                 // For now, return 0.0 as placeholder
                 warn!("Custom calculation not yet implemented");
+                0.0
+            }
+            MagnitudeCalculation::CustomExecution { .. } => {
+                // CustomExecution produces multiple modifiers, not a single magnitude
+                // This should not be called for execution calculations
+                warn!("CustomExecution should not be evaluated as a simple magnitude");
                 0.0
             }
         }
