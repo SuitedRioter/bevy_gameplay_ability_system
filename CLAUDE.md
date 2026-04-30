@@ -91,11 +91,12 @@ Integration tests in `tests/` (`ability_activation_flow.rs`, `effect_application
 
 **Test Coverage:**
 - Unit tests: 41/41 passed ✅
-- Integration tests: 77/77 passed ✅
+- Integration tests: 81/81 passed ✅
   - `ability_granting_lifecycle_test`: 1 test
   - `ability_task_test`: 12 tests (all task types)
   - `application_requirement_test`: 2 tests (custom requirements)
   - `attribute_aggregation_test`: 2 tests
+  - `enhanced_requirements_test`: 4 tests (percent-based, source vs target, tags, level range)
   - `evaluation_channel_test`: 3 tests (channel evaluation order, same-channel combination, complex stacking)
   - `gameplay_effect_spec_test`: 2 tests
   - `instancing_policy_test`: 3 tests (NonInstanced, InstancedPerActor, InstancedPerExecution)
@@ -105,7 +106,7 @@ Integration tests in `tests/` (`ability_activation_flow.rs`, `effect_application
 - Doc tests: 5/5 passed ✅
 - Examples: `basic_attributes`, `ability_activation`, `gameplay_effects`, `complete_rpg`, `stress_test`
 
-**Total: 123/123 tests passing (100% pass rate) ✅**
+**Total: 127/127 tests passing (100% pass rate) ✅**
 
 **Known Limitations:**
 - Single-player only (no networking/replication)

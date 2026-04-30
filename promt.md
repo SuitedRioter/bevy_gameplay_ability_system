@@ -18,8 +18,16 @@
 这个（/Users/zhengwei/GeneralProject/UnrealEngine/Engine/Plugins/Runtime/GameplayAbilities）文件夹下是UnrealEngine的GAS插件的代码，我希望你在当前项目使用bevy来实现UnrealEngine的GAS插件的功能，
 对外功能表现必须与原模块一致，你需要把原模块oop思想的代码已bevy的ecs思想实现，现有项目已经实现了一部分代码。你可以参考并优化（当需要优化的时候）。注意，我已经自己实现了GameplayTag的功能（源码在/Users/zhengwei/RustProject/bevy_gameplay_tag），相关需要使用GameplayTag，GameplayTagContainer，GameplayTagCountContainer的直接使用。如果需要查看bevy的api，可以分析bevy源码（源码在/Users/zhengwei/RustProject/bevy），我不需要实现联网功能，目标是做单机游戏。
 
-你希望我：
-  1. 为技能实现实例化策略？
-  2. 为 modifier 系统添加评估通道？
-  3. 创建自定义应用需求系统？
-  4. 其他？
+3. 增强内置需求库 (可选)
+
+  当前内置需求有设计问题，可以：
+  - 重新设计为需要明确的 MaxHealth 属性
+  - 添加更多实用的内置需求（距离检查、标签组合等）
+  - 为内置需求添加完整测试
+
+  4. 属性捕获快照模式 (高级功能)
+
+  UE GAS 支持两种模式：
+  - Snapshot: 在效果创建时捕获属性值
+  - Dynamic: 每次重新评估
+  - 这对于复杂的 buff/debuff 计算很有用
