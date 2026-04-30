@@ -792,6 +792,8 @@ pub fn create_effect_modifiers_system(
 /// Modifiers are evaluated in channel order (Channel0 → Channel1 → ... → Channel9).
 /// Within each channel, modifiers are applied in operation priority order.
 /// The output of one channel becomes the input to the next channel.
+///
+/// This optimized version uses batch aggregation to reduce iterations and improve cache locality.
 pub fn aggregate_attribute_modifiers_system(
     mut attributes: Query<(
         Entity,
@@ -803,55 +805,75 @@ pub fn aggregate_attribute_modifiers_system(
     modifiers: Query<&AttributeModifier>,
     hooks: Option<Res<AttributeLifecycleHooks>>,
 ) {
+    use super::batch_aggregation::ModifierAggregator;
+
+    // Build aggregator by collecting all modifiers
+    let mut aggregator = ModifierAggregator::new();
+    for modifier in modifiers.iter() {
+        aggregator.add_modifier(modifier);
+    }
+
+    // Process each attribute using the pre-aggregated batches
     for (attr_entity, mut attr_data, attr_name, child_of, set_id) in attributes.iter_mut() {
         let owner = child_of.get();
-        let applicable_modifiers: Vec<_> = modifiers
-            .iter()
-            .filter(|m| m.target_entity == owner && m.target_attribute == attr_name.0)
-            .collect();
 
-        // Group modifiers by channel
-        let mut channels: std::collections::BTreeMap<EvaluationChannel, Vec<&AttributeModifier>> =
-            std::collections::BTreeMap::new();
-        for modifier in applicable_modifiers {
-            channels
-                .entry(modifier.channel)
-                .or_insert_with(Vec::new)
-                .push(modifier);
-        }
+        // Get the batch for this attribute (if any)
+        if let Some(batch) = aggregator.get_batch(owner, &attr_name.0) {
+            // Evaluate the batch starting from base value
+            let new_value = batch.evaluate(attr_data.base_value);
 
-        // Start with base value
-        let mut current = attr_data.base_value;
+            // Apply the final value with hooks
+            let old_value = attr_data.current_value;
+            if (new_value - old_value).abs() > f32::EPSILON {
+                let mut context = AttributeModifyContext {
+                    owner,
+                    attribute: attr_entity,
+                    attribute_name: attr_name.0.clone(),
+                    old_value,
+                    new_value,
+                    source_effect: None,
+                };
 
-        // Evaluate each channel in order
-        for (_channel, channel_modifiers) in channels.iter() {
-            current = evaluate_channel(current, channel_modifiers);
-        }
+                if let Some(hooks_res) = &hooks
+                    && let Some(set_hooks) = hooks_res.get(set_id.0)
+                {
+                    (set_hooks.pre_change)(&mut context);
+                }
 
-        // Apply the final value with hooks
-        let old_value = attr_data.current_value;
-        if (current - old_value).abs() > f32::EPSILON {
-            let mut context = AttributeModifyContext {
-                owner,
-                attribute: attr_entity,
-                attribute_name: attr_name.0.clone(),
-                old_value,
-                new_value: current,
-                source_effect: None,
-            };
+                attr_data.current_value = context.new_value;
 
-            if let Some(hooks_res) = &hooks
-                && let Some(set_hooks) = hooks_res.get(set_id.0)
-            {
-                (set_hooks.pre_change)(&mut context);
+                if let Some(hooks_res) = &hooks
+                    && let Some(set_hooks) = hooks_res.get(set_id.0)
+                {
+                    (set_hooks.post_change)(&context);
+                }
             }
+        } else {
+            // No modifiers for this attribute, reset to base value if needed
+            let old_value = attr_data.current_value;
+            if (attr_data.base_value - old_value).abs() > f32::EPSILON {
+                let mut context = AttributeModifyContext {
+                    owner,
+                    attribute: attr_entity,
+                    attribute_name: attr_name.0.clone(),
+                    old_value,
+                    new_value: attr_data.base_value,
+                    source_effect: None,
+                };
 
-            attr_data.current_value = context.new_value;
+                if let Some(hooks_res) = &hooks
+                    && let Some(set_hooks) = hooks_res.get(set_id.0)
+                {
+                    (set_hooks.pre_change)(&mut context);
+                }
 
-            if let Some(hooks_res) = &hooks
-                && let Some(set_hooks) = hooks_res.get(set_id.0)
-            {
-                (set_hooks.post_change)(&context);
+                attr_data.current_value = context.new_value;
+
+                if let Some(hooks_res) = &hooks
+                    && let Some(set_hooks) = hooks_res.get(set_id.0)
+                {
+                    (set_hooks.post_change)(&context);
+                }
             }
         }
     }

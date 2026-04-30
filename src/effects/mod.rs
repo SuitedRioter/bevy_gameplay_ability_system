@@ -50,6 +50,7 @@
 
 pub mod ability_granting;
 pub mod application_requirement;
+pub mod batch_aggregation;
 pub mod builtin_requirements;
 pub mod components;
 pub mod custom_calculation;
@@ -63,6 +64,7 @@ pub mod systems;
 
 pub use ability_granting::*;
 pub use application_requirement::*;
+pub use batch_aggregation::*;
 pub use builtin_requirements::*;
 pub use components::*;
 pub use custom_calculation::*;
