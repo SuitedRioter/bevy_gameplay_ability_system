@@ -17,7 +17,7 @@ use bevy_gameplay_ability_system::{
     attributes::{AttributeData, AttributeMetadata, AttributeName, AttributeSetDefinition},
     effects::{
         ApplyGameplayEffectEvent, DurationPolicy, GameplayEffectDefinition, GameplayEffectRegistry,
-        MagnitudeCalculation, ModifierOperation,
+        MagnitudeCalculation, ModifierInfo, ModifierOperation,
     },
 };
 use bevy_gameplay_tag::{GameplayTag, GameplayTagsManager, GameplayTagsPlugin};
@@ -350,6 +350,7 @@ fn test_wait_attribute_change_task() {
 
     // Register and grant ability
     let ability_id = Atom::from("test_ability");
+    let ability_id_clone = ability_id.clone();
     app.world_mut()
         .run_system_once(move |mut registry: ResMut<AbilityRegistry>| {
             let def = AbilityDefinition::new(ability_id.clone());
@@ -359,7 +360,7 @@ fn test_wait_attribute_change_task() {
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
             commands.spawn((
-                AbilitySpec::new(ability_id.clone(), 1),
+                AbilitySpec::new(ability_id_clone.clone(), 1),
                 AbilityOwner(player),
                 AbilityActiveState::default(),
             ));
@@ -439,28 +440,29 @@ fn test_wait_effect_applied_task() {
 
     // Register effect
     let effect_id = Atom::from("test_effect");
-    app.world_mut().run_system_once(
-        move |mut registry: ResMut<GameplayEffectRegistry>, tags: Res<GameplayTagsManager>| {
+    let effect_id_clone1 = effect_id.clone();
+    let effect_id_clone2 = effect_id.clone();
+    app.world_mut()
+        .run_system_once(move |mut registry: ResMut<GameplayEffectRegistry>| {
             let def = GameplayEffectDefinition::new(effect_id.clone())
                 .with_duration_policy(DurationPolicy::HasDuration)
                 .with_duration(5.0);
             registry.register(def);
-        },
-    );
+        });
 
     // Register and grant ability
     let ability_id = Atom::from("test_ability");
-    app.world_mut().run_system_once(
-        move |mut registry: ResMut<AbilityRegistry>, tags: Res<GameplayTagsManager>| {
+    let ability_id_clone = ability_id.clone();
+    app.world_mut()
+        .run_system_once(move |mut registry: ResMut<AbilityRegistry>| {
             let def = AbilityDefinition::new(ability_id.clone());
             registry.register(def);
-        },
-    );
+        });
 
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
             commands.spawn((
-                AbilitySpec::new(ability_id.clone(), 1),
+                AbilitySpec::new(ability_id_clone.clone(), 1),
                 AbilityOwner(player),
                 AbilityActiveState::default(),
             ));
@@ -468,12 +470,12 @@ fn test_wait_effect_applied_task() {
     app.update();
 
     // Get ability spec and activate
-    let ability_spec = app
-        .world()
-        .query_filtered::<Entity, With<AbilitySpec>>()
-        .iter(app.world())
-        .next()
-        .unwrap();
+    let ability_spec = {
+        let mut query = app
+            .world_mut()
+            .query_filtered::<Entity, With<AbilitySpec>>();
+        query.iter(app.world()).next().unwrap()
+    };
 
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
@@ -481,12 +483,12 @@ fn test_wait_effect_applied_task() {
         });
     app.update();
 
-    let ability_instance = app
-        .world()
-        .query_filtered::<Entity, With<AbilitySpecInstance>>()
-        .iter(app.world())
-        .next()
-        .unwrap();
+    let ability_instance = {
+        let mut query = app
+            .world_mut()
+            .query_filtered::<Entity, With<AbilitySpecInstance>>();
+        query.iter(app.world()).next().unwrap()
+    };
 
     // Spawn WaitEffectApplied task
     let task = app
@@ -497,7 +499,7 @@ fn test_wait_effect_applied_task() {
                 ability_spec,
                 owner: player,
             },
-            WaitEffectAppliedTask::for_effect(effect_id.as_ref()),
+            WaitEffectAppliedTask::for_effect(effect_id_clone1.as_ref()),
             TaskState::Running,
         ))
         .id();
@@ -512,7 +514,7 @@ fn test_wait_effect_applied_task() {
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
             commands.trigger(
-                ApplyGameplayEffectEvent::new(effect_id.clone(), player)
+                ApplyGameplayEffectEvent::new(effect_id_clone2.clone(), player)
                     .with_instigator(player)
                     .with_level(1),
             );
@@ -540,6 +542,8 @@ fn test_wait_effect_removed_task() {
 
     // Register effect
     let effect_id = Atom::from("test_effect");
+    let effect_id_clone1 = effect_id.clone();
+    let effect_id_clone2 = effect_id.clone();
     app.world_mut()
         .run_system_once(move |mut registry: ResMut<GameplayEffectRegistry>| {
             let def = GameplayEffectDefinition::new(effect_id.clone())
@@ -552,7 +556,7 @@ fn test_wait_effect_removed_task() {
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
             commands.trigger(
-                ApplyGameplayEffectEvent::new(effect_id.clone(), player)
+                ApplyGameplayEffectEvent::new(effect_id_clone1.clone(), player)
                     .with_instigator(player)
                     .with_level(1),
             );
@@ -561,29 +565,29 @@ fn test_wait_effect_removed_task() {
 
     // Register and grant ability
     let ability_id = Atom::from("test_ability");
-    app.world_mut().run_system_once(
-        move |mut registry: ResMut<AbilityRegistry>, tags: Res<GameplayTagsManager>| {
+    let ability_id_clone = ability_id.clone();
+    app.world_mut()
+        .run_system_once(move |mut registry: ResMut<AbilityRegistry>| {
             let def = AbilityDefinition::new(ability_id.clone());
             registry.register(def);
-        },
-    );
+        });
 
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
             commands.spawn((
-                AbilitySpec::new(ability_id.clone(), 1),
+                AbilitySpec::new(ability_id_clone.clone(), 1),
                 AbilityOwner(player),
                 AbilityActiveState::default(),
             ));
         });
     app.update();
 
-    let ability_spec = app
-        .world()
-        .query_filtered::<Entity, With<AbilitySpec>>()
-        .iter(app.world())
-        .next()
-        .unwrap();
+    let ability_spec = {
+        let mut query = app
+            .world_mut()
+            .query_filtered::<Entity, With<AbilitySpec>>();
+        query.iter(app.world()).next().unwrap()
+    };
 
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
@@ -591,12 +595,12 @@ fn test_wait_effect_removed_task() {
         });
     app.update();
 
-    let ability_instance = app
-        .world()
-        .query_filtered::<Entity, With<AbilitySpecInstance>>()
-        .iter(app.world())
-        .next()
-        .unwrap();
+    let ability_instance = {
+        let mut query = app
+            .world_mut()
+            .query_filtered::<Entity, With<AbilitySpecInstance>>();
+        query.iter(app.world()).next().unwrap()
+    };
 
     // Spawn WaitEffectRemoved task
     let task = app
@@ -607,7 +611,7 @@ fn test_wait_effect_removed_task() {
                 ability_spec,
                 owner: player,
             },
-            WaitEffectRemovedTask::for_effect(effect_id.as_ref()),
+            WaitEffectRemovedTask::for_effect(effect_id_clone2.as_ref()),
             TaskState::Running,
         ))
         .id();
@@ -649,44 +653,44 @@ fn test_apply_effect_to_target_data_task() {
 
     // Register damage effect
     let effect_id = Atom::from("damage_effect");
-    app.world_mut().run_system_once(
-        move |mut registry: ResMut<GameplayEffectRegistry>, tags: Res<GameplayTagsManager>| {
-            let def = GameplayEffectDefinition::new(effect_id.clone(), &tags)
+    let effect_id_clone = effect_id.clone();
+    app.world_mut()
+        .run_system_once(move |mut registry: ResMut<GameplayEffectRegistry>| {
+            let def = GameplayEffectDefinition::new(effect_id.clone())
                 .with_duration_policy(DurationPolicy::Instant)
-                .add_modifier(
-                    "Health".into(),
+                .add_modifier(ModifierInfo::new(
+                    "Health",
                     ModifierOperation::AddCurrent,
                     MagnitudeCalculation::scalar(-50.0),
-                );
+                ));
             registry.register(def);
-        },
-    );
+        });
 
     // Register and grant ability
     let ability_id = Atom::from("test_ability");
-    app.world_mut().run_system_once(
-        move |mut registry: ResMut<AbilityRegistry>, tags: Res<GameplayTagsManager>| {
+    let ability_id_clone = ability_id.clone();
+    app.world_mut()
+        .run_system_once(move |mut registry: ResMut<AbilityRegistry>| {
             let def = AbilityDefinition::new(ability_id.clone());
             registry.register(def);
-        },
-    );
+        });
 
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
             commands.spawn((
-                AbilitySpec::new(ability_id.clone(), 1),
+                AbilitySpec::new(ability_id_clone.clone(), 1),
                 AbilityOwner(player),
                 AbilityActiveState::default(),
             ));
         });
     app.update();
 
-    let ability_spec = app
-        .world()
-        .query_filtered::<Entity, With<AbilitySpec>>()
-        .iter(app.world())
-        .next()
-        .unwrap();
+    let ability_spec = {
+        let mut query = app
+            .world_mut()
+            .query_filtered::<Entity, With<AbilitySpec>>();
+        query.iter(app.world()).next().unwrap()
+    };
 
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
@@ -694,12 +698,12 @@ fn test_apply_effect_to_target_data_task() {
         });
     app.update();
 
-    let ability_instance = app
-        .world()
-        .query_filtered::<Entity, With<AbilitySpecInstance>>()
-        .iter(app.world())
-        .next()
-        .unwrap();
+    let ability_instance = {
+        let mut query = app
+            .world_mut()
+            .query_filtered::<Entity, With<AbilitySpecInstance>>();
+        query.iter(app.world()).next().unwrap()
+    };
 
     // Create target data with enemy
     let target_data = GameplayAbilityTargetData {
@@ -717,7 +721,7 @@ fn test_apply_effect_to_target_data_task() {
                 ability_spec,
                 owner: player,
             },
-            ApplyEffectToTargetDataTask::new(effect_id.clone(), target_data, 1),
+            ApplyEffectToTargetDataTask::new(effect_id_clone.clone(), target_data, 1),
             TaskState::Running,
         ))
         .id();
@@ -725,13 +729,16 @@ fn test_apply_effect_to_target_data_task() {
     app.update();
 
     // Check enemy Health was reduced
-    let enemy_health = app
-        .world()
-        .query_filtered::<(&AttributeData, &AttributeName, &ChildOf), ()>()
-        .iter(app.world())
-        .find(|(_, name, child_of)| name.0 == "Health" && child_of.get() == enemy)
-        .map(|(attr, _, _)| attr.current_value())
-        .unwrap();
+    let enemy_health = {
+        let mut query = app
+            .world_mut()
+            .query_filtered::<(&AttributeData, &AttributeName, &ChildOf), ()>();
+        query
+            .iter(app.world())
+            .find(|(_, name, child_of)| name.as_str() == "Health" && child_of.parent() == enemy)
+            .map(|(attr, _, _)| attr.current_value)
+            .unwrap()
+    };
 
     assert_eq!(enemy_health, 50.0); // 100 - 50
 }
@@ -740,36 +747,33 @@ fn test_apply_effect_to_target_data_task() {
 fn test_wait_target_data_task() {
     let mut app = setup_test_app();
 
-    let player = app
-        .world_mut()
-        .spawn((Name::new("Player"), SpatialBundle::default()))
-        .id();
+    let player = app.world_mut().spawn(Name::new("Player")).id();
 
     // Register and grant ability
     let ability_id = Atom::from("test_ability");
-    app.world_mut().run_system_once(
-        move |mut registry: ResMut<AbilityRegistry>, tags: Res<GameplayTagsManager>| {
+    let ability_id_clone = ability_id.clone();
+    app.world_mut()
+        .run_system_once(move |mut registry: ResMut<AbilityRegistry>| {
             let def = AbilityDefinition::new(ability_id.clone());
             registry.register(def);
-        },
-    );
+        });
 
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
             commands.spawn((
-                AbilitySpec::new(ability_id.clone(), 1),
+                AbilitySpec::new(ability_id_clone.clone(), 1),
                 AbilityOwner(player),
                 AbilityActiveState::default(),
             ));
         });
     app.update();
 
-    let ability_spec = app
-        .world()
-        .query_filtered::<Entity, With<AbilitySpec>>()
-        .iter(app.world())
-        .next()
-        .unwrap();
+    let ability_spec = {
+        let mut query = app
+            .world_mut()
+            .query_filtered::<Entity, With<AbilitySpec>>();
+        query.iter(app.world()).next().unwrap()
+    };
 
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
@@ -777,12 +781,12 @@ fn test_wait_target_data_task() {
         });
     app.update();
 
-    let ability_instance = app
-        .world()
-        .query_filtered::<Entity, With<AbilitySpecInstance>>()
-        .iter(app.world())
-        .next()
-        .unwrap();
+    let ability_instance = {
+        let mut query = app
+            .world_mut()
+            .query_filtered::<Entity, With<AbilitySpecInstance>>();
+        query.iter(app.world()).next().unwrap()
+    };
 
     // Spawn WaitTargetData task
     let task = app
@@ -807,16 +811,16 @@ fn test_wait_target_data_task() {
     // Provide target data
     let target_data = GameplayAbilityTargetData {
         actors: vec![player],
-        origin: Vec3::ZERO,
-        end_point: Some(Vec3::new(10.0, 0.0, 0.0)),
+        origin: Some(Transform::from_translation(Vec3::ZERO)),
+        end_point: Some(Transform::from_translation(Vec3::new(10.0, 0.0, 0.0))),
     };
 
-    app.world_mut()
-        .run_system_once(move |mut tasks: Query<&mut WaitTargetDataTask>| {
-            if let Ok(mut wait_target) = tasks.get_mut(task) {
-                wait_target.provide_target_data(target_data);
-            }
-        });
+    {
+        let mut tasks = app.world_mut().query::<&mut WaitTargetDataTask>();
+        if let Ok(mut wait_target) = tasks.get_mut(app.world_mut(), task) {
+            wait_target.provide_target_data(target_data);
+        }
+    }
     app.update();
 
     // Task should complete
@@ -828,36 +832,33 @@ fn test_wait_target_data_task() {
 fn test_wait_input_press_task() {
     let mut app = setup_test_app();
 
-    let player = app
-        .world_mut()
-        .spawn((Name::new("Player"), SpatialBundle::default()))
-        .id();
+    let player = app.world_mut().spawn(Name::new("Player")).id();
 
     // Register and grant ability
     let ability_id = Atom::from("test_ability");
-    app.world_mut().run_system_once(
-        move |mut registry: ResMut<AbilityRegistry>, tags: Res<GameplayTagsManager>| {
+    let ability_id_clone = ability_id.clone();
+    app.world_mut()
+        .run_system_once(move |mut registry: ResMut<AbilityRegistry>| {
             let def = AbilityDefinition::new(ability_id.clone());
             registry.register(def);
-        },
-    );
+        });
 
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
             commands.spawn((
-                AbilitySpec::new(ability_id.clone(), 1),
+                AbilitySpec::new(ability_id_clone.clone(), 1),
                 AbilityOwner(player),
                 AbilityActiveState::default(),
             ));
         });
     app.update();
 
-    let ability_spec = app
-        .world()
-        .query_filtered::<Entity, With<AbilitySpec>>()
-        .iter(app.world())
-        .next()
-        .unwrap();
+    let ability_spec = {
+        let mut query = app
+            .world_mut()
+            .query_filtered::<Entity, With<AbilitySpec>>();
+        query.iter(app.world()).next().unwrap()
+    };
 
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
@@ -865,12 +866,12 @@ fn test_wait_input_press_task() {
         });
     app.update();
 
-    let ability_instance = app
-        .world()
-        .query_filtered::<Entity, With<AbilitySpecInstance>>()
-        .iter(app.world())
-        .next()
-        .unwrap();
+    let ability_instance = {
+        let mut query = app
+            .world_mut()
+            .query_filtered::<Entity, With<AbilitySpecInstance>>();
+        query.iter(app.world()).next().unwrap()
+    };
 
     // Spawn WaitInputPress task
     let task = app
@@ -917,29 +918,29 @@ fn test_wait_overlap_task() {
 
     // Register and grant ability
     let ability_id = Atom::from("test_ability");
-    app.world_mut().run_system_once(
-        move |mut registry: ResMut<AbilityRegistry>, tags: Res<GameplayTagsManager>| {
+    let ability_id_clone = ability_id.clone();
+    app.world_mut()
+        .run_system_once(move |mut registry: ResMut<AbilityRegistry>| {
             let def = AbilityDefinition::new(ability_id.clone());
             registry.register(def);
-        },
-    );
+        });
 
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
             commands.spawn((
-                AbilitySpec::new(ability_id.clone(), 1),
+                AbilitySpec::new(ability_id_clone.clone(), 1),
                 AbilityOwner(player),
                 AbilityActiveState::default(),
             ));
         });
     app.update();
 
-    let ability_spec = app
-        .world()
-        .query_filtered::<Entity, With<AbilitySpec>>()
-        .iter(app.world())
-        .next()
-        .unwrap();
+    let ability_spec = {
+        let mut query = app
+            .world_mut()
+            .query_filtered::<Entity, With<AbilitySpec>>();
+        query.iter(app.world()).next().unwrap()
+    };
 
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
@@ -947,12 +948,12 @@ fn test_wait_overlap_task() {
         });
     app.update();
 
-    let ability_instance = app
-        .world()
-        .query_filtered::<Entity, With<AbilitySpecInstance>>()
-        .iter(app.world())
-        .next()
-        .unwrap();
+    let ability_instance = {
+        let mut query = app
+            .world_mut()
+            .query_filtered::<Entity, With<AbilitySpecInstance>>();
+        query.iter(app.world()).next().unwrap()
+    };
 
     // Spawn WaitOverlap task
     let task = app
@@ -978,8 +979,9 @@ fn test_wait_overlap_task() {
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
             commands.trigger(OverlapEvent {
-                entity: player,
-                other: enemy,
+                entity_a: player,
+                entity_b: enemy,
+                component_type: None,
             });
         });
     app.update();
