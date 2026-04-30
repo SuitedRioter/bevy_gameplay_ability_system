@@ -3,6 +3,7 @@
 //! Provides a flexible query system for matching gameplay effects based on various criteria.
 //! Used by ImmunityComponent, RemoveOtherEffectsComponent, and other advanced features.
 
+use bevy::ecs::system::RunSystemOnce;
 use bevy::prelude::*;
 use bevy_gameplay_tag::{GameplayTag, GameplayTagContainer, GameplayTagsManager};
 use std::sync::Arc;
@@ -249,19 +250,37 @@ impl GameplayEffectQuery {
         {
             if let Some(source_tags) = world.get::<OwnedTags>(active_effect.source) {
                 if let Some(ref tags_all) = self.source_tags_all {
-                    if !source_tags.0.has_all_matching_gameplay_tags(tags_all) {
+                    // Check if source has all of the required tags
+                    let has_all = tags_all.gameplay_tags.iter().all(|query_tag| {
+                        source_tags.0.explicit_tags.gameplay_tags.iter().any(|source_tag| {
+                            source_tag == query_tag || source_tags.0.explicit_tags.parent_tags.contains(query_tag)
+                        })
+                    });
+                    if !has_all {
                         return false;
                     }
                 }
 
                 if let Some(ref tags_any) = self.source_tags_any {
-                    if !source_tags.0.has_any_matching_gameplay_tags(tags_any) {
+                    // Check if source has any of the required tags
+                    let has_match = tags_any.gameplay_tags.iter().any(|query_tag| {
+                        source_tags.0.explicit_tags.gameplay_tags.iter().any(|source_tag| {
+                            source_tag == query_tag || source_tags.0.explicit_tags.parent_tags.contains(query_tag)
+                        })
+                    });
+                    if !has_match {
                         return false;
                     }
                 }
 
                 if let Some(ref tags_none) = self.source_tags_none {
-                    if source_tags.0.has_any_matching_gameplay_tags(tags_none) {
+                    // Check if source has none of the forbidden tags
+                    let has_forbidden = tags_none.gameplay_tags.iter().any(|query_tag| {
+                        source_tags.0.explicit_tags.gameplay_tags.iter().any(|source_tag| {
+                            source_tag == query_tag || source_tags.0.explicit_tags.parent_tags.contains(query_tag)
+                        })
+                    });
+                    if has_forbidden {
                         return false;
                     }
                 }
@@ -284,28 +303,36 @@ impl GameplayEffectQuery {
     /// Find all active effects on a target that match this query.
     ///
     /// # Parameters
-    /// - `_target`: The entity to search for effects on (currently unused)
-    /// - `_world`: World access for querying (currently unused)
+    /// - `target`: The entity to search for effects on
+    /// - `world`: Mutable world access for running systems
     ///
     /// # Returns
     /// Vector of effect entities that match the query
     ///
-    /// # Note
-    /// This is a simplified implementation. For production use, consider:
-    /// - Maintaining an index of effects by target (using EffectTarget component)
-    /// - Using a system with proper Query access instead of &World
-    pub fn find_matching_effects(&self, _target: Entity, _world: &World) -> Vec<Entity> {
-        let matching = Vec::new();
+    /// # Implementation Note
+    /// This method uses `run_system_once` to get proper Query access.
+    /// For better performance in existing systems, use a `Query<(Entity, &ActiveGameplayEffect)>`
+    /// and call `matches()` on each effect directly.
+    pub fn find_matching_effects(&self, target: Entity, world: &mut World) -> Vec<Entity> {
+        // Collect all effects using run_system_once
+        let all_effects: Vec<(Entity, ActiveGameplayEffect)> = world
+            .run_system_once(
+                |effects: Query<(Entity, &ActiveGameplayEffect)>| {
+                    effects
+                        .iter()
+                        .map(|(e, a)| (e, a.clone()))
+                        .collect::<Vec<_>>()
+                },
+            )
+            .unwrap_or_default();
 
-        // Simplified implementation: iterate through all entities
-        // In a real system, you'd use a Query<Entity, With<ActiveGameplayEffect>>
-        // but that requires &mut World or SystemParam access
-        //
-        // For now, we'll just return an empty vec and document that this
-        // should be called from a system with proper query access
-        warn!(
-            "GameplayEffectQuery::find_matching_effects() called with &World - this is inefficient. Consider using a system with Query access."
-        );
+        // Filter effects that match the query
+        let mut matching = Vec::new();
+        for (effect_entity, active_effect) in all_effects {
+            if active_effect.target == target && self.matches(effect_entity, world) {
+                matching.push(effect_entity);
+            }
+        }
 
         matching
     }
