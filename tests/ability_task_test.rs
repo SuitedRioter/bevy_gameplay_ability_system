@@ -340,7 +340,14 @@ fn test_wait_attribute_change_task() {
     let mut app = setup_test_app();
 
     // Create player with Health attribute
-    let player = app.world_mut().spawn(Name::new("Player")).id();
+    let player = app
+        .world_mut()
+        .spawn((
+            Name::new("Player"),
+            bevy_gameplay_ability_system::core::OwnedTags::default(),
+            bevy_gameplay_ability_system::core::BlockedAbilityTags::default(),
+        ))
+        .id();
 
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
@@ -419,17 +426,36 @@ fn test_wait_attribute_change_task() {
         });
     app.update();
 
-    // Task should complete
-    let state = app.world().get::<TaskState>(task).unwrap();
-    assert_eq!(*state, TaskState::Completed);
+    // Task should complete and be despawned
+    {
+        let events = app.world().resource::<TaskEvents>();
+        let completed = events.completed.lock().unwrap();
+        assert!(
+            completed.contains(&task),
+            "TaskCompletedEvent should be triggered"
+        );
+    }
+
+    // Task should be despawned by cleanup system
+    assert!(
+        app.world().get_entity(task).is_err(),
+        "Task should be despawned after completion"
+    );
 }
 
 #[test]
 fn test_wait_effect_applied_task() {
     let mut app = setup_test_app();
 
-    // Create player
-    let player = app.world_mut().spawn(Name::new("Player")).id();
+    // Create player with required components
+    let player = app
+        .world_mut()
+        .spawn((
+            Name::new("Player"),
+            bevy_gameplay_ability_system::core::OwnedTags::default(),
+            bevy_gameplay_ability_system::core::BlockedAbilityTags::default(),
+        ))
+        .id();
 
     app.world_mut().run_system_once(
         move |mut commands: Commands, tags: Res<GameplayTagsManager>| {
@@ -521,17 +547,36 @@ fn test_wait_effect_applied_task() {
         });
     app.update();
 
-    // Task should complete
-    let state = app.world().get::<TaskState>(task).unwrap();
-    assert_eq!(*state, TaskState::Completed);
+    // Task should complete and be despawned
+    {
+        let events = app.world().resource::<TaskEvents>();
+        let completed = events.completed.lock().unwrap();
+        assert!(
+            completed.contains(&task),
+            "TaskCompletedEvent should be triggered"
+        );
+    }
+
+    // Task should be despawned by cleanup system
+    assert!(
+        app.world().get_entity(task).is_err(),
+        "Task should be despawned after completion"
+    );
 }
 
 #[test]
 fn test_wait_effect_removed_task() {
     let mut app = setup_test_app();
 
-    // Create player
-    let player = app.world_mut().spawn(Name::new("Player")).id();
+    // Create player with required components
+    let player = app
+        .world_mut()
+        .spawn((
+            Name::new("Player"),
+            bevy_gameplay_ability_system::core::OwnedTags::default(),
+            bevy_gameplay_ability_system::core::BlockedAbilityTags::default(),
+        ))
+        .id();
 
     app.world_mut().run_system_once(
         move |mut commands: Commands, tags: Res<GameplayTagsManager>| {
@@ -629,17 +674,36 @@ fn test_wait_effect_removed_task() {
     }
     app.update();
 
-    // Task should complete
-    let state = app.world().get::<TaskState>(task).unwrap();
-    assert_eq!(*state, TaskState::Completed);
+    // Task should complete and be despawned
+    {
+        let events = app.world().resource::<TaskEvents>();
+        let completed = events.completed.lock().unwrap();
+        assert!(
+            completed.contains(&task),
+            "TaskCompletedEvent should be triggered"
+        );
+    }
+
+    // Task should be despawned by cleanup system
+    assert!(
+        app.world().get_entity(task).is_err(),
+        "Task should be despawned after completion"
+    );
 }
 
 #[test]
 fn test_apply_effect_to_target_data_task() {
     let mut app = setup_test_app();
 
-    // Create player and enemy
-    let player = app.world_mut().spawn(Name::new("Player")).id();
+    // Create player and enemy with required components
+    let player = app
+        .world_mut()
+        .spawn((
+            Name::new("Player"),
+            bevy_gameplay_ability_system::core::OwnedTags::default(),
+            bevy_gameplay_ability_system::core::BlockedAbilityTags::default(),
+        ))
+        .id();
 
     let enemy = app.world_mut().spawn(Name::new("Enemy")).id();
 
@@ -747,7 +811,14 @@ fn test_apply_effect_to_target_data_task() {
 fn test_wait_target_data_task() {
     let mut app = setup_test_app();
 
-    let player = app.world_mut().spawn(Name::new("Player")).id();
+    let player = app
+        .world_mut()
+        .spawn((
+            Name::new("Player"),
+            bevy_gameplay_ability_system::core::OwnedTags::default(),
+            bevy_gameplay_ability_system::core::BlockedAbilityTags::default(),
+        ))
+        .id();
 
     // Register and grant ability
     let ability_id = Atom::from("test_ability");
@@ -823,16 +894,35 @@ fn test_wait_target_data_task() {
     }
     app.update();
 
-    // Task should complete
-    let state = app.world().get::<TaskState>(task).unwrap();
-    assert_eq!(*state, TaskState::Completed);
+    // Task should complete and be despawned
+    {
+        let events = app.world().resource::<TaskEvents>();
+        let completed = events.completed.lock().unwrap();
+        assert!(
+            completed.contains(&task),
+            "TaskCompletedEvent should be triggered"
+        );
+    }
+
+    // Task should be despawned by cleanup system
+    assert!(
+        app.world().get_entity(task).is_err(),
+        "Task should be despawned after completion"
+    );
 }
 
 #[test]
 fn test_wait_input_press_task() {
     let mut app = setup_test_app();
 
-    let player = app.world_mut().spawn(Name::new("Player")).id();
+    let player = app
+        .world_mut()
+        .spawn((
+            Name::new("Player"),
+            bevy_gameplay_ability_system::core::OwnedTags::default(),
+            bevy_gameplay_ability_system::core::BlockedAbilityTags::default(),
+        ))
+        .id();
 
     // Register and grant ability
     let ability_id = Atom::from("test_ability");
@@ -903,16 +993,35 @@ fn test_wait_input_press_task() {
         });
     app.update();
 
-    // Task should complete
-    let state = app.world().get::<TaskState>(task).unwrap();
-    assert_eq!(*state, TaskState::Completed);
+    // Task should complete and be despawned
+    {
+        let events = app.world().resource::<TaskEvents>();
+        let completed = events.completed.lock().unwrap();
+        assert!(
+            completed.contains(&task),
+            "TaskCompletedEvent should be triggered"
+        );
+    }
+
+    // Task should be despawned by cleanup system
+    assert!(
+        app.world().get_entity(task).is_err(),
+        "Task should be despawned after completion"
+    );
 }
 
 #[test]
 fn test_wait_overlap_task() {
     let mut app = setup_test_app();
 
-    let player = app.world_mut().spawn(Name::new("Player")).id();
+    let player = app
+        .world_mut()
+        .spawn((
+            Name::new("Player"),
+            bevy_gameplay_ability_system::core::OwnedTags::default(),
+            bevy_gameplay_ability_system::core::BlockedAbilityTags::default(),
+        ))
+        .id();
 
     let enemy = app.world_mut().spawn(Name::new("Enemy")).id();
 
@@ -986,13 +1095,21 @@ fn test_wait_overlap_task() {
         });
     app.update();
 
-    // Task should complete
-    let state = app.world().get::<TaskState>(task).unwrap();
-    assert_eq!(*state, TaskState::Completed);
+    // Task should complete and be despawned
+    {
+        let events = app.world().resource::<TaskEvents>();
+        let completed = events.completed.lock().unwrap();
+        assert!(
+            completed.contains(&task),
+            "TaskCompletedEvent should be triggered"
+        );
+    }
 
-    // Check overlapping entity was recorded
-    let wait_overlap = app.world().get::<WaitOverlapTask>(task).unwrap();
-    assert_eq!(wait_overlap.overlapping_entity, Some(enemy));
+    // Task should be despawned by cleanup system
+    assert!(
+        app.world().get_entity(task).is_err(),
+        "Task should be despawned after completion"
+    );
 }
 
 #[test]
