@@ -44,6 +44,7 @@ pub mod attributes;
 pub mod core;
 pub mod cues;
 pub mod effects;
+pub mod error;
 pub mod utils;
 
 /// Prelude module for convenient imports.
@@ -76,6 +77,7 @@ pub mod prelude {
     pub use crate::core::events::*;
     pub use crate::core::system_sets::*;
 
+    pub use crate::error::*;
     pub use crate::utils::*;
 
     pub use crate::GasPlugin;
