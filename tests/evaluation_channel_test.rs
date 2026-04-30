@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_gameplay_ability_system::{attributes::*, effects::*, GasPlugin};
+use bevy_gameplay_ability_system::{GasPlugin, attributes::*, effects::*};
 use bevy_gameplay_tag::GameplayTagsPlugin;
 use string_cache::DefaultAtom as Atom;
 
@@ -14,7 +14,11 @@ impl AttributeSetDefinition for TestAttributeSet {
     fn attribute_metadata(name: &str) -> Option<AttributeMetadata> {
         match name {
             "Damage" => Some(AttributeMetadata::new("Damage").with_min(0.0)),
-            "Health" => Some(AttributeMetadata::new("Health").with_min(0.0).with_max(1000.0)),
+            "Health" => Some(
+                AttributeMetadata::new("Health")
+                    .with_min(0.0)
+                    .with_max(1000.0),
+            ),
             "Attack" => Some(AttributeMetadata::new("Attack").with_min(0.0)),
             _ => None,
         }
@@ -166,11 +170,10 @@ fn test_same_channel_modifier_combination() {
                 ),
         );
 
-    app.world_mut()
-        .trigger(ApplyGameplayEffectEvent::new(
-            "multi_modifier_effect",
-            owner,
-        ));
+    app.world_mut().trigger(ApplyGameplayEffectEvent::new(
+        "multi_modifier_effect",
+        owner,
+    ));
 
     app.update();
 

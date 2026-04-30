@@ -408,7 +408,7 @@ impl GameplayEffectCue {
 ///
 /// This is the template for creating active effect instances.
 /// Store these in a resource or asset system.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone)]
 pub struct GameplayEffectDefinition {
     /// Unique identifier for this effect.
     pub id: Atom,
@@ -438,6 +438,59 @@ pub struct GameplayEffectDefinition {
     pub granted_abilities: Vec<GrantedAbilityConfig>,
     /// Gameplay cues triggered by this effect.
     pub gameplay_cues: Vec<GameplayEffectCue>,
+    /// Modular components that extend effect behavior (UE 5.3+ feature).
+    ///
+    /// Components are executed at specific lifecycle points:
+    /// - `can_apply`: Before application (can block)
+    /// - `on_effect_applied`: After successful application
+    /// - `on_effect_removed`: When removed from target
+    pub components: Vec<crate::effects::ge_component::BoxedGameplayEffectComponent>,
+}
+
+impl std::fmt::Debug for GameplayEffectDefinition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GameplayEffectDefinition")
+            .field("id", &self.id)
+            .field("duration_policy", &self.duration_policy)
+            .field("duration_magnitude", &self.duration_magnitude)
+            .field("period", &self.period)
+            .field("modifiers", &self.modifiers)
+            .field("granted_tags", &self.granted_tags)
+            .field("asset_tags", &self.asset_tags)
+            .field("immunity_tags", &self.immunity_tags)
+            .field(
+                "application_tag_requirements",
+                &self.application_tag_requirements,
+            )
+            .field("application_requirements", &self.application_requirements)
+            .field("stacking_policy", &self.stacking_policy)
+            .field("granted_abilities", &self.granted_abilities)
+            .field("gameplay_cues", &self.gameplay_cues)
+            .field(
+                "components",
+                &format!("{} components", self.components.len()),
+            )
+            .finish()
+    }
+}
+
+impl PartialEq for GameplayEffectDefinition {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+            && self.duration_policy == other.duration_policy
+            && self.duration_magnitude == other.duration_magnitude
+            && self.period == other.period
+            && self.modifiers == other.modifiers
+            && self.granted_tags == other.granted_tags
+            && self.asset_tags == other.asset_tags
+            && self.immunity_tags == other.immunity_tags
+            && self.application_tag_requirements == other.application_tag_requirements
+            && self.application_requirements == other.application_requirements
+            && self.stacking_policy == other.stacking_policy
+            && self.granted_abilities == other.granted_abilities
+            && self.gameplay_cues == other.gameplay_cues
+            && self.components.len() == other.components.len()
+    }
 }
 
 impl GameplayEffectDefinition {
@@ -457,6 +510,7 @@ impl GameplayEffectDefinition {
             stacking_policy: StackingPolicy::Independent,
             granted_abilities: Vec::new(),
             gameplay_cues: Vec::new(),
+            components: Vec::new(),
         }
     }
 
@@ -550,6 +604,29 @@ impl GameplayEffectDefinition {
     pub fn grant_ability_simple(mut self, ability_id: impl Into<Atom>) -> Self {
         self.granted_abilities
             .push(GrantedAbilityConfig::new(ability_id));
+        self
+    }
+
+    /// Adds a modular component to this effect.
+    ///
+    /// Components extend effect behavior at specific lifecycle points.
+    /// See `GameplayEffectComponent` trait for details.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use std::sync::Arc;
+    ///
+    /// let effect = GameplayEffectDefinition::new("buff")
+    ///     .add_component(Arc::new(ChanceToApplyComponent::new(0.5)))
+    ///     .add_component(Arc::new(AdditionalEffectsComponent::new()
+    ///         .on_application(vec!["apply_damage".into()])));
+    /// ```
+    pub fn add_component(
+        mut self,
+        component: crate::effects::ge_component::BoxedGameplayEffectComponent,
+    ) -> Self {
+        self.components.push(component);
         self
     }
 }

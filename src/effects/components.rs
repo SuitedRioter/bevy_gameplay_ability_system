@@ -15,21 +15,36 @@ use string_cache::DefaultAtom as Atom;
 pub struct ActiveGameplayEffect {
     /// The ID of the effect definition.
     pub definition_id: Atom,
+    /// The entity that applied this effect (instigator).
+    pub source: Entity,
+    /// The entity receiving this effect.
+    pub target: Entity,
     /// The level at which this effect was applied.
     pub level: i32,
     /// The time when this effect was applied (in seconds).
     pub start_time: f32,
+    /// Tags granted to the target while this effect is active.
+    pub granted_tags: GameplayTagContainer,
     /// The current stack count for this effect.
     pub stack_count: i32,
 }
 
 impl ActiveGameplayEffect {
     /// Creates a new active gameplay effect.
-    pub fn new(definition_id: impl Into<Atom>, level: i32, start_time: f32) -> Self {
+    pub fn new(
+        definition_id: impl Into<Atom>,
+        source: Entity,
+        target: Entity,
+        level: i32,
+        start_time: f32,
+    ) -> Self {
         Self {
             definition_id: definition_id.into(),
+            source,
+            target,
             level,
             start_time,
+            granted_tags: GameplayTagContainer::default(),
             stack_count: 1,
         }
     }
@@ -267,7 +282,8 @@ impl GameplayEffectSpec {
 
     /// Captures an attribute value for Snapshot mode.
     pub fn capture_attribute(&mut self, entity: Entity, attribute_name: Atom, value: f32) {
-        self.captured_attributes.insert((entity, attribute_name), value);
+        self.captured_attributes
+            .insert((entity, attribute_name), value);
     }
 
     /// Gets a captured attribute value for Snapshot mode.

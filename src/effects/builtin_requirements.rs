@@ -150,10 +150,7 @@ pub struct SourceAttributeGreaterThanTarget {
 }
 
 impl SourceAttributeGreaterThanTarget {
-    pub fn new(
-        source_attribute: impl Into<Atom>,
-        target_attribute: impl Into<Atom>,
-    ) -> Self {
+    pub fn new(source_attribute: impl Into<Atom>, target_attribute: impl Into<Atom>) -> Self {
         Self {
             source_attribute: source_attribute.into(),
             target_attribute: target_attribute.into(),

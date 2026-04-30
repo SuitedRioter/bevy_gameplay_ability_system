@@ -1,8 +1,8 @@
 use bevy::prelude::*;
 use bevy_gameplay_ability_system::{
+    GasPlugin,
     abilities::*,
     core::{BlockedAbilityTags, OwnedTags},
-    GasPlugin,
 };
 use bevy_gameplay_tag::GameplayTagsPlugin;
 
@@ -17,12 +17,10 @@ fn test_instanced_per_execution_creates_new_instance_each_time() {
     app.update();
 
     // Register ability with InstancedPerExecution policy (default)
-    app.world_mut()
-        .resource_mut::<AbilityRegistry>()
-        .register(
-            AbilityDefinition::new("test_ability")
-                .with_instancing_policy(InstancingPolicy::InstancedPerExecution),
-        );
+    app.world_mut().resource_mut::<AbilityRegistry>().register(
+        AbilityDefinition::new("test_ability")
+            .with_instancing_policy(InstancingPolicy::InstancedPerExecution),
+    );
 
     // Spawn owner and grant ability
     let owner = app
@@ -99,12 +97,10 @@ fn test_instanced_per_actor_reuses_same_instance() {
     app.update();
 
     // Register ability with InstancedPerActor policy
-    app.world_mut()
-        .resource_mut::<AbilityRegistry>()
-        .register(
-            AbilityDefinition::new("test_ability")
-                .with_instancing_policy(InstancingPolicy::InstancedPerActor),
-        );
+    app.world_mut().resource_mut::<AbilityRegistry>().register(
+        AbilityDefinition::new("test_ability")
+            .with_instancing_policy(InstancingPolicy::InstancedPerActor),
+    );
 
     // Spawn owner and grant ability
     let owner = app
@@ -191,12 +187,10 @@ fn test_non_instanced_has_no_instance_entity() {
     app.update();
 
     // Register ability with NonInstanced policy
-    app.world_mut()
-        .resource_mut::<AbilityRegistry>()
-        .register(
-            AbilityDefinition::new("test_ability")
-                .with_instancing_policy(InstancingPolicy::NonInstanced),
-        );
+    app.world_mut().resource_mut::<AbilityRegistry>().register(
+        AbilityDefinition::new("test_ability")
+            .with_instancing_policy(InstancingPolicy::NonInstanced),
+    );
 
     // Spawn owner and grant ability
     let owner = app

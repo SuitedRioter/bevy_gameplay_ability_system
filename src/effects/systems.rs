@@ -596,8 +596,15 @@ pub fn on_apply_gameplay_effect(
         }
         DurationPolicy::HasDuration | DurationPolicy::Infinite => {
             // Spawn effect entity with components
+            let source = spec.context.source.unwrap_or(target);
             let mut effect_entity_commands = commands.spawn((
-                ActiveGameplayEffect::new(effect_id.clone(), level, time.elapsed_secs()),
+                ActiveGameplayEffect::new(
+                    effect_id.clone(),
+                    source,
+                    target,
+                    level,
+                    time.elapsed_secs(),
+                ),
                 EffectTarget(target),
                 EffectInstigator(spec.instigator()),
                 spec.context.clone(),

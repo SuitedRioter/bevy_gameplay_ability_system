@@ -263,11 +263,13 @@ pub fn spawn_pending_ability_instances_system(
 
                 if let Some(existing_entity) = existing {
                     // Reuse existing instance - mark it as active again
-                    commands.entity(existing_entity).insert(InstanceControlState {
-                        is_active: true,
-                        is_blocking_other_abilities: def.default_blocks_other_abilities,
-                        is_cancelable: def.default_is_cancelable,
-                    });
+                    commands
+                        .entity(existing_entity)
+                        .insert(InstanceControlState {
+                            is_active: true,
+                            is_blocking_other_abilities: def.default_blocks_other_abilities,
+                            is_cancelable: def.default_is_cancelable,
+                        });
                     Some(existing_entity)
                 } else {
                     // Create new instance (first activation)

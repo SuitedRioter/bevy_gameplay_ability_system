@@ -677,7 +677,7 @@ fn test_wait_effect_removed_task() {
             .world_mut()
             .query::<&mut bevy_gameplay_ability_system::effects::EffectDuration>();
         for mut duration in query.iter_mut(app.world_mut()) {
-            duration.tick(1.1);  // Manually tick the duration
+            duration.tick(1.1); // Manually tick the duration
         }
     }
 

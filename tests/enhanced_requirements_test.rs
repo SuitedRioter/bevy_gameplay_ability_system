@@ -1,8 +1,8 @@
 use bevy::ecs::relationship::Relationship;
 use bevy::ecs::system::RunSystemOnce;
 use bevy::prelude::*;
-use bevy_gameplay_ability_system::{attributes::*, core::OwnedTags, effects::*, GasPlugin};
-use bevy_gameplay_tag::{gameplay_tag::GameplayTag, GameplayTagsPlugin};
+use bevy_gameplay_ability_system::{GasPlugin, attributes::*, core::OwnedTags, effects::*};
+use bevy_gameplay_tag::{GameplayTagsPlugin, gameplay_tag::GameplayTag};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct TestAttributeSet;
@@ -178,9 +178,8 @@ fn test_source_attribute_greater_than_target() {
     app.update();
 
     // Source AttackPower: 50, Target Defense: 20 (50 > 20, should apply)
-    app.world_mut().trigger(
-        ApplyGameplayEffectEvent::new("armor_break", target).with_source(source),
-    );
+    app.world_mut()
+        .trigger(ApplyGameplayEffectEvent::new("armor_break", target).with_source(source));
     app.update();
 
     let defense_attr = find_attribute_entity(app.world_mut(), target, "Defense");
@@ -212,9 +211,7 @@ fn test_require_all_tags() {
         .resource_mut::<ApplicationRequirementRegistry>()
         .register(
             "alive_and_not_stunned",
-            Box::new(RequireAllTags::new(vec![
-                GameplayTag::new("State.Alive"),
-            ])),
+            Box::new(RequireAllTags::new(vec![GameplayTag::new("State.Alive")])),
         );
 
     app.world_mut()
