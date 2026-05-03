@@ -101,11 +101,28 @@ impl AttributeSetDefinition for CharacterAttributes {
 
 ### 2. 生命周期钩子
 
-每个 AttributeSet 可以实现 4 个生命周期钩子：
+每个 AttributeSet 可以实现 6 个生命周期钩子（对应 UE 的 AttributeSet 回调）：
 
 ```rust
 impl AttributeSetDefinition for CharacterAttributes {
+    // 在 Instant 效果修改 base_value 前调用（可修改 new_value，可拒绝）
+    // 对应 UE 的 PreGameplayEffectExecute
+    fn pre_effect_execute(context: &mut AttributeModifyContext) -> bool {
+        // 示例：拒绝负面效果
+        if context.new_value < context.old_value {
+            return false; // 拒绝此次修改
+        }
+        true
+    }
+
+    // 在 Instant 效果修改 base_value 后调用（只读）
+    // 对应 UE 的 PostGameplayEffectExecute
+    fn post_effect_execute(context: &AttributeModifyContext) {
+        // 示例：记录效果应用日志
+    }
+
     // 在 current_value 修改前调用（可修改 new_value）
+    // 对应 UE 的 PreAttributeChange
     fn pre_attribute_change(context: &mut AttributeModifyContext) {
         // 示例：限制值在范围内
         if let Some(meta) = Self::attribute_metadata(context.attribute_name.as_ref()) {
@@ -122,6 +139,7 @@ impl AttributeSetDefinition for CharacterAttributes {
     }
 
     // 在 current_value 修改后调用（只读）
+    // 对应 UE 的 PostAttributeChange
     fn post_attribute_change(context: &AttributeModifyContext) {
         // 示例：检测死亡
         if context.attribute_name.as_ref() == "Health" && context.new_value <= 0.0 {
@@ -133,11 +151,13 @@ impl AttributeSetDefinition for CharacterAttributes {
     }
 
     // 在 base_value 修改前调用（可修改 new_value）
+    // 对应 UE 的 PreAttributeBaseChange
     fn pre_attribute_base_change(context: &mut AttributeModifyContext) {
         // 用户自定义逻辑
     }
 
     // 在 base_value 修改后调用（只读）
+    // 对应 UE 的 PostAttributeBaseChange
     fn post_attribute_base_change(context: &AttributeModifyContext) {
         // 用户自定义逻辑
     }
@@ -159,20 +179,43 @@ pub struct AttributeModifyContext {
 
 ### 3. 钩子调用时机
 
-钩子在 `aggregate_attribute_modifiers_system` 中被调用：
+钩子在不同系统中被调用，对应不同的修改场景：
 
+#### Instant 效果应用（修改 base_value）
 ```
-1. 计算所有修改器的聚合值
-2. 创建 AttributeModifyContext
-3. 调用 pre_attribute_change (可修改 new_value)
-4. 应用修改: attr_data.current_value = context.new_value
-5. 调用 post_attribute_change (只读)
+apply_instant_effect_system
+    1. 计算修改器的最终值
+    2. 创建 AttributeModifyContext
+    3. 调用 pre_effect_execute (可修改 new_value，可拒绝)
+    4. 如果返回 true: attr_data.base_value = context.new_value
+    5. 调用 post_effect_execute (只读)
+```
+
+#### Aggregation（修改 current_value）
+```
+aggregate_attribute_modifiers_system
+    1. 计算所有修改器的聚合值
+    2. 创建 AttributeModifyContext
+    3. 调用 pre_attribute_change (可修改 new_value)
+    4. 应用修改: attr_data.current_value = context.new_value
+    5. 调用 post_attribute_change (只读)
+```
+
+#### 永久修改（修改 base_value）
+```
+// 用户代码直接修改 base_value 时
+attr_data.set_base_value(new_value);
+    1. 创建 AttributeModifyContext
+    2. 调用 pre_attribute_base_change (可修改 new_value)
+    3. 应用修改: attr_data.base_value = context.new_value
+    4. 调用 post_attribute_base_change (只读)
 ```
 
 **关键特性**：
 - 同一帧内同步执行
 - Pre 钩子可以修改即将应用的值
 - Post 钩子用于响应变化（如触发事件、检测死亡）
+- `pre_effect_execute` 可以返回 false 拒绝修改
 
 ## 使用指南
 
@@ -363,12 +406,38 @@ fn pre_attribute_change(context: &mut AttributeModifyContext) {
 
 ### 与 Effects 模块
 
-Effects 模块通过 `aggregate_attribute_modifiers_system` 修改属性：
+Effects 模块通过三种路径修改属性，每种路径触发不同的钩子：
 
+#### 1. Instant 效果（修改 base_value）
 ```
-GameplayEffect -> AttributeModifier -> aggregate_attribute_modifiers_system
-                                       -> Pre Hook -> 修改值 -> Post Hook
+GameplayEffect (Instant) 
+    -> apply_instant_effect_system
+    -> pre_effect_execute / post_effect_execute
+    -> 修改 base_value
+    -> 触发 aggregation (重新计算 current_value)
 ```
+
+#### 2. 持久/周期效果（修改 current_value）
+```
+GameplayEffect (HasDuration/Infinite)
+    -> create_effect_modifiers_system (创建 AttributeModifier 实体)
+    -> aggregate_attribute_modifiers_system
+    -> pre_attribute_change / post_attribute_change
+    -> 修改 current_value
+```
+
+#### 3. 永久修改（修改 base_value）
+```
+用户代码调用 set_base_value()
+    -> pre_attribute_base_change / post_attribute_base_change
+    -> 修改 base_value
+    -> 触发 aggregation (重新计算 current_value)
+```
+
+**钩子选择指南**:
+- `pre_effect_execute`/`post_effect_execute`: 用于 Instant 效果的特殊处理（如拒绝负面效果）
+- `pre_attribute_change`/`post_attribute_change`: 用于所有 current_value 变化（最常用）
+- `pre_attribute_base_change`/`post_attribute_base_change`: 用于永久修改（如升级）
 
 ### 与 Abilities 模块
 
@@ -390,9 +459,14 @@ fn can_afford_cost(
 
 Attributes 模块提供了：
 - ✅ 纯 ECS 架构的属性系统
-- ✅ 灵活的生命周期钩子
+- ✅ 6 个灵活的生命周期钩子（对应 UE 的 AttributeSet 回调）
 - ✅ 最小化框架约束
 - ✅ 高性能设计
 - ✅ 类型安全的 AttributeSet 系统
+
+**钩子系统特性**:
+- `pre_effect_execute`/`post_effect_execute`: Instant 效果专用（可拒绝修改）
+- `pre_attribute_change`/`post_attribute_change`: 所有 current_value 变化（最常用）
+- `pre_attribute_base_change`/`post_attribute_base_change`: 永久修改专用
 
 用户可以在钩子中实现任何自定义逻辑，框架不做任何假设。
