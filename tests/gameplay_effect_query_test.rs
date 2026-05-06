@@ -34,25 +34,27 @@ fn spawn_entity_with_tags(world: &mut World, tag_names: Vec<&str>) -> Entity {
 
     // Add tags using a system to get proper access to Commands
     let tag_names_owned: Vec<String> = tag_names.iter().map(|s| s.to_string()).collect();
-    world.run_system_once(
-        move |mut query: Query<&mut OwnedTags>,
-              tags_manager: Res<GameplayTagsManager>,
-              mut commands: Commands| {
-            if let Ok(mut tags) = query.get_mut(entity) {
-                for tag_name in &tag_names_owned {
-                    let mut container = GameplayTagContainer::default();
-                    container.add_tag(GameplayTag::new(tag_name), &tags_manager);
-                    tags.0.update_tag_container_count(
-                        &container,
-                        1,
-                        &tags_manager,
-                        &mut commands,
-                        entity,
-                    );
+    world
+        .run_system_once(
+            move |mut query: Query<&mut OwnedTags>,
+                  tags_manager: Res<GameplayTagsManager>,
+                  mut commands: Commands| {
+                if let Ok(mut tags) = query.get_mut(entity) {
+                    for tag_name in &tag_names_owned {
+                        let mut container = GameplayTagContainer::default();
+                        container.add_tag(GameplayTag::new(tag_name), &tags_manager);
+                        tags.0.update_tag_container_count(
+                            &container,
+                            1,
+                            &tags_manager,
+                            &mut commands,
+                            entity,
+                        );
+                    }
                 }
-            }
-        },
-    );
+            },
+        )
+        .unwrap();
 
     entity
 }

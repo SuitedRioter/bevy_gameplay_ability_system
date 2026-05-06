@@ -255,16 +255,18 @@ fn test_require_all_tags() {
     );
 
     // Add State.Alive tag
-    app.world_mut().run_system_once(
-        move |mut query: Query<&mut OwnedTags>,
-              tags_manager: Res<bevy_gameplay_tag::GameplayTagsManager>| {
-            if let Ok(mut tags) = query.get_mut(owner) {
-                tags.0
-                    .explicit_tags
-                    .add_tag(GameplayTag::new("State.Alive"), &tags_manager);
-            }
-        },
-    );
+    app.world_mut()
+        .run_system_once(
+            move |mut query: Query<&mut OwnedTags>,
+                  tags_manager: Res<bevy_gameplay_tag::GameplayTagsManager>| {
+                if let Ok(mut tags) = query.get_mut(owner) {
+                    tags.0
+                        .explicit_tags
+                        .add_tag(GameplayTag::new("State.Alive"), &tags_manager);
+                }
+            },
+        )
+        .unwrap();
 
     app.update();
 

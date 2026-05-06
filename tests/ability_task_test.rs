@@ -21,10 +21,7 @@ use bevy_gameplay_ability_system::{
     },
 };
 use bevy_gameplay_tag::{GameplayTag, GameplayTagsManager, GameplayTagsPlugin};
-use std::{
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::sync::{Arc, Mutex};
 use string_cache::DefaultAtom as Atom;
 
 struct TestAttributeSet;
@@ -352,7 +349,8 @@ fn test_wait_attribute_change_task() {
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
             TestAttributeSet::create_attributes(&mut commands, player);
-        });
+        })
+        .unwrap();
     app.update();
 
     // Register and grant ability
@@ -362,7 +360,8 @@ fn test_wait_attribute_change_task() {
         .run_system_once(move |mut registry: ResMut<AbilityRegistry>| {
             let def = AbilityDefinition::new(ability_id.clone());
             registry.register(def);
-        });
+        })
+        .unwrap();
 
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
@@ -371,7 +370,8 @@ fn test_wait_attribute_change_task() {
                 AbilityOwner(player),
                 AbilityActiveState::default(),
             ));
-        });
+        })
+        .unwrap();
     app.update();
 
     // Get ability spec
@@ -386,7 +386,8 @@ fn test_wait_attribute_change_task() {
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
             commands.trigger(TryActivateAbilityEvent::new(ability_spec, player));
-        });
+        })
+        .unwrap();
     app.update();
 
     // Get ability instance
@@ -423,7 +424,8 @@ fn test_wait_attribute_change_task() {
             for mut attr in attributes.iter_mut() {
                 attr.set_base_value(200.0);
             }
-        });
+        })
+        .unwrap();
     app.update();
 
     // Task should complete and be despawned
@@ -457,11 +459,13 @@ fn test_wait_effect_applied_task() {
         ))
         .id();
 
-    app.world_mut().run_system_once(
-        move |mut commands: Commands, tags: Res<GameplayTagsManager>| {
-            TestAttributeSet::create_attributes(&mut commands, player);
-        },
-    );
+    app.world_mut()
+        .run_system_once(
+            move |mut commands: Commands, tags: Res<GameplayTagsManager>| {
+                TestAttributeSet::create_attributes(&mut commands, player);
+            },
+        )
+        .unwrap();
     app.update();
 
     // Register effect
@@ -474,7 +478,8 @@ fn test_wait_effect_applied_task() {
                 .with_duration_policy(DurationPolicy::HasDuration)
                 .with_duration(5.0);
             registry.register(def);
-        });
+        })
+        .unwrap();
 
     // Register and grant ability
     let ability_id = Atom::from("test_ability");
@@ -483,7 +488,8 @@ fn test_wait_effect_applied_task() {
         .run_system_once(move |mut registry: ResMut<AbilityRegistry>| {
             let def = AbilityDefinition::new(ability_id.clone());
             registry.register(def);
-        });
+        })
+        .unwrap();
 
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
@@ -492,7 +498,8 @@ fn test_wait_effect_applied_task() {
                 AbilityOwner(player),
                 AbilityActiveState::default(),
             ));
-        });
+        })
+        .unwrap();
     app.update();
 
     // Get ability spec and activate
@@ -506,7 +513,8 @@ fn test_wait_effect_applied_task() {
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
             commands.trigger(TryActivateAbilityEvent::new(ability_spec, player));
-        });
+        })
+        .unwrap();
     app.update();
 
     let ability_instance = {
@@ -544,7 +552,8 @@ fn test_wait_effect_applied_task() {
                     .with_instigator(player)
                     .with_level(1),
             );
-        });
+        })
+        .unwrap();
     app.update();
 
     // Task should complete and be despawned
@@ -578,11 +587,13 @@ fn test_wait_effect_removed_task() {
         ))
         .id();
 
-    app.world_mut().run_system_once(
-        move |mut commands: Commands, tags: Res<GameplayTagsManager>| {
-            TestAttributeSet::create_attributes(&mut commands, player);
-        },
-    );
+    app.world_mut()
+        .run_system_once(
+            move |mut commands: Commands, tags: Res<GameplayTagsManager>| {
+                TestAttributeSet::create_attributes(&mut commands, player);
+            },
+        )
+        .unwrap();
     app.update();
 
     // Register effect
@@ -595,7 +606,8 @@ fn test_wait_effect_removed_task() {
                 .with_duration_policy(DurationPolicy::HasDuration)
                 .with_duration(1.0);
             registry.register(def);
-        });
+        })
+        .unwrap();
 
     // Register and grant ability FIRST
     let ability_id = Atom::from("test_ability");
@@ -604,7 +616,8 @@ fn test_wait_effect_removed_task() {
         .run_system_once(move |mut registry: ResMut<AbilityRegistry>| {
             let def = AbilityDefinition::new(ability_id.clone());
             registry.register(def);
-        });
+        })
+        .unwrap();
 
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
@@ -613,7 +626,8 @@ fn test_wait_effect_removed_task() {
                 AbilityOwner(player),
                 AbilityActiveState::default(),
             ));
-        });
+        })
+        .unwrap();
     app.update();
 
     let ability_spec = {
@@ -626,7 +640,8 @@ fn test_wait_effect_removed_task() {
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
             commands.trigger(TryActivateAbilityEvent::new(ability_spec, player));
-        });
+        })
+        .unwrap();
     app.update();
 
     let ability_instance = {
@@ -660,7 +675,8 @@ fn test_wait_effect_removed_task() {
                     .with_instigator(player)
                     .with_level(1),
             );
-        });
+        })
+        .unwrap();
     app.update();
 
     // Need another update for effect to be applied (observer triggers in Effects)
@@ -723,12 +739,14 @@ fn test_apply_effect_to_target_data_task() {
         ))
         .id();
 
-    app.world_mut().run_system_once(
-        move |mut commands: Commands, tags: Res<GameplayTagsManager>| {
-            TestAttributeSet::create_attributes(&mut commands, player);
-            TestAttributeSet::create_attributes(&mut commands, enemy);
-        },
-    );
+    app.world_mut()
+        .run_system_once(
+            move |mut commands: Commands, tags: Res<GameplayTagsManager>| {
+                TestAttributeSet::create_attributes(&mut commands, player);
+                TestAttributeSet::create_attributes(&mut commands, enemy);
+            },
+        )
+        .unwrap();
     app.update();
 
     // Register damage effect
@@ -744,7 +762,8 @@ fn test_apply_effect_to_target_data_task() {
                     MagnitudeCalculation::scalar(-50.0),
                 ));
             registry.register(def);
-        });
+        })
+        .unwrap();
 
     // Register and grant ability
     let ability_id = Atom::from("test_ability");
@@ -753,7 +772,8 @@ fn test_apply_effect_to_target_data_task() {
         .run_system_once(move |mut registry: ResMut<AbilityRegistry>| {
             let def = AbilityDefinition::new(ability_id.clone());
             registry.register(def);
-        });
+        })
+        .unwrap();
 
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
@@ -762,7 +782,8 @@ fn test_apply_effect_to_target_data_task() {
                 AbilityOwner(player),
                 AbilityActiveState::default(),
             ));
-        });
+        })
+        .unwrap();
     app.update();
 
     let ability_spec = {
@@ -775,7 +796,8 @@ fn test_apply_effect_to_target_data_task() {
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
             commands.trigger(TryActivateAbilityEvent::new(ability_spec, player));
-        });
+        })
+        .unwrap();
     app.update();
 
     let ability_instance = {
@@ -846,7 +868,8 @@ fn test_wait_target_data_task() {
         .run_system_once(move |mut registry: ResMut<AbilityRegistry>| {
             let def = AbilityDefinition::new(ability_id.clone());
             registry.register(def);
-        });
+        })
+        .unwrap();
 
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
@@ -855,7 +878,8 @@ fn test_wait_target_data_task() {
                 AbilityOwner(player),
                 AbilityActiveState::default(),
             ));
-        });
+        })
+        .unwrap();
     app.update();
 
     let ability_spec = {
@@ -868,7 +892,8 @@ fn test_wait_target_data_task() {
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
             commands.trigger(TryActivateAbilityEvent::new(ability_spec, player));
-        });
+        })
+        .unwrap();
     app.update();
 
     let ability_instance = {
@@ -950,7 +975,8 @@ fn test_wait_input_press_task() {
         .run_system_once(move |mut registry: ResMut<AbilityRegistry>| {
             let def = AbilityDefinition::new(ability_id.clone());
             registry.register(def);
-        });
+        })
+        .unwrap();
 
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
@@ -959,7 +985,8 @@ fn test_wait_input_press_task() {
                 AbilityOwner(player),
                 AbilityActiveState::default(),
             ));
-        });
+        })
+        .unwrap();
     app.update();
 
     let ability_spec = {
@@ -972,7 +999,8 @@ fn test_wait_input_press_task() {
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
             commands.trigger(TryActivateAbilityEvent::new(ability_spec, player));
-        });
+        })
+        .unwrap();
     app.update();
 
     let ability_instance = {
@@ -1009,7 +1037,8 @@ fn test_wait_input_press_task() {
                 entity: player,
                 action: InputAction::Confirm,
             });
-        });
+        })
+        .unwrap();
     app.update();
 
     // Task should complete and be despawned
@@ -1051,7 +1080,8 @@ fn test_wait_overlap_task() {
         .run_system_once(move |mut registry: ResMut<AbilityRegistry>| {
             let def = AbilityDefinition::new(ability_id.clone());
             registry.register(def);
-        });
+        })
+        .unwrap();
 
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
@@ -1060,7 +1090,8 @@ fn test_wait_overlap_task() {
                 AbilityOwner(player),
                 AbilityActiveState::default(),
             ));
-        });
+        })
+        .unwrap();
     app.update();
 
     let ability_spec = {
@@ -1073,7 +1104,8 @@ fn test_wait_overlap_task() {
     app.world_mut()
         .run_system_once(move |mut commands: Commands| {
             commands.trigger(TryActivateAbilityEvent::new(ability_spec, player));
-        });
+        })
+        .unwrap();
     app.update();
 
     let ability_instance = {
@@ -1111,7 +1143,8 @@ fn test_wait_overlap_task() {
                 entity_b: enemy,
                 component_type: None,
             });
-        });
+        })
+        .unwrap();
     app.update();
 
     // Task should complete and be despawned

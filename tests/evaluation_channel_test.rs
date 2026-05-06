@@ -1,7 +1,6 @@
 use bevy::prelude::*;
 use bevy_gameplay_ability_system::{GasPlugin, attributes::*, effects::*};
 use bevy_gameplay_tag::GameplayTagsPlugin;
-use string_cache::DefaultAtom as Atom;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct TestAttributeSet;
@@ -110,7 +109,7 @@ fn test_channel_evaluation_order() {
         .world_mut()
         .query::<(&AttributeData, &AttributeName)>()
         .iter(app.world())
-        .find(|(_, name)| name.0 == Atom::from("Damage"))
+        .find(|(_, name)| name.0.as_ref() == "Damage")
         .map(|(data, _)| data.current_value)
         .expect("Damage attribute should exist");
 
@@ -181,7 +180,7 @@ fn test_same_channel_modifier_combination() {
         .world_mut()
         .query::<(&AttributeData, &AttributeName)>()
         .iter(app.world())
-        .find(|(_, name)| name.0 == Atom::from("Health"))
+        .find(|(_, name)| name.0.as_ref() == "Health")
         .map(|(data, _)| data.current_value)
         .expect("Health attribute should exist");
 
@@ -319,7 +318,7 @@ fn test_complex_buff_debuff_stacking() {
         .world_mut()
         .query::<(&AttributeData, &AttributeName)>()
         .iter(app.world())
-        .find(|(_, name)| name.0 == Atom::from("Attack"))
+        .find(|(_, name)| name.0.as_ref() == "Attack")
         .map(|(data, _)| data.current_value)
         .expect("Attack attribute should exist");
 
