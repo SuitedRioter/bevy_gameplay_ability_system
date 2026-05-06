@@ -423,6 +423,59 @@ pub struct InputPressedEvent {
     pub action: InputAction,
 }
 
+/// WaitInputRelease task - waits for a specific input action to be released.
+///
+/// Completes when the specified input action is released.
+/// Tracks how long the input was held.
+#[derive(Component, Debug, Clone)]
+pub struct WaitInputReleaseTask {
+    /// The input action to wait for.
+    pub action: InputAction,
+    /// Time when the input was first pressed (for tracking hold duration).
+    pub press_time: f64,
+    /// Whether the input has been released.
+    pub released: bool,
+}
+
+impl WaitInputReleaseTask {
+    /// Create a new wait input release task.
+    pub fn new(action: InputAction, press_time: f64) -> Self {
+        Self {
+            action,
+            press_time,
+            released: false,
+        }
+    }
+
+    /// Create a task waiting for confirm input release.
+    pub fn confirm(press_time: f64) -> Self {
+        Self::new(InputAction::Confirm, press_time)
+    }
+
+    /// Create a task waiting for cancel input release.
+    pub fn cancel(press_time: f64) -> Self {
+        Self::new(InputAction::Cancel, press_time)
+    }
+
+    /// Calculate how long the input was held.
+    pub fn hold_duration(&self, current_time: f64) -> f64 {
+        current_time - self.press_time
+    }
+}
+
+/// Event sent when an input action is released.
+///
+/// User code should send this event when input is released.
+#[derive(Event, Debug, Clone, Copy)]
+pub struct InputReleasedEvent {
+    /// The entity that triggered the input (usually the player character).
+    pub entity: Entity,
+    /// The input action that was released.
+    pub action: InputAction,
+    /// Time when the input was released.
+    pub release_time: f64,
+}
+
 /// WaitOverlap task - waits for collision overlap with entities matching a filter.
 ///
 /// Completes when the owner overlaps with an entity that has the specified component.
@@ -919,6 +972,45 @@ pub fn handle_input_pressed_for_tasks_system(
         }
 
         wait_input.pressed = true;
+        *state = TaskState::Completed;
+        commands.trigger(TaskCompletedEvent {
+            task: task_entity,
+            ability_instance: ability_task.ability_instance,
+            ability_spec: ability_task.ability_spec,
+            owner: ability_task.owner,
+        });
+    }
+}
+
+/// Observer that handles input released events for WaitInputRelease tasks.
+pub fn handle_input_released_for_tasks_system(
+    trigger: On<InputReleasedEvent>,
+    mut commands: Commands,
+    mut tasks: Query<(
+        Entity,
+        &AbilityTask,
+        &mut WaitInputReleaseTask,
+        &mut TaskState,
+    )>,
+) {
+    let event = trigger.event();
+
+    for (task_entity, ability_task, mut wait_release, mut state) in tasks.iter_mut() {
+        if *state != TaskState::Running || wait_release.released {
+            continue;
+        }
+
+        // Check if this task belongs to the entity that triggered the input
+        if ability_task.owner != event.entity {
+            continue;
+        }
+
+        // Check if the input action matches
+        if wait_release.action != event.action {
+            continue;
+        }
+
+        wait_release.released = true;
         *state = TaskState::Completed;
         commands.trigger(TaskCompletedEvent {
             task: task_entity,

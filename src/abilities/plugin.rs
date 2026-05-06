@@ -58,6 +58,7 @@ impl Plugin for AbilityPlugin {
             // Task observers
             .add_observer(tasks::handle_gameplay_event_for_tasks_system)
             .add_observer(tasks::handle_input_pressed_for_tasks_system)
+            .add_observer(tasks::handle_input_released_for_tasks_system)
             .add_observer(tasks::handle_overlap_for_tasks_system)
             .add_observer(tasks::handle_provide_target_data_system)
             .add_observer(tasks::handle_cancel_target_data_system)
