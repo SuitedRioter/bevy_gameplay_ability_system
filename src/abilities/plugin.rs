@@ -44,6 +44,8 @@ impl Plugin for AbilityPlugin {
                     tasks::tick_wait_delay_tasks_system,
                     tasks::check_wait_target_data_tasks_system,
                     tasks::update_play_montage_tasks_system,
+                    tasks::spawn_actor_tasks_system,
+                    tasks::update_repeat_tasks_system,
                     tasks::cleanup_finished_tasks_system,
                 )
                     .chain()

@@ -1169,4 +1169,249 @@ pub fn handle_cancel_montage_system(
     // listening to this event. This task only manages the state.
 }
 
+/// SpawnActor task - spawns an entity at a specified location.
+///
+/// This task is used for abilities that need to spawn entities such as
+/// projectiles, summons, traps, or other game objects.
+///
+/// # Example
+/// ```ignore
+/// // Spawn a projectile
+/// commands.spawn((
+///     AbilityTask { ability_instance, ability_spec, owner },
+///     SpawnActorTask::new(projectile_template, Vec3::new(0.0, 0.0, 0.0))
+///         .with_rotation(Quat::from_rotation_y(1.57)),
+///     TaskState::Running,
+/// ));
+/// ```
+#[derive(Component, Debug, Clone)]
+pub struct SpawnActorTask {
+    /// The entity template to spawn (can be a prefab or bundle)
+    pub template: Option<Entity>,
+    /// Spawn location in world space
+    pub location: Vec3,
+    /// Spawn rotation
+    pub rotation: Quat,
+    /// The spawned entity (once created)
+    pub spawned_entity: Option<Entity>,
+    /// Whether the entity has been spawned
+    pub spawned: bool,
+    /// Optional bundle components to add to the spawned entity
+    pub bundle_name: Option<String>,
+}
+
+impl SpawnActorTask {
+    /// Create a new spawn actor task with a template entity.
+    pub fn new(template: Entity, location: Vec3) -> Self {
+        Self {
+            template: Some(template),
+            location,
+            rotation: Quat::IDENTITY,
+            spawned_entity: None,
+            spawned: false,
+            bundle_name: None,
+        }
+    }
+
+    /// Create a new spawn actor task with a bundle name.
+    pub fn with_bundle(bundle_name: impl Into<String>, location: Vec3) -> Self {
+        Self {
+            template: None,
+            location,
+            rotation: Quat::IDENTITY,
+            spawned_entity: None,
+            spawned: false,
+            bundle_name: Some(bundle_name.into()),
+        }
+    }
+
+    /// Set the spawn rotation.
+    pub fn with_rotation(mut self, rotation: Quat) -> Self {
+        self.rotation = rotation;
+        self
+    }
+
+    /// Set the spawn location.
+    pub fn with_location(mut self, location: Vec3) -> Self {
+        self.location = location;
+        self
+    }
+}
+
+/// Event triggered when an actor is spawned by a SpawnActor task.
+#[derive(Event, Debug, Clone)]
+pub struct ActorSpawnedEvent {
+    /// The task entity that spawned the actor.
+    pub task: Entity,
+    /// The spawned entity.
+    pub spawned_entity: Entity,
+    /// The ability instance that owns this task.
+    pub ability_instance: Option<Entity>,
+    /// The ability spec entity.
+    pub ability_spec: Entity,
+    /// The owner entity (character).
+    pub owner: Entity,
+}
+
+/// System that spawns entities for SpawnActor tasks.
+pub fn spawn_actor_tasks_system(
+    mut commands: Commands,
+    mut tasks: Query<(Entity, &AbilityTask, &mut SpawnActorTask, &mut TaskState)>,
+) {
+    for (task_entity, ability_task, mut spawn_task, mut state) in tasks.iter_mut() {
+        if *state != TaskState::Running || spawn_task.spawned {
+            continue;
+        }
+
+        // Spawn the entity
+        let spawned = commands
+            .spawn((
+                Transform::from_translation(spawn_task.location)
+                    .with_rotation(spawn_task.rotation),
+                GlobalTransform::default(),
+            ))
+            .id();
+
+        spawn_task.spawned_entity = Some(spawned);
+        spawn_task.spawned = true;
+        *state = TaskState::Completed;
+
+        // Trigger spawned event
+        commands.trigger(ActorSpawnedEvent {
+            task: task_entity,
+            spawned_entity: spawned,
+            ability_instance: ability_task.ability_instance,
+            ability_spec: ability_task.ability_spec,
+            owner: ability_task.owner,
+        });
+
+        // Trigger task completed event
+        commands.trigger(TaskCompletedEvent {
+            task: task_entity,
+            ability_instance: ability_task.ability_instance,
+            ability_spec: ability_task.ability_spec,
+            owner: ability_task.owner,
+        });
+    }
+}
+
+/// Repeat task - repeats an action multiple times with a delay.
+///
+/// This task is used for abilities that need to execute repeatedly,
+/// such as channeled abilities, multi-hit attacks, or periodic effects.
+///
+/// # Example
+/// ```ignore
+/// // Repeat 5 times with 1 second delay
+/// commands.spawn((
+///     AbilityTask { ability_instance, ability_spec, owner },
+///     RepeatTask::times(5, 1.0),
+///     TaskState::Running,
+/// ));
+///
+/// // Infinite repeat with 0.5 second delay
+/// commands.spawn((
+///     AbilityTask { ability_instance, ability_spec, owner },
+///     RepeatTask::infinite(0.5),
+///     TaskState::Running,
+/// ));
+/// ```
+#[derive(Component, Debug, Clone)]
+pub struct RepeatTask {
+    /// Number of times to repeat (None = infinite)
+    pub repeat_count: Option<u32>,
+    /// Current iteration (starts at 0)
+    pub current_iteration: u32,
+    /// Delay between iterations (seconds)
+    pub delay: f32,
+    /// Elapsed time since last iteration
+    pub elapsed: f32,
+}
+
+impl RepeatTask {
+    /// Create a new repeat task with a specific count.
+    pub fn times(count: u32, delay: f32) -> Self {
+        Self {
+            repeat_count: Some(count),
+            current_iteration: 0,
+            delay,
+            elapsed: 0.0,
+        }
+    }
+
+    /// Create a new infinite repeat task.
+    pub fn infinite(delay: f32) -> Self {
+        Self {
+            repeat_count: None,
+            current_iteration: 0,
+            delay,
+            elapsed: 0.0,
+        }
+    }
+
+    /// Check if the task should continue repeating.
+    pub fn should_continue(&self) -> bool {
+        match self.repeat_count {
+            Some(max) => self.current_iteration < max,
+            None => true,
+        }
+    }
+}
+
+/// Event triggered on each iteration of a Repeat task.
+#[derive(Event, Debug, Clone)]
+pub struct TaskIterationEvent {
+    /// The task entity.
+    pub task: Entity,
+    /// Current iteration number (starts at 1).
+    pub iteration: u32,
+    /// The ability instance that owns this task.
+    pub ability_instance: Option<Entity>,
+    /// The ability spec entity.
+    pub ability_spec: Entity,
+    /// The owner entity (character).
+    pub owner: Entity,
+}
+
+/// System that updates Repeat tasks.
+pub fn update_repeat_tasks_system(
+    mut commands: Commands,
+    mut tasks: Query<(Entity, &AbilityTask, &mut RepeatTask, &mut TaskState)>,
+    time: Res<Time>,
+) {
+    for (task_entity, ability_task, mut repeat_task, mut state) in tasks.iter_mut() {
+        if *state != TaskState::Running {
+            continue;
+        }
+
+        repeat_task.elapsed += time.delta_secs();
+
+        if repeat_task.elapsed >= repeat_task.delay {
+            repeat_task.elapsed = 0.0;
+            repeat_task.current_iteration += 1;
+
+            // Trigger iteration event
+            commands.trigger(TaskIterationEvent {
+                task: task_entity,
+                iteration: repeat_task.current_iteration,
+                ability_instance: ability_task.ability_instance,
+                ability_spec: ability_task.ability_spec,
+                owner: ability_task.owner,
+            });
+
+            // Check if we should complete
+            if !repeat_task.should_continue() {
+                *state = TaskState::Completed;
+                commands.trigger(TaskCompletedEvent {
+                    task: task_entity,
+                    ability_instance: ability_task.ability_instance,
+                    ability_spec: ability_task.ability_spec,
+                    owner: ability_task.owner,
+                });
+            }
+        }
+    }
+}
+
+
 
