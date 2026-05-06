@@ -1364,6 +1364,200 @@ impl RepeatTask {
     }
 }
 
+/// WaitGameplayTagAdded task - waits for a gameplay tag to be added to the owner.
+///
+/// Completes when the specified tag is added to the owner's OwnedTags.
+#[derive(Component, Debug, Clone)]
+pub struct WaitGameplayTagAddedTask {
+    /// The tag to wait for.
+    pub tag: GameplayTag,
+    /// Whether to trigger only once.
+    pub only_trigger_once: bool,
+    /// Whether the tag has been added.
+    pub triggered: bool,
+}
+
+impl WaitGameplayTagAddedTask {
+    /// Create a new wait gameplay tag added task.
+    pub fn new(tag: GameplayTag) -> Self {
+        Self {
+            tag,
+            only_trigger_once: true,
+            triggered: false,
+        }
+    }
+
+    /// Set whether to trigger only once.
+    pub fn with_only_trigger_once(mut self, only_once: bool) -> Self {
+        self.only_trigger_once = only_once;
+        self
+    }
+}
+
+/// WaitGameplayTagRemoved task - waits for a gameplay tag to be removed from the owner.
+///
+/// Completes when the specified tag is removed from the owner's OwnedTags.
+#[derive(Component, Debug, Clone)]
+pub struct WaitGameplayTagRemovedTask {
+    /// The tag to wait for removal.
+    pub tag: GameplayTag,
+    /// Whether to trigger only once.
+    pub only_trigger_once: bool,
+    /// Whether the tag has been removed.
+    pub triggered: bool,
+}
+
+impl WaitGameplayTagRemovedTask {
+    /// Create a new wait gameplay tag removed task.
+    pub fn new(tag: GameplayTag) -> Self {
+        Self {
+            tag,
+            only_trigger_once: true,
+            triggered: false,
+        }
+    }
+
+    /// Set whether to trigger only once.
+    pub fn with_only_trigger_once(mut self, only_once: bool) -> Self {
+        self.only_trigger_once = only_once;
+        self
+    }
+}
+
+/// WaitAbilityActivate task - waits for another ability to activate.
+///
+/// Completes when an ability with the specified definition ID activates on the owner.
+#[derive(Component, Debug, Clone)]
+pub struct WaitAbilityActivateTask {
+    /// The ability definition ID to wait for (None = any ability).
+    pub ability_definition_id: Option<String>,
+    /// Whether to trigger only once.
+    pub only_trigger_once: bool,
+    /// Whether the ability has activated.
+    pub triggered: bool,
+}
+
+impl WaitAbilityActivateTask {
+    /// Create a new wait ability activate task for any ability.
+    pub fn new() -> Self {
+        Self {
+            ability_definition_id: None,
+            only_trigger_once: true,
+            triggered: false,
+        }
+    }
+
+    /// Create a new wait ability activate task for a specific ability.
+    pub fn for_ability(ability_definition_id: impl Into<String>) -> Self {
+        Self {
+            ability_definition_id: Some(ability_definition_id.into()),
+            only_trigger_once: true,
+            triggered: false,
+        }
+    }
+
+    /// Set whether to trigger only once.
+    pub fn with_only_trigger_once(mut self, only_once: bool) -> Self {
+        self.only_trigger_once = only_once;
+        self
+    }
+}
+
+/// WaitAbilityEnd task - waits for another ability to end.
+///
+/// Completes when an ability with the specified definition ID ends on the owner.
+#[derive(Component, Debug, Clone)]
+pub struct WaitAbilityEndTask {
+    /// The ability definition ID to wait for (None = any ability).
+    pub ability_definition_id: Option<String>,
+    /// Whether to trigger only once.
+    pub only_trigger_once: bool,
+    /// Whether the ability has ended.
+    pub triggered: bool,
+}
+
+impl WaitAbilityEndTask {
+    /// Create a new wait ability end task for any ability.
+    pub fn new() -> Self {
+        Self {
+            ability_definition_id: None,
+            only_trigger_once: true,
+            triggered: false,
+        }
+    }
+
+    /// Create a new wait ability end task for a specific ability.
+    pub fn for_ability(ability_definition_id: impl Into<String>) -> Self {
+        Self {
+            ability_definition_id: Some(ability_definition_id.into()),
+            only_trigger_once: true,
+            triggered: false,
+        }
+    }
+
+    /// Set whether to trigger only once.
+    pub fn with_only_trigger_once(mut self, only_once: bool) -> Self {
+        self.only_trigger_once = only_once;
+        self
+    }
+}
+
+/// WaitAttributeChangeRatio task - waits for an attribute to reach a percentage of another attribute.
+///
+/// Completes when the ratio (numerator / denominator) meets the comparison condition.
+/// Useful for health percentage checks, mana percentage, etc.
+#[derive(Component, Debug, Clone)]
+pub struct WaitAttributeChangeRatioTask {
+    /// The numerator attribute name (e.g., "Health").
+    pub numerator_attribute: String,
+    /// The denominator attribute name (e.g., "MaxHealth").
+    pub denominator_attribute: String,
+    /// The comparison operator.
+    pub comparison: AttributeComparison,
+    /// The threshold ratio (0.0 to 1.0 for percentages).
+    pub threshold: f32,
+    /// Whether to trigger only once.
+    pub only_trigger_once: bool,
+    /// Whether the condition has been met.
+    pub triggered: bool,
+}
+
+impl WaitAttributeChangeRatioTask {
+    /// Create a new wait attribute change ratio task.
+    ///
+    /// # Example
+    /// ```ignore
+    /// // Wait for health to drop below 50%
+    /// WaitAttributeChangeRatioTask::new(
+    ///     "Health",
+    ///     "MaxHealth",
+    ///     AttributeComparison::LessThan,
+    ///     0.5
+    /// )
+    /// ```
+    pub fn new(
+        numerator_attribute: impl Into<String>,
+        denominator_attribute: impl Into<String>,
+        comparison: AttributeComparison,
+        threshold: f32,
+    ) -> Self {
+        Self {
+            numerator_attribute: numerator_attribute.into(),
+            denominator_attribute: denominator_attribute.into(),
+            comparison,
+            threshold,
+            only_trigger_once: true,
+            triggered: false,
+        }
+    }
+
+    /// Set whether to trigger only once.
+    pub fn with_only_trigger_once(mut self, only_once: bool) -> Self {
+        self.only_trigger_once = only_once;
+        self
+    }
+}
+
 /// Event triggered on each iteration of a Repeat task.
 #[derive(Event, Debug, Clone)]
 pub struct TaskIterationEvent {

@@ -4,6 +4,7 @@
 
 use super::definition::AbilityRegistry;
 use super::systems::*;
+use super::task_systems;
 use super::tasks;
 use super::trigger_systems::*;
 use crate::core::system_sets::GasSystemSet;
@@ -46,6 +47,9 @@ impl Plugin for AbilityPlugin {
                     tasks::update_play_montage_tasks_system,
                     tasks::spawn_actor_tasks_system,
                     tasks::update_repeat_tasks_system,
+                    task_systems::update_wait_tag_added_tasks_system,
+                    task_systems::update_wait_tag_removed_tasks_system,
+                    task_systems::update_wait_attribute_ratio_tasks_system,
                     tasks::cleanup_finished_tasks_system,
                 )
                     .chain()
@@ -58,6 +62,8 @@ impl Plugin for AbilityPlugin {
             .add_observer(tasks::handle_provide_target_data_system)
             .add_observer(tasks::handle_cancel_target_data_system)
             .add_observer(tasks::handle_cancel_montage_system)
+            .add_observer(task_systems::on_ability_activated_for_wait_tasks)
+            .add_observer(task_systems::on_ability_ended_for_wait_tasks)
             // Trigger systems
             .add_systems(
                 Update,

@@ -51,6 +51,9 @@ impl AttributeData {
     ///
     /// Note: This does NOT trigger lifecycle events. Use the system-level
     /// functions for event-driven changes.
+    ///
+    /// **Optimization**: After calling this, you should mark the attribute entity with
+    /// `DirtyAttribute` component to trigger re-aggregation.
     pub fn set_base_value(&mut self, value: f32) {
         self.base_value = value;
         // Do NOT set current_value here - aggregation system will recalculate it
@@ -151,6 +154,17 @@ pub struct PreviousAttributeValue {
 /// Marker component identifying which AttributeSet this attribute belongs to.
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct AttributeSetId(pub std::any::TypeId);
+
+/// Marker component indicating that an attribute's modifiers need re-aggregation.
+///
+/// This is automatically added when:
+/// - A gameplay effect is applied/removed that modifies this attribute
+/// - The attribute's base value changes
+/// - An effect's modifier magnitude changes (e.g., dynamic AttributeBased)
+///
+/// The aggregation system removes this component after recalculating current_value.
+#[derive(Component, Debug, Clone, Copy)]
+pub struct DirtyAttribute;
 
 #[cfg(test)]
 mod tests {

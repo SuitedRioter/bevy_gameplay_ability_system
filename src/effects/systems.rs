@@ -713,7 +713,7 @@ pub fn create_effect_modifiers_system(
         ),
     >,
     existing_modifiers: Query<(Entity, &ModifierSource)>,
-    attributes: Query<(&AttributeData, &AttributeName, &ChildOf)>,
+    attributes: Query<(Entity, &AttributeData, &AttributeName, &ChildOf)>,
 ) {
     for (effect_entity, active_effect, target, instigator, set_by_caller, context) in
         new_or_changed_effects.iter()
@@ -756,7 +756,7 @@ pub fn create_effect_modifiers_system(
 
         let attribute_snapshots: Vec<_> = attributes
             .iter()
-            .map(|(data, name, child_of)| {
+            .map(|(_, data, name, child_of)| {
                 ApplicationAttributeSnapshot::new(child_of.get(), name, data)
             })
             .collect();
@@ -821,6 +821,16 @@ pub fn create_effect_modifiers_system(
                 ));
             }
         }
+
+        // Mark affected attributes as dirty for re-aggregation
+        for modifier_info in &definition.modifiers {
+            // Find the target attribute entity and mark it dirty
+            if let Some((attr_entity, _, _, _)) = attributes.iter().find(|(_, _, name, child_of)| {
+                child_of.get() == target.0 && name.0 == modifier_info.attribute_name
+            }) {
+                commands.entity(attr_entity).insert(crate::attributes::DirtyAttribute);
+            }
+        }
     }
 }
 
@@ -835,6 +845,7 @@ pub fn create_effect_modifiers_system(
 ///
 /// Performance optimization: Only recalculates Dynamic modifiers when their source attributes change.
 pub fn aggregate_attribute_modifiers_system(
+    mut commands: Commands,
     mut param_set: ParamSet<(
         Query<(
             Entity,
@@ -846,6 +857,7 @@ pub fn aggregate_attribute_modifiers_system(
         Query<(&AttributeData, &AttributeName, &ChildOf), Changed<AttributeData>>,
     )>,
     mut modifiers: Query<&mut AttributeModifier>,
+    dirty_attributes: Query<Entity, With<crate::attributes::DirtyAttribute>>,
     hooks: Option<Res<AttributeLifecycleHooks>>,
 ) {
     use super::batch_aggregation::ModifierAggregator;
@@ -906,9 +918,17 @@ pub fn aggregate_attribute_modifiers_system(
         aggregator.add_modifier(modifier);
     }
 
+    // Build set of dirty attribute entities for fast lookup
+    let dirty_set: HashSet<Entity> = dirty_attributes.iter().collect();
+
     // Process each attribute using the pre-aggregated batches
     let mut attributes = param_set.p0();
     for (attr_entity, mut attr_data, attr_name, child_of, set_id) in attributes.iter_mut() {
+        // Skip if not dirty (optimization)
+        if !dirty_set.is_empty() && !dirty_set.contains(&attr_entity) {
+            continue;
+        }
+
         let owner = child_of.get();
 
         // Get the batch for this attribute (if any)
@@ -942,6 +962,9 @@ pub fn aggregate_attribute_modifiers_system(
                     (set_hooks.post_change)(&context);
                 }
             }
+
+            // Remove dirty marker after processing
+            commands.entity(attr_entity).remove::<crate::attributes::DirtyAttribute>();
         } else {
             // No modifiers for this attribute, reset to base value if needed
             let old_value = attr_data.current_value;
@@ -969,6 +992,9 @@ pub fn aggregate_attribute_modifiers_system(
                     (set_hooks.post_change)(&context);
                 }
             }
+
+            // Remove dirty marker after processing
+            commands.entity(attr_entity).remove::<crate::attributes::DirtyAttribute>();
         }
     }
 }
@@ -1048,9 +1074,13 @@ pub fn remove_expired_effects_system(
     )>,
     modifiers: Query<(Entity, &ModifierSource)>,
     mut tag_containers: Query<&mut OwnedTags>,
+    attributes: Query<(Entity, &AttributeName, &ChildOf)>,
 ) {
     for (effect_entity, duration, active_effect, target, granted_tags, context) in effects.iter() {
         if duration.is_expired() {
+            // Get definition to find affected attributes
+            let definition = registry.get(&active_effect.definition_id);
+
             // Remove granted_tags from target's OwnedTags
             if let Some(granted) = granted_tags
                 && let Ok(mut target_tags) = tag_containers.get_mut(target.0)
@@ -1068,6 +1098,17 @@ pub fn remove_expired_effects_system(
             for (modifier_entity, source) in modifiers.iter() {
                 if source.0 == effect_entity {
                     commands.entity(modifier_entity).despawn();
+                }
+            }
+
+            // Mark affected attributes as dirty
+            if let Some(def) = definition {
+                for modifier_info in &def.modifiers {
+                    if let Some((attr_entity, _, _)) = attributes.iter().find(|(_, name, child_of)| {
+                        child_of.get() == target.0 && name.0 == modifier_info.attribute_name
+                    }) {
+                        commands.entity(attr_entity).insert(crate::attributes::DirtyAttribute);
+                    }
                 }
             }
 
