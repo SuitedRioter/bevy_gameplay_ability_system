@@ -281,8 +281,16 @@ mod tests {
     #[test]
     fn test_modifier_batch_single_channel() {
         let mut batch = ModifierBatch::new();
-        batch.add_modifier(EvaluationChannel::Channel0, ModifierOperation::AddBase, 10.0);
-        batch.add_modifier(EvaluationChannel::Channel0, ModifierOperation::AddBase, 20.0);
+        batch.add_modifier(
+            EvaluationChannel::Channel0,
+            ModifierOperation::AddBase,
+            10.0,
+        );
+        batch.add_modifier(
+            EvaluationChannel::Channel0,
+            ModifierOperation::AddBase,
+            20.0,
+        );
 
         let result = batch.evaluate(100.0);
         assert_eq!(result, 130.0);
@@ -292,7 +300,11 @@ mod tests {
     fn test_modifier_batch_multiple_channels() {
         let mut batch = ModifierBatch::new();
         // Channel0: +10
-        batch.add_modifier(EvaluationChannel::Channel0, ModifierOperation::AddBase, 10.0);
+        batch.add_modifier(
+            EvaluationChannel::Channel0,
+            ModifierOperation::AddBase,
+            10.0,
+        );
         // Channel1: *1.5 (50% bonus)
         batch.add_modifier(
             EvaluationChannel::Channel1,

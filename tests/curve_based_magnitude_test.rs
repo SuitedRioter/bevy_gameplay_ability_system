@@ -133,9 +133,8 @@ fn test_curve_based_linear_damage_scaling() {
     app.update();
 
     // Test level 1: 100 + 10 = 110
-    app.world_mut().trigger(
-        ApplyGameplayEffectEvent::new("CurveDamage", target).with_level(1),
-    );
+    app.world_mut()
+        .trigger(ApplyGameplayEffectEvent::new("CurveDamage", target).with_level(1));
     app.update();
     let health = get_attribute_current_value(&mut app.world_mut(), target, "Health").unwrap();
     assert_eq!(health, 110.0, "Level 1 should add 10 damage");
@@ -145,9 +144,8 @@ fn test_curve_based_linear_damage_scaling() {
     app.update();
 
     // Test level 3: 100 + 30 = 130
-    app.world_mut().trigger(
-        ApplyGameplayEffectEvent::new("CurveDamage", target).with_level(3),
-    );
+    app.world_mut()
+        .trigger(ApplyGameplayEffectEvent::new("CurveDamage", target).with_level(3));
     app.update();
     let health = get_attribute_current_value(&mut app.world_mut(), target, "Health").unwrap();
     assert_eq!(health, 130.0, "Level 3 should add 30 damage");
@@ -157,9 +155,8 @@ fn test_curve_based_linear_damage_scaling() {
     app.update();
 
     // Test level 5: 100 + 50 = 150
-    app.world_mut().trigger(
-        ApplyGameplayEffectEvent::new("CurveDamage", target).with_level(5),
-    );
+    app.world_mut()
+        .trigger(ApplyGameplayEffectEvent::new("CurveDamage", target).with_level(5));
     app.update();
     let health = get_attribute_current_value(&mut app.world_mut(), target, "Health").unwrap();
     assert_eq!(health, 150.0, "Level 5 should add 50 damage");
@@ -171,7 +168,9 @@ fn test_curve_based_nonlinear_scaling() {
 
     // Create a nonlinear curve: exponential growth
     // Level 1 = 10, Level 5 = 100, Level 10 = 500
-    let samples = vec![10.0, 20.0, 40.0, 70.0, 100.0, 150.0, 220.0, 310.0, 400.0, 500.0];
+    let samples = vec![
+        10.0, 20.0, 40.0, 70.0, 100.0, 150.0, 220.0, 310.0, 400.0, 500.0,
+    ];
     let curve = SampleCurve::new(
         interval(1.0, 10.0).unwrap(),
         samples,
@@ -207,9 +206,8 @@ fn test_curve_based_nonlinear_scaling() {
     app.update();
 
     // Test level 1: 1000 + 10 = 1010
-    app.world_mut().trigger(
-        ApplyGameplayEffectEvent::new("NonlinearDamage", target).with_level(1),
-    );
+    app.world_mut()
+        .trigger(ApplyGameplayEffectEvent::new("NonlinearDamage", target).with_level(1));
     app.update();
     let health = get_attribute_current_value(&mut app.world_mut(), target, "Health").unwrap();
     assert_eq!(health, 1010.0, "Level 1 should add 10");
@@ -219,9 +217,8 @@ fn test_curve_based_nonlinear_scaling() {
     app.update();
 
     // Test level 5: 1000 + 100 = 1100
-    app.world_mut().trigger(
-        ApplyGameplayEffectEvent::new("NonlinearDamage", target).with_level(5),
-    );
+    app.world_mut()
+        .trigger(ApplyGameplayEffectEvent::new("NonlinearDamage", target).with_level(5));
     app.update();
     let health = get_attribute_current_value(&mut app.world_mut(), target, "Health").unwrap();
     assert_eq!(health, 1100.0, "Level 5 should add 100");
@@ -231,9 +228,8 @@ fn test_curve_based_nonlinear_scaling() {
     app.update();
 
     // Test level 10: 1000 + 500 = 1500
-    app.world_mut().trigger(
-        ApplyGameplayEffectEvent::new("NonlinearDamage", target).with_level(10),
-    );
+    app.world_mut()
+        .trigger(ApplyGameplayEffectEvent::new("NonlinearDamage", target).with_level(10));
     app.update();
     let health = get_attribute_current_value(&mut app.world_mut(), target, "Health").unwrap();
     assert_eq!(health, 1500.0, "Level 10 should add 500");
@@ -280,9 +276,8 @@ fn test_curve_based_clamping() {
     app.update();
 
     // Test level 0 (below domain): should clamp to level 1 = 10
-    app.world_mut().trigger(
-        ApplyGameplayEffectEvent::new("ClampedDamage", target).with_level(0),
-    );
+    app.world_mut()
+        .trigger(ApplyGameplayEffectEvent::new("ClampedDamage", target).with_level(0));
     app.update();
     let health = get_attribute_current_value(&mut app.world_mut(), target, "Health").unwrap();
     assert_eq!(health, 110.0, "Level 0 should clamp to level 1 (10 damage)");
@@ -292,10 +287,12 @@ fn test_curve_based_clamping() {
     app.update();
 
     // Test level 10 (above domain): should clamp to level 5 = 50
-    app.world_mut().trigger(
-        ApplyGameplayEffectEvent::new("ClampedDamage", target).with_level(10),
-    );
+    app.world_mut()
+        .trigger(ApplyGameplayEffectEvent::new("ClampedDamage", target).with_level(10));
     app.update();
     let health = get_attribute_current_value(&mut app.world_mut(), target, "Health").unwrap();
-    assert_eq!(health, 150.0, "Level 10 should clamp to level 5 (50 damage)");
+    assert_eq!(
+        health, 150.0,
+        "Level 10 should clamp to level 5 (50 damage)"
+    );
 }

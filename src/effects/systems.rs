@@ -867,11 +867,13 @@ pub fn aggregate_attribute_modifiers_system(
             for mut modifier in modifiers.iter_mut() {
                 if let Some(ref dynamic_info) = modifier.dynamic_magnitude {
                     // Check if this modifier's source attribute changed
-                    if changed_set.contains(&(dynamic_info.capture_entity, dynamic_info.attribute_name.clone())) {
+                    if changed_set.contains(&(
+                        dynamic_info.capture_entity,
+                        dynamic_info.attribute_name.clone(),
+                    )) {
                         // Find the changed attribute and recalculate magnitude
-                        if let Some((data, _, _)) = changed_attributes
-                            .iter()
-                            .find(|(_, name, child_of)| {
+                        if let Some((data, _, _)) =
+                            changed_attributes.iter().find(|(_, name, child_of)| {
                                 child_of.get() == dynamic_info.capture_entity
                                     && name.0 == dynamic_info.attribute_name
                             })
@@ -885,7 +887,8 @@ pub fn aggregate_attribute_modifiers_system(
                             };
 
                             // Apply formula: (source + pre) * coef + post
-                            let new_magnitude = (attribute_value + dynamic_info.pre_multiply_additive)
+                            let new_magnitude = (attribute_value
+                                + dynamic_info.pre_multiply_additive)
                                 * dynamic_info.coefficient
                                 + dynamic_info.post_multiply_additive;
 

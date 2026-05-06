@@ -837,7 +837,12 @@ pub fn check_wait_target_data_tasks_system(
 pub fn handle_provide_target_data_system(
     trigger: On<ProvideTargetDataEvent>,
     mut commands: Commands,
-    mut tasks: Query<(Entity, &AbilityTask, &mut WaitTargetDataTask, &mut TaskState)>,
+    mut tasks: Query<(
+        Entity,
+        &AbilityTask,
+        &mut WaitTargetDataTask,
+        &mut TaskState,
+    )>,
 ) {
     let event = trigger.event();
 
@@ -884,7 +889,6 @@ pub fn handle_cancel_target_data_system(
     wait_target.target_data = None;
     *state = TaskState::Cancelled;
 }
-
 
 /// Observer that handles input pressed events for WaitInputPress tasks.
 pub fn handle_input_pressed_for_tasks_system(
@@ -1107,7 +1111,12 @@ pub struct CancelMontageEvent {
 /// System that updates PlayMontageAndWait tasks.
 pub fn update_play_montage_tasks_system(
     mut commands: Commands,
-    mut tasks: Query<(Entity, &AbilityTask, &mut PlayMontageAndWaitTask, &mut TaskState)>,
+    mut tasks: Query<(
+        Entity,
+        &AbilityTask,
+        &mut PlayMontageAndWaitTask,
+        &mut TaskState,
+    )>,
     time: Res<Time>,
 ) {
     for (task_entity, ability_task, mut montage_task, mut state) in tasks.iter_mut() {
@@ -1117,9 +1126,7 @@ pub fn update_play_montage_tasks_system(
 
         // Start the montage on first update
         if !montage_task.started {
-            let animation_entity = montage_task
-                .animation_entity
-                .unwrap_or(ability_task.owner);
+            let animation_entity = montage_task.animation_entity.unwrap_or(ability_task.owner);
 
             commands.trigger(StartMontageEvent {
                 task: task_entity,
@@ -1266,8 +1273,7 @@ pub fn spawn_actor_tasks_system(
         // Spawn the entity
         let spawned = commands
             .spawn((
-                Transform::from_translation(spawn_task.location)
-                    .with_rotation(spawn_task.rotation),
+                Transform::from_translation(spawn_task.location).with_rotation(spawn_task.rotation),
                 GlobalTransform::default(),
             ))
             .id();
@@ -1412,6 +1418,3 @@ pub fn update_repeat_tasks_system(
         }
     }
 }
-
-
-
