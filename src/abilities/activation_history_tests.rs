@@ -1,4 +1,5 @@
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod activation_history_tests {
     use crate::abilities::components::{AbilityActivationHistory, ActivationResult};
 

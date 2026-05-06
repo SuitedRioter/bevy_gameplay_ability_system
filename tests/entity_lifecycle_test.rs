@@ -6,7 +6,6 @@
 //! After migrating Effects and Abilities to use ChildOf, all child entities
 //! should be automatically cleaned up when the owner is despawned.
 
-use bevy::ecs::relationship::Relationship;
 use bevy::ecs::system::RunSystemOnce;
 use bevy::prelude::*;
 use bevy_gameplay_ability_system::abilities::grant_ability;

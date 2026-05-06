@@ -826,10 +826,14 @@ pub fn create_effect_modifiers_system(
         // Mark affected attributes as dirty for re-aggregation
         for modifier_info in &definition.modifiers {
             // Find the target attribute entity and mark it dirty
-            if let Some((attr_entity, _, _, _)) = attributes.iter().find(|(_, _, name, child_of)| {
-                child_of.get() == target.0 && name.0 == modifier_info.attribute_name
-            }) {
-                commands.entity(attr_entity).insert(crate::attributes::DirtyAttribute);
+            if let Some((attr_entity, _, _, _)) =
+                attributes.iter().find(|(_, _, name, child_of)| {
+                    child_of.get() == target.0 && name.0 == modifier_info.attribute_name
+                })
+            {
+                commands
+                    .entity(attr_entity)
+                    .insert(crate::attributes::DirtyAttribute);
             }
         }
     }
@@ -965,7 +969,9 @@ pub fn aggregate_attribute_modifiers_system(
             }
 
             // Remove dirty marker after processing
-            commands.entity(attr_entity).remove::<crate::attributes::DirtyAttribute>();
+            commands
+                .entity(attr_entity)
+                .remove::<crate::attributes::DirtyAttribute>();
         } else {
             // No modifiers for this attribute, reset to base value if needed
             let old_value = attr_data.current_value;
@@ -995,7 +1001,9 @@ pub fn aggregate_attribute_modifiers_system(
             }
 
             // Remove dirty marker after processing
-            commands.entity(attr_entity).remove::<crate::attributes::DirtyAttribute>();
+            commands
+                .entity(attr_entity)
+                .remove::<crate::attributes::DirtyAttribute>();
         }
     }
 }
@@ -1105,10 +1113,14 @@ pub fn remove_expired_effects_system(
             // Mark affected attributes as dirty
             if let Some(def) = definition {
                 for modifier_info in &def.modifiers {
-                    if let Some((attr_entity, _, _)) = attributes.iter().find(|(_, name, child_of)| {
-                        child_of.get() == target.0 && name.0 == modifier_info.attribute_name
-                    }) {
-                        commands.entity(attr_entity).insert(crate::attributes::DirtyAttribute);
+                    if let Some((attr_entity, _, _)) =
+                        attributes.iter().find(|(_, name, child_of)| {
+                            child_of.get() == target.0 && name.0 == modifier_info.attribute_name
+                        })
+                    {
+                        commands
+                            .entity(attr_entity)
+                            .insert(crate::attributes::DirtyAttribute);
                     }
                 }
             }

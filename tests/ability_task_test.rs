@@ -461,7 +461,7 @@ fn test_wait_effect_applied_task() {
 
     app.world_mut()
         .run_system_once(
-            move |mut commands: Commands, tags: Res<GameplayTagsManager>| {
+            move |mut commands: Commands, _tags: Res<GameplayTagsManager>| {
                 TestAttributeSet::create_attributes(&mut commands, player);
             },
         )
@@ -589,7 +589,7 @@ fn test_wait_effect_removed_task() {
 
     app.world_mut()
         .run_system_once(
-            move |mut commands: Commands, tags: Res<GameplayTagsManager>| {
+            move |mut commands: Commands, _tags: Res<GameplayTagsManager>| {
                 TestAttributeSet::create_attributes(&mut commands, player);
             },
         )
@@ -741,7 +741,7 @@ fn test_apply_effect_to_target_data_task() {
 
     app.world_mut()
         .run_system_once(
-            move |mut commands: Commands, tags: Res<GameplayTagsManager>| {
+            move |mut commands: Commands, _tags: Res<GameplayTagsManager>| {
                 TestAttributeSet::create_attributes(&mut commands, player);
                 TestAttributeSet::create_attributes(&mut commands, enemy);
             },

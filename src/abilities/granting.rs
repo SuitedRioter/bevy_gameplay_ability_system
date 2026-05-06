@@ -1,6 +1,5 @@
 //! Helper functions for granting abilities with proper ChildOf relationships.
 
-use bevy::ecs::relationship::Relationship;
 use bevy::prelude::*;
 use string_cache::DefaultAtom as Atom;
 
@@ -51,6 +50,7 @@ impl GrantAbilityExt for Commands<'_, '_> {
 mod tests {
     use super::*;
     use bevy::app::App;
+    use bevy::ecs::relationship::Relationship;
 
     #[test]
     fn test_grant_ability_with_childof() {

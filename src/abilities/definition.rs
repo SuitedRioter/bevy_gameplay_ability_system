@@ -14,7 +14,7 @@ use super::triggers::AbilityTriggerData;
 ///
 /// Determines how ability instances are created and managed.
 /// Follows UE GAS's instancing model.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum InstancingPolicy {
     /// No instance is created. Logic executes directly from the definition.
     /// - No per-activation state storage
@@ -33,13 +33,8 @@ pub enum InstancingPolicy {
     /// - State exists only for the duration of activation
     /// - Most common pattern
     /// - Example: Most abilities (fireball, dash, etc.)
+    #[default]
     InstancedPerExecution,
-}
-
-impl Default for InstancingPolicy {
-    fn default() -> Self {
-        Self::InstancedPerExecution
-    }
 }
 
 /// Ability definition — pure configuration data stored in the AbilityRegistry.

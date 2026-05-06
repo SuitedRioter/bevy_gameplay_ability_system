@@ -30,20 +30,15 @@ pub struct AbilityTask {
 }
 
 /// Task state component.
-#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TaskState {
     /// Task is running and waiting for completion.
+    #[default]
     Running,
     /// Task has completed successfully.
     Completed,
     /// Task was cancelled or failed.
     Cancelled,
-}
-
-impl Default for TaskState {
-    fn default() -> Self {
-        Self::Running
-    }
 }
 
 /// WaitDelay task - waits for a specified duration.
@@ -617,10 +612,10 @@ pub fn handle_gameplay_event_for_tasks_system(
         }
 
         // Check if event targets the owner (if target is specified)
-        if let Some(target) = event.target {
-            if target != ability_task.owner {
-                continue;
-            }
+        if let Some(target) = event.target
+            && target != ability_task.owner
+        {
+            continue;
         }
 
         // Mark as triggered
@@ -750,10 +745,10 @@ pub fn on_effect_applied_for_tasks(
         }
 
         // Check if the effect definition ID matches (if specified)
-        if let Some(ref expected_id) = wait_effect.effect_definition_id {
-            if effect_def_id != expected_id {
-                continue;
-            }
+        if let Some(ref expected_id) = wait_effect.effect_definition_id
+            && effect_def_id != expected_id
+        {
+            continue;
         }
 
         // Mark as triggered
@@ -795,10 +790,10 @@ pub fn on_effect_removed_for_tasks(
         }
 
         // Check if the effect definition ID matches (if specified)
-        if let Some(ref expected_id) = wait_effect.effect_definition_id {
-            if event.effect_id.as_ref() != expected_id.as_str() {
-                continue;
-            }
+        if let Some(ref expected_id) = wait_effect.effect_definition_id
+            && event.effect_id.as_ref() != expected_id.as_str()
+        {
+            continue;
         }
 
         // Mark as triggered
@@ -1519,7 +1514,7 @@ impl WaitGameplayTagRemovedTask {
 /// WaitAbilityActivate task - waits for another ability to activate.
 ///
 /// Completes when an ability with the specified definition ID activates on the owner.
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, Default)]
 pub struct WaitAbilityActivateTask {
     /// The ability definition ID to wait for (None = any ability).
     pub ability_definition_id: Option<String>,
@@ -1558,7 +1553,7 @@ impl WaitAbilityActivateTask {
 /// WaitAbilityEnd task - waits for another ability to end.
 ///
 /// Completes when an ability with the specified definition ID ends on the owner.
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, Default)]
 pub struct WaitAbilityEndTask {
     /// The ability definition ID to wait for (None = any ability).
     pub ability_definition_id: Option<String>,

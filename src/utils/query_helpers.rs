@@ -394,17 +394,11 @@ mod tests {
 
         // Spawn attributes as children
         world
-            .spawn((
-                AttributeData::new(100.0),
-                AttributeName::new("Health"),
-            ))
+            .spawn((AttributeData::new(100.0), AttributeName::new("Health")))
             .set_parent_in_place(owner);
 
         world
-            .spawn((
-                AttributeData::new(50.0),
-                AttributeName::new("Mana"),
-            ))
+            .spawn((AttributeData::new(50.0), AttributeName::new("Mana")))
             .set_parent_in_place(owner);
 
         world.flush();

@@ -107,7 +107,7 @@ impl CustomMagnitudeCalculation for CriticalDamageCalculator {
 
         // 10% base crit chance + attribute crit chance
         // Simplified: use a deterministic pattern instead of random
-        let is_crit = (base_damage as u32 % 5) == 0; // Every 5th attack crits
+        let is_crit = (base_damage as u32).is_multiple_of(5); // Every 5th attack crits
         if is_crit {
             info!("💥 Critical hit!");
             damage * 2.0

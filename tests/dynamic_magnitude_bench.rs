@@ -112,8 +112,8 @@ fn bench_dynamic_static_scenario() {
                 BlockedAbilityTags::default(),
             ))
             .id();
-        spawn_attribute_set::<TestAttributeSet>(&mut app.world_mut(), source);
-        set_attribute_base_value(&mut app.world_mut(), source, "Attack", 100.0);
+        spawn_attribute_set::<TestAttributeSet>(app.world_mut(), source);
+        set_attribute_base_value(app.world_mut(), source, "Attack", 100.0);
         sources.push(source);
 
         let target = app
@@ -124,7 +124,7 @@ fn bench_dynamic_static_scenario() {
                 BlockedAbilityTags::default(),
             ))
             .id();
-        spawn_attribute_set::<TestAttributeSet>(&mut app.world_mut(), target);
+        spawn_attribute_set::<TestAttributeSet>(app.world_mut(), target);
         targets.push(target);
     }
 
@@ -201,8 +201,8 @@ fn bench_dynamic_active_scenario() {
                 BlockedAbilityTags::default(),
             ))
             .id();
-        spawn_attribute_set::<TestAttributeSet>(&mut app.world_mut(), source);
-        set_attribute_base_value(&mut app.world_mut(), source, "Attack", 100.0);
+        spawn_attribute_set::<TestAttributeSet>(app.world_mut(), source);
+        set_attribute_base_value(app.world_mut(), source, "Attack", 100.0);
         sources.push(source);
 
         let target = app
@@ -213,7 +213,7 @@ fn bench_dynamic_active_scenario() {
                 BlockedAbilityTags::default(),
             ))
             .id();
-        spawn_attribute_set::<TestAttributeSet>(&mut app.world_mut(), target);
+        spawn_attribute_set::<TestAttributeSet>(app.world_mut(), target);
         targets.push(target);
     }
 
@@ -234,7 +234,7 @@ fn bench_dynamic_active_scenario() {
     let start = std::time::Instant::now();
     for i in 0..100 {
         let source = sources[i % sources.len()];
-        set_attribute_base_value(&mut app.world_mut(), source, "Attack", 100.0 + i as f32);
+        set_attribute_base_value(app.world_mut(), source, "Attack", 100.0 + i as f32);
         app.update();
     }
     let elapsed = start.elapsed();

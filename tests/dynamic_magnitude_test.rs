@@ -124,8 +124,8 @@ fn test_dynamic_aura_updates_when_source_changes() {
             BlockedAbilityTags::default(),
         ))
         .id();
-    spawn_attribute_set::<TestAttributeSet>(&mut app.world_mut(), source);
-    set_attribute_base_value(&mut app.world_mut(), source, "Attack", 100.0);
+    spawn_attribute_set::<TestAttributeSet>(app.world_mut(), source);
+    set_attribute_base_value(app.world_mut(), source, "Attack", 100.0);
 
     // Spawn target with 50 Attack
     let target = app
@@ -136,8 +136,8 @@ fn test_dynamic_aura_updates_when_source_changes() {
             BlockedAbilityTags::default(),
         ))
         .id();
-    spawn_attribute_set::<TestAttributeSet>(&mut app.world_mut(), target);
-    set_attribute_base_value(&mut app.world_mut(), target, "Attack", 50.0);
+    spawn_attribute_set::<TestAttributeSet>(app.world_mut(), target);
+    set_attribute_base_value(app.world_mut(), target, "Attack", 50.0);
 
     app.update();
 
@@ -151,28 +151,28 @@ fn test_dynamic_aura_updates_when_source_changes() {
     app.update();
 
     // Verify initial bonus: 50 + (100 * 0.1) = 60
-    let attack = get_attribute_current_value(&mut app.world_mut(), target, "Attack").unwrap();
+    let attack = get_attribute_current_value(app.world_mut(), target, "Attack").unwrap();
     assert_eq!(attack, 60.0, "Target should have +10 Attack from aura");
 
     // Source's Attack increases to 200
-    set_attribute_base_value(&mut app.world_mut(), source, "Attack", 200.0);
+    set_attribute_base_value(app.world_mut(), source, "Attack", 200.0);
 
     app.update();
 
     // Verify dynamic update: 50 + (200 * 0.1) = 70
-    let attack = get_attribute_current_value(&mut app.world_mut(), target, "Attack").unwrap();
+    let attack = get_attribute_current_value(app.world_mut(), target, "Attack").unwrap();
     assert_eq!(
         attack, 70.0,
         "Target's bonus should update when source's Attack changes"
     );
 
     // Source's Attack decreases to 50
-    set_attribute_base_value(&mut app.world_mut(), source, "Attack", 50.0);
+    set_attribute_base_value(app.world_mut(), source, "Attack", 50.0);
 
     app.update();
 
     // Verify dynamic update: 50 + (50 * 0.1) = 55
-    let attack = get_attribute_current_value(&mut app.world_mut(), target, "Attack").unwrap();
+    let attack = get_attribute_current_value(app.world_mut(), target, "Attack").unwrap();
     assert_eq!(
         attack, 55.0,
         "Target's bonus should decrease when source's Attack decreases"
@@ -205,8 +205,8 @@ fn test_snapshot_mode_does_not_update() {
             BlockedAbilityTags::default(),
         ))
         .id();
-    spawn_attribute_set::<TestAttributeSet>(&mut app.world_mut(), source);
-    set_attribute_base_value(&mut app.world_mut(), source, "Attack", 100.0);
+    spawn_attribute_set::<TestAttributeSet>(app.world_mut(), source);
+    set_attribute_base_value(app.world_mut(), source, "Attack", 100.0);
 
     // Spawn target with 50 Attack
     let target = app
@@ -217,8 +217,8 @@ fn test_snapshot_mode_does_not_update() {
             BlockedAbilityTags::default(),
         ))
         .id();
-    spawn_attribute_set::<TestAttributeSet>(&mut app.world_mut(), target);
-    set_attribute_base_value(&mut app.world_mut(), target, "Attack", 50.0);
+    spawn_attribute_set::<TestAttributeSet>(app.world_mut(), target);
+    set_attribute_base_value(app.world_mut(), target, "Attack", 50.0);
 
     app.update();
 
@@ -232,16 +232,16 @@ fn test_snapshot_mode_does_not_update() {
     app.update();
 
     // Verify initial bonus: 50 + (100 * 0.1) = 60
-    let attack = get_attribute_current_value(&mut app.world_mut(), target, "Attack").unwrap();
+    let attack = get_attribute_current_value(app.world_mut(), target, "Attack").unwrap();
     assert_eq!(attack, 60.0, "Target should have +10 Attack from buff");
 
     // Source's Attack increases to 200
-    set_attribute_base_value(&mut app.world_mut(), source, "Attack", 200.0);
+    set_attribute_base_value(app.world_mut(), source, "Attack", 200.0);
 
     app.update();
 
     // Verify Snapshot mode: bonus stays at 10 (does NOT update)
-    let attack = get_attribute_current_value(&mut app.world_mut(), target, "Attack").unwrap();
+    let attack = get_attribute_current_value(app.world_mut(), target, "Attack").unwrap();
     assert_eq!(
         attack, 60.0,
         "Snapshot mode should NOT update when source changes"
@@ -282,8 +282,8 @@ fn test_dynamic_with_base_value_calculation() {
             BlockedAbilityTags::default(),
         ))
         .id();
-    spawn_attribute_set::<TestAttributeSet>(&mut app.world_mut(), source);
-    set_attribute_base_value(&mut app.world_mut(), source, "Attack", 100.0);
+    spawn_attribute_set::<TestAttributeSet>(app.world_mut(), source);
+    set_attribute_base_value(app.world_mut(), source, "Attack", 100.0);
 
     // Apply a temporary buff to source (increases current but not base)
     app.world_mut()
@@ -309,8 +309,8 @@ fn test_dynamic_with_base_value_calculation() {
             BlockedAbilityTags::default(),
         ))
         .id();
-    spawn_attribute_set::<TestAttributeSet>(&mut app.world_mut(), target);
-    set_attribute_base_value(&mut app.world_mut(), target, "Attack", 50.0);
+    spawn_attribute_set::<TestAttributeSet>(app.world_mut(), target);
+    set_attribute_base_value(app.world_mut(), target, "Attack", 50.0);
 
     app.update();
 
@@ -325,19 +325,19 @@ fn test_dynamic_with_base_value_calculation() {
 
     // Verify: uses base Attack (100), not current (150)
     // 50 + (100 * 0.2) = 70
-    let attack = get_attribute_current_value(&mut app.world_mut(), target, "Attack").unwrap();
+    let attack = get_attribute_current_value(app.world_mut(), target, "Attack").unwrap();
     assert_eq!(
         attack, 70.0,
         "Should use base Attack, not current (with temp buff)"
     );
 
     // Source's base Attack increases to 200
-    set_attribute_base_value(&mut app.world_mut(), source, "Attack", 200.0);
+    set_attribute_base_value(app.world_mut(), source, "Attack", 200.0);
 
     app.update();
 
     // Verify dynamic update: 50 + (200 * 0.2) = 90
-    let attack = get_attribute_current_value(&mut app.world_mut(), target, "Attack").unwrap();
+    let attack = get_attribute_current_value(app.world_mut(), target, "Attack").unwrap();
     assert_eq!(
         attack, 90.0,
         "Should update when source's base Attack changes"

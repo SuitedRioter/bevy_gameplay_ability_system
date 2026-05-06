@@ -119,8 +119,8 @@ fn test_attribute_based_damage_from_source_attack() {
             BlockedAbilityTags::default(),
         ))
         .id();
-    spawn_attribute_set::<TestAttributeSet>(&mut app.world_mut(), attacker);
-    set_attribute_base_value(&mut app.world_mut(), attacker, "Attack", 50.0);
+    spawn_attribute_set::<TestAttributeSet>(app.world_mut(), attacker);
+    set_attribute_base_value(app.world_mut(), attacker, "Attack", 50.0);
 
     // Spawn target with 100 Health
     let target = app
@@ -131,8 +131,8 @@ fn test_attribute_based_damage_from_source_attack() {
             BlockedAbilityTags::default(),
         ))
         .id();
-    spawn_attribute_set::<TestAttributeSet>(&mut app.world_mut(), target);
-    set_attribute_base_value(&mut app.world_mut(), target, "Health", 100.0);
+    spawn_attribute_set::<TestAttributeSet>(app.world_mut(), target);
+    set_attribute_base_value(app.world_mut(), target, "Health", 100.0);
 
     app.update();
 
@@ -146,7 +146,7 @@ fn test_attribute_based_damage_from_source_attack() {
     app.update();
 
     // Verify damage: 100 + (50 * -1.5) = 25
-    let health = get_attribute_current_value(&mut app.world_mut(), target, "Health").unwrap();
+    let health = get_attribute_current_value(app.world_mut(), target, "Health").unwrap();
     assert_eq!(health, 25.0, "Health should be reduced by Attack * 1.5");
 }
 
@@ -176,9 +176,9 @@ fn test_attribute_based_healing_from_target_max_health() {
             BlockedAbilityTags::default(),
         ))
         .id();
-    spawn_attribute_set::<TestAttributeSet>(&mut app.world_mut(), target);
-    set_attribute_base_value(&mut app.world_mut(), target, "MaxHealth", 100.0); // Keep MaxHealth at 100
-    set_attribute_base_value(&mut app.world_mut(), target, "Health", 50.0);
+    spawn_attribute_set::<TestAttributeSet>(app.world_mut(), target);
+    set_attribute_base_value(app.world_mut(), target, "MaxHealth", 100.0); // Keep MaxHealth at 100
+    set_attribute_base_value(app.world_mut(), target, "Health", 50.0);
 
     app.update();
 
@@ -189,7 +189,7 @@ fn test_attribute_based_healing_from_target_max_health() {
     app.update();
 
     // Verify heal: 50 + (100 * 0.3) = 80
-    let health = get_attribute_current_value(&mut app.world_mut(), target, "Health").unwrap();
+    let health = get_attribute_current_value(app.world_mut(), target, "Health").unwrap();
     assert_eq!(health, 80.0, "Health should be healed by MaxHealth * 0.3");
 }
 
@@ -227,8 +227,8 @@ fn test_attribute_based_with_base_value_calculation() {
             BlockedAbilityTags::default(),
         ))
         .id();
-    spawn_attribute_set::<TestAttributeSet>(&mut app.world_mut(), attacker);
-    set_attribute_base_value(&mut app.world_mut(), attacker, "Attack", 30.0);
+    spawn_attribute_set::<TestAttributeSet>(app.world_mut(), attacker);
+    set_attribute_base_value(app.world_mut(), attacker, "Attack", 30.0);
 
     // Apply a buff to increase current Attack
     app.world_mut()
@@ -254,8 +254,8 @@ fn test_attribute_based_with_base_value_calculation() {
             BlockedAbilityTags::default(),
         ))
         .id();
-    spawn_attribute_set::<TestAttributeSet>(&mut app.world_mut(), target);
-    set_attribute_base_value(&mut app.world_mut(), target, "Health", 100.0);
+    spawn_attribute_set::<TestAttributeSet>(app.world_mut(), target);
+    set_attribute_base_value(app.world_mut(), target, "Health", 100.0);
 
     app.update();
 
@@ -269,7 +269,7 @@ fn test_attribute_based_with_base_value_calculation() {
     app.update();
 
     // Verify damage: 100 + (30 * -2.0) = 40
-    let health = get_attribute_current_value(&mut app.world_mut(), target, "Health").unwrap();
+    let health = get_attribute_current_value(app.world_mut(), target, "Health").unwrap();
     assert_eq!(health, 40.0, "Damage should use base Attack, not current");
 }
 
@@ -307,8 +307,8 @@ fn test_attribute_based_with_bonus_magnitude() {
             BlockedAbilityTags::default(),
         ))
         .id();
-    spawn_attribute_set::<TestAttributeSet>(&mut app.world_mut(), attacker);
-    set_attribute_base_value(&mut app.world_mut(), attacker, "Attack", 30.0);
+    spawn_attribute_set::<TestAttributeSet>(app.world_mut(), attacker);
+    set_attribute_base_value(app.world_mut(), attacker, "Attack", 30.0);
 
     // Apply a buff (bonus = 20)
     app.world_mut()
@@ -334,8 +334,8 @@ fn test_attribute_based_with_bonus_magnitude() {
             BlockedAbilityTags::default(),
         ))
         .id();
-    spawn_attribute_set::<TestAttributeSet>(&mut app.world_mut(), target);
-    set_attribute_base_value(&mut app.world_mut(), target, "Health", 100.0);
+    spawn_attribute_set::<TestAttributeSet>(app.world_mut(), target);
+    set_attribute_base_value(app.world_mut(), target, "Health", 100.0);
 
     app.update();
 
@@ -349,7 +349,7 @@ fn test_attribute_based_with_bonus_magnitude() {
     app.update();
 
     // Verify damage: 100 + (20 * -3.0) = 40
-    let health = get_attribute_current_value(&mut app.world_mut(), target, "Health").unwrap();
+    let health = get_attribute_current_value(app.world_mut(), target, "Health").unwrap();
     assert_eq!(health, 40.0, "Damage should use bonus Attack only");
 }
 
@@ -381,8 +381,8 @@ fn test_attribute_based_with_pre_and_post_multiply() {
             BlockedAbilityTags::default(),
         ))
         .id();
-    spawn_attribute_set::<TestAttributeSet>(&mut app.world_mut(), attacker);
-    set_attribute_base_value(&mut app.world_mut(), attacker, "Attack", 20.0);
+    spawn_attribute_set::<TestAttributeSet>(app.world_mut(), attacker);
+    set_attribute_base_value(app.world_mut(), attacker, "Attack", 20.0);
 
     // Spawn target with 100 Health
     let target = app
@@ -393,8 +393,8 @@ fn test_attribute_based_with_pre_and_post_multiply() {
             BlockedAbilityTags::default(),
         ))
         .id();
-    spawn_attribute_set::<TestAttributeSet>(&mut app.world_mut(), target);
-    set_attribute_base_value(&mut app.world_mut(), target, "Health", 100.0);
+    spawn_attribute_set::<TestAttributeSet>(app.world_mut(), target);
+    set_attribute_base_value(app.world_mut(), target, "Health", 100.0);
 
     app.update();
 
@@ -408,7 +408,7 @@ fn test_attribute_based_with_pre_and_post_multiply() {
     app.update();
 
     // Verify damage: 100 + ((20 + 10) * -2.0 + 5) = 100 + (-60 + 5) = 45
-    let health = get_attribute_current_value(&mut app.world_mut(), target, "Health").unwrap();
+    let health = get_attribute_current_value(app.world_mut(), target, "Health").unwrap();
     assert_eq!(
         health, 45.0,
         "Complex formula should be evaluated correctly"

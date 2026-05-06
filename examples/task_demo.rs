@@ -9,7 +9,7 @@
 
 use bevy::prelude::*;
 use bevy_gameplay_ability_system::{
-    GasPlugin, abilities::tasks::*, abilities::*, attributes::*, core::*, effects::*,
+    GasPlugin, abilities::tasks::*, abilities::*, attributes::*, effects::*,
 };
 use bevy_gameplay_tag::{GameplayTag, GameplayTagsManager, GameplayTagsPlugin};
 use std::sync::Arc;
@@ -85,7 +85,7 @@ fn setup(
     info!("  5. Counter Attack (WaitGameplayEventTask)\n");
 }
 
-fn setup_effects(registry: &mut GameplayEffectRegistry, tags_manager: &GameplayTagsManager) {
+fn setup_effects(registry: &mut GameplayEffectRegistry, _tags_manager: &GameplayTagsManager) {
     let damage = GameplayEffectDefinition::new("damage_20")
         .with_duration_policy(DurationPolicy::Instant)
         .add_modifier(ModifierInfo::new(
@@ -114,7 +114,7 @@ fn setup_effects(registry: &mut GameplayEffectRegistry, tags_manager: &GameplayT
     registry.register(mana_cost);
 }
 
-fn setup_abilities(registry: &mut AbilityRegistry, tags_manager: &GameplayTagsManager) {
+fn setup_abilities(registry: &mut AbilityRegistry, _tags_manager: &GameplayTagsManager) {
     // 1. Charged Attack - uses WaitDelayTask
     let charged_attack = AbilityDefinition::new("ability_charged_attack")
         .with_instancing_policy(InstancingPolicy::InstancedPerExecution)
@@ -395,7 +395,7 @@ fn simulate_damage(
     mut commands: Commands,
     keyboard: Res<ButtonInput<KeyCode>>,
     player_query: Query<Entity, With<Player>>,
-    tags_manager: Res<GameplayTagsManager>,
+    _tags_manager: Res<GameplayTagsManager>,
 ) {
     let Ok(player) = player_query.single() else {
         return;

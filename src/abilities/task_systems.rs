@@ -12,7 +12,12 @@ use bevy::prelude::*;
 /// System that updates WaitGameplayTagAdded tasks.
 pub fn update_wait_tag_added_tasks_system(
     mut commands: Commands,
-    mut tasks: Query<(Entity, &AbilityTask, &mut WaitGameplayTagAddedTask, &mut TaskState)>,
+    mut tasks: Query<(
+        Entity,
+        &AbilityTask,
+        &mut WaitGameplayTagAddedTask,
+        &mut TaskState,
+    )>,
     owner_tags: Query<&OwnedTags>,
 ) {
     for (task_entity, ability_task, mut task, mut state) in tasks.iter_mut() {
@@ -21,17 +26,17 @@ pub fn update_wait_tag_added_tasks_system(
         }
 
         // Check if owner has the tag
-        if let Ok(tags) = owner_tags.get(ability_task.owner) {
-            if tags.0.explicit_tags.has_tag(&task.tag) {
-                task.triggered = true;
-                *state = TaskState::Completed;
-                commands.trigger(TaskCompletedEvent {
-                    task: task_entity,
-                    ability_instance: ability_task.ability_instance,
-                    ability_spec: ability_task.ability_spec,
-                    owner: ability_task.owner,
-                });
-            }
+        if let Ok(tags) = owner_tags.get(ability_task.owner)
+            && tags.0.explicit_tags.has_tag(&task.tag)
+        {
+            task.triggered = true;
+            *state = TaskState::Completed;
+            commands.trigger(TaskCompletedEvent {
+                task: task_entity,
+                ability_instance: ability_task.ability_instance,
+                ability_spec: ability_task.ability_spec,
+                owner: ability_task.owner,
+            });
         }
     }
 }
@@ -39,7 +44,12 @@ pub fn update_wait_tag_added_tasks_system(
 /// System that updates WaitGameplayTagRemoved tasks.
 pub fn update_wait_tag_removed_tasks_system(
     mut commands: Commands,
-    mut tasks: Query<(Entity, &AbilityTask, &mut WaitGameplayTagRemovedTask, &mut TaskState)>,
+    mut tasks: Query<(
+        Entity,
+        &AbilityTask,
+        &mut WaitGameplayTagRemovedTask,
+        &mut TaskState,
+    )>,
     owner_tags: Query<&OwnedTags>,
 ) {
     for (task_entity, ability_task, mut task, mut state) in tasks.iter_mut() {
@@ -48,17 +58,17 @@ pub fn update_wait_tag_removed_tasks_system(
         }
 
         // Check if owner no longer has the tag
-        if let Ok(tags) = owner_tags.get(ability_task.owner) {
-            if !tags.0.explicit_tags.has_tag(&task.tag) {
-                task.triggered = true;
-                *state = TaskState::Completed;
-                commands.trigger(TaskCompletedEvent {
-                    task: task_entity,
-                    ability_instance: ability_task.ability_instance,
-                    ability_spec: ability_task.ability_spec,
-                    owner: ability_task.owner,
-                });
-            }
+        if let Ok(tags) = owner_tags.get(ability_task.owner)
+            && !tags.0.explicit_tags.has_tag(&task.tag)
+        {
+            task.triggered = true;
+            *state = TaskState::Completed;
+            commands.trigger(TaskCompletedEvent {
+                task: task_entity,
+                ability_instance: ability_task.ability_instance,
+                ability_spec: ability_task.ability_spec,
+                owner: ability_task.owner,
+            });
         }
     }
 }
@@ -67,7 +77,12 @@ pub fn update_wait_tag_removed_tasks_system(
 pub fn on_ability_activated_for_wait_tasks(
     ev: On<crate::abilities::systems::AbilityActivatedEvent>,
     mut commands: Commands,
-    mut tasks: Query<(Entity, &AbilityTask, &mut WaitAbilityActivateTask, &mut TaskState)>,
+    mut tasks: Query<(
+        Entity,
+        &AbilityTask,
+        &mut WaitAbilityActivateTask,
+        &mut TaskState,
+    )>,
     ability_specs: Query<&crate::abilities::components::AbilitySpec>,
 ) {
     let event = ev.event();
@@ -108,7 +123,12 @@ pub fn on_ability_activated_for_wait_tasks(
 pub fn on_ability_ended_for_wait_tasks(
     ev: On<crate::abilities::systems::OnGameplayAbilityEnded>,
     mut commands: Commands,
-    mut tasks: Query<(Entity, &AbilityTask, &mut WaitAbilityEndTask, &mut TaskState)>,
+    mut tasks: Query<(
+        Entity,
+        &AbilityTask,
+        &mut WaitAbilityEndTask,
+        &mut TaskState,
+    )>,
     ability_specs: Query<&crate::abilities::components::AbilitySpec>,
 ) {
     let event = ev.event();
@@ -153,7 +173,12 @@ pub fn on_ability_ended_for_wait_tasks(
 /// System that updates WaitAttributeChangeRatio tasks.
 pub fn update_wait_attribute_ratio_tasks_system(
     mut commands: Commands,
-    mut tasks: Query<(Entity, &AbilityTask, &mut WaitAttributeChangeRatioTask, &mut TaskState)>,
+    mut tasks: Query<(
+        Entity,
+        &AbilityTask,
+        &mut WaitAttributeChangeRatioTask,
+        &mut TaskState,
+    )>,
     attributes: Query<(&AttributeData, &AttributeName, &ChildOf)>,
 ) {
     for (task_entity, ability_task, mut task, mut state) in tasks.iter_mut() {

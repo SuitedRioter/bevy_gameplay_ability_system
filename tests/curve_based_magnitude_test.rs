@@ -3,7 +3,7 @@
 //! Verifies that effects can scale their magnitude based on level using curves.
 
 use bevy::ecs::relationship::Relationship;
-use bevy::math::curve::{Curve, SampleCurve, interval};
+use bevy::math::curve::{SampleCurve, interval};
 use bevy::prelude::*;
 use bevy_gameplay_ability_system::{GasPlugin, attributes::*, core::*, effects::*};
 use bevy_gameplay_tag::GameplayTagsPlugin;
@@ -127,8 +127,8 @@ fn test_curve_based_linear_damage_scaling() {
             BlockedAbilityTags::default(),
         ))
         .id();
-    spawn_attribute_set::<TestAttributeSet>(&mut app.world_mut(), target);
-    set_attribute_base_value(&mut app.world_mut(), target, "Health", 100.0);
+    spawn_attribute_set::<TestAttributeSet>(app.world_mut(), target);
+    set_attribute_base_value(app.world_mut(), target, "Health", 100.0);
 
     app.update();
 
@@ -136,29 +136,29 @@ fn test_curve_based_linear_damage_scaling() {
     app.world_mut()
         .trigger(ApplyGameplayEffectEvent::new("CurveDamage", target).with_level(1));
     app.update();
-    let health = get_attribute_current_value(&mut app.world_mut(), target, "Health").unwrap();
+    let health = get_attribute_current_value(app.world_mut(), target, "Health").unwrap();
     assert_eq!(health, 110.0, "Level 1 should add 10 damage");
 
     // Reset health
-    set_attribute_base_value(&mut app.world_mut(), target, "Health", 100.0);
+    set_attribute_base_value(app.world_mut(), target, "Health", 100.0);
     app.update();
 
     // Test level 3: 100 + 30 = 130
     app.world_mut()
         .trigger(ApplyGameplayEffectEvent::new("CurveDamage", target).with_level(3));
     app.update();
-    let health = get_attribute_current_value(&mut app.world_mut(), target, "Health").unwrap();
+    let health = get_attribute_current_value(app.world_mut(), target, "Health").unwrap();
     assert_eq!(health, 130.0, "Level 3 should add 30 damage");
 
     // Reset health
-    set_attribute_base_value(&mut app.world_mut(), target, "Health", 100.0);
+    set_attribute_base_value(app.world_mut(), target, "Health", 100.0);
     app.update();
 
     // Test level 5: 100 + 50 = 150
     app.world_mut()
         .trigger(ApplyGameplayEffectEvent::new("CurveDamage", target).with_level(5));
     app.update();
-    let health = get_attribute_current_value(&mut app.world_mut(), target, "Health").unwrap();
+    let health = get_attribute_current_value(app.world_mut(), target, "Health").unwrap();
     assert_eq!(health, 150.0, "Level 5 should add 50 damage");
 }
 
@@ -200,8 +200,8 @@ fn test_curve_based_nonlinear_scaling() {
             BlockedAbilityTags::default(),
         ))
         .id();
-    spawn_attribute_set::<TestAttributeSet>(&mut app.world_mut(), target);
-    set_attribute_base_value(&mut app.world_mut(), target, "Health", 1000.0);
+    spawn_attribute_set::<TestAttributeSet>(app.world_mut(), target);
+    set_attribute_base_value(app.world_mut(), target, "Health", 1000.0);
 
     app.update();
 
@@ -209,29 +209,29 @@ fn test_curve_based_nonlinear_scaling() {
     app.world_mut()
         .trigger(ApplyGameplayEffectEvent::new("NonlinearDamage", target).with_level(1));
     app.update();
-    let health = get_attribute_current_value(&mut app.world_mut(), target, "Health").unwrap();
+    let health = get_attribute_current_value(app.world_mut(), target, "Health").unwrap();
     assert_eq!(health, 1010.0, "Level 1 should add 10");
 
     // Reset
-    set_attribute_base_value(&mut app.world_mut(), target, "Health", 1000.0);
+    set_attribute_base_value(app.world_mut(), target, "Health", 1000.0);
     app.update();
 
     // Test level 5: 1000 + 100 = 1100
     app.world_mut()
         .trigger(ApplyGameplayEffectEvent::new("NonlinearDamage", target).with_level(5));
     app.update();
-    let health = get_attribute_current_value(&mut app.world_mut(), target, "Health").unwrap();
+    let health = get_attribute_current_value(app.world_mut(), target, "Health").unwrap();
     assert_eq!(health, 1100.0, "Level 5 should add 100");
 
     // Reset
-    set_attribute_base_value(&mut app.world_mut(), target, "Health", 1000.0);
+    set_attribute_base_value(app.world_mut(), target, "Health", 1000.0);
     app.update();
 
     // Test level 10: 1000 + 500 = 1500
     app.world_mut()
         .trigger(ApplyGameplayEffectEvent::new("NonlinearDamage", target).with_level(10));
     app.update();
-    let health = get_attribute_current_value(&mut app.world_mut(), target, "Health").unwrap();
+    let health = get_attribute_current_value(app.world_mut(), target, "Health").unwrap();
     assert_eq!(health, 1500.0, "Level 10 should add 500");
 }
 
@@ -270,8 +270,8 @@ fn test_curve_based_clamping() {
             BlockedAbilityTags::default(),
         ))
         .id();
-    spawn_attribute_set::<TestAttributeSet>(&mut app.world_mut(), target);
-    set_attribute_base_value(&mut app.world_mut(), target, "Health", 100.0);
+    spawn_attribute_set::<TestAttributeSet>(app.world_mut(), target);
+    set_attribute_base_value(app.world_mut(), target, "Health", 100.0);
 
     app.update();
 
@@ -279,18 +279,18 @@ fn test_curve_based_clamping() {
     app.world_mut()
         .trigger(ApplyGameplayEffectEvent::new("ClampedDamage", target).with_level(0));
     app.update();
-    let health = get_attribute_current_value(&mut app.world_mut(), target, "Health").unwrap();
+    let health = get_attribute_current_value(app.world_mut(), target, "Health").unwrap();
     assert_eq!(health, 110.0, "Level 0 should clamp to level 1 (10 damage)");
 
     // Reset
-    set_attribute_base_value(&mut app.world_mut(), target, "Health", 100.0);
+    set_attribute_base_value(app.world_mut(), target, "Health", 100.0);
     app.update();
 
     // Test level 10 (above domain): should clamp to level 5 = 50
     app.world_mut()
         .trigger(ApplyGameplayEffectEvent::new("ClampedDamage", target).with_level(10));
     app.update();
-    let health = get_attribute_current_value(&mut app.world_mut(), target, "Health").unwrap();
+    let health = get_attribute_current_value(app.world_mut(), target, "Health").unwrap();
     assert_eq!(
         health, 150.0,
         "Level 10 should clamp to level 5 (50 damage)"

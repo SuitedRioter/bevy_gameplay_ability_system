@@ -151,12 +151,12 @@ impl AbilityBehavior for ChargedAttackBehavior {
         };
 
         let charge_time = self.charge_time;
-        let effect_id = self.effect_id;
-        let target = activation_info
+        let _effect_id = self.effect_id;
+        let _target = activation_info
             .primary_target()
             .unwrap_or(activation_info.owner);
-        let level = activation_info.level;
-        let source = activation_info.owner;
+        let _level = activation_info.level;
+        let _source = activation_info.owner;
         let owner = activation_info.owner;
 
         info!(
@@ -165,7 +165,7 @@ impl AbilityBehavior for ChargedAttackBehavior {
         );
 
         // Spawn WaitDelay task
-        let task_entity = commands
+        let _task_entity = commands
             .spawn((
                 AbilityTask {
                     ability_instance: Some(instance),
