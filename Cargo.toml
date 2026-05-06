@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bevy = "0.18.0"
-bevy_gameplay_tag = "0.1.0"
+bevy = "0.18.1"
+bevy_gameplay_tag = "0.2.0"
 string_cache = "0.9"
 
 [dev-dependencies]

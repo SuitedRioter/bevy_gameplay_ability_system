@@ -6,8 +6,8 @@ use super::components::{
     AttributeData, AttributeMetadata, AttributeMetadataComponent, AttributeName, AttributeSetId,
 };
 use super::hooks::{AttributeLifecycleHooks, AttributeModifyContext, AttributeSetHooks};
-use bevy::prelude::*;
 use bevy::ecs::relationship::Relationship;
+use bevy::prelude::*;
 
 /// Trait for defining an attribute set.
 ///
@@ -74,6 +74,8 @@ pub trait AttributeSetDefinition: Send + Sync + 'static {
     fn register_hooks(world: &mut World) {
         let type_id = std::any::TypeId::of::<Self>();
         let hooks = AttributeSetHooks {
+            pre_effect_execute: |_| true,
+            post_effect_execute: |_| {},
             pre_change: Self::pre_attribute_change,
             post_change: Self::post_attribute_change,
             pre_base_change: Self::pre_attribute_base_change,

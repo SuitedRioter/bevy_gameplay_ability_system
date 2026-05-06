@@ -41,11 +41,19 @@ impl AttributeData {
 
     /// Sets the base value.
     ///
-    /// This should be used for permanent changes to the attribute.
+    /// **IMPORTANT**: This only modifies the base value. The current value will be
+    /// recalculated by the aggregation system on the next frame based on active modifiers.
+    /// Do NOT manually set current_value after calling this - let the aggregation system
+    /// handle it.
+    ///
+    /// This should be used for permanent changes to the attribute (e.g., leveling up).
+    /// For temporary changes, use gameplay effects instead.
+    ///
     /// Note: This does NOT trigger lifecycle events. Use the system-level
     /// functions for event-driven changes.
     pub fn set_base_value(&mut self, value: f32) {
         self.base_value = value;
+        // Do NOT set current_value here - aggregation system will recalculate it
     }
 
     /// Sets the current value.

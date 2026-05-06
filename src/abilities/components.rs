@@ -84,6 +84,104 @@ impl AbilityActiveState {
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AbilityOwner(pub Entity);
 
+/// Tracks activation history for an ability.
+///
+/// Records statistics about ability activations for debugging, analytics,
+/// and gameplay logic (e.g., combo systems, cooldown reduction based on usage).
+///
+/// Matches UE GAS's activation tracking in `FGameplayAbilityActivationInfo`.
+#[derive(Component, Debug, Clone)]
+pub struct AbilityActivationHistory {
+    /// Total number of times this ability has been activated.
+    pub activation_count: u32,
+    /// Game time (in seconds) when this ability was last activated.
+    pub last_activation_time: f64,
+    /// Result of the last activation attempt.
+    pub last_activation_result: ActivationResult,
+    /// Game time (in seconds) when this ability was last successfully activated.
+    pub last_successful_activation_time: Option<f64>,
+    /// Number of successful activations.
+    pub successful_activation_count: u32,
+    /// Number of failed activations.
+    pub failed_activation_count: u32,
+}
+
+impl Default for AbilityActivationHistory {
+    fn default() -> Self {
+        Self {
+            activation_count: 0,
+            last_activation_time: 0.0,
+            last_activation_result: ActivationResult::Success,
+            last_successful_activation_time: None,
+            successful_activation_count: 0,
+            failed_activation_count: 0,
+        }
+    }
+}
+
+impl AbilityActivationHistory {
+    /// Creates a new empty activation history.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Records a new activation attempt.
+    pub fn record_activation(&mut self, time: f64, result: ActivationResult) {
+        self.activation_count += 1;
+        self.last_activation_time = time;
+        self.last_activation_result = result.clone();
+
+        match result {
+            ActivationResult::Success => {
+                self.successful_activation_count += 1;
+                self.last_successful_activation_time = Some(time);
+            }
+            _ => {
+                self.failed_activation_count += 1;
+            }
+        }
+    }
+
+    /// Returns the time since the last activation.
+    pub fn time_since_last_activation(&self, current_time: f64) -> f64 {
+        current_time - self.last_activation_time
+    }
+
+    /// Returns the time since the last successful activation.
+    pub fn time_since_last_successful_activation(&self, current_time: f64) -> Option<f64> {
+        self.last_successful_activation_time
+            .map(|time| current_time - time)
+    }
+
+    /// Returns the success rate (0.0 to 1.0).
+    pub fn success_rate(&self) -> f32 {
+        if self.activation_count == 0 {
+            0.0
+        } else {
+            self.successful_activation_count as f32 / self.activation_count as f32
+        }
+    }
+}
+
+/// Result of an ability activation attempt.
+///
+/// Matches UE GAS's activation result types.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ActivationResult {
+    /// Ability activated successfully.
+    Success,
+    /// Activation failed due to missing requirements.
+    FailedRequirements,
+    /// Activation failed due to insufficient resources (mana, stamina, etc.).
+    FailedCost,
+    /// Activation failed because the ability is on cooldown.
+    FailedCooldown,
+    /// Activation failed due to blocking tags.
+    FailedBlocked,
+    /// Activation failed for other reasons.
+    Failed,
+}
+
 // ---------------------------------------------------------------------------
 // AbilitySpecInstance — spawned as a child of AbilitySpec on activation
 // ---------------------------------------------------------------------------
@@ -103,6 +201,12 @@ pub struct AbilitySpecInstance {
     pub level: i32,
     /// The behavior implementation for this instance.
     pub behavior: Option<Arc<dyn AbilityBehavior>>,
+    /// The entity that owns this ability (the character/actor).
+    pub owner: Entity,
+    /// The entity that initiated the activation (may be different from owner).
+    pub instigator: Option<Entity>,
+    /// Target data for this ability activation.
+    pub target_data: Option<super::target_data::GameplayAbilityTargetData>,
 }
 
 impl std::fmt::Debug for AbilitySpecInstance {
@@ -111,6 +215,9 @@ impl std::fmt::Debug for AbilitySpecInstance {
             .field("definition_id", &self.definition_id)
             .field("level", &self.level)
             .field("behavior", &self.behavior.as_ref().map(|_| "<behavior>"))
+            .field("owner", &self.owner)
+            .field("instigator", &self.instigator)
+            .field("target_data", &self.target_data)
             .finish()
     }
 }
@@ -137,6 +244,10 @@ impl Default for InstanceControlState {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "activation_history_tests.rs"]
+mod activation_history_tests;
 
 #[cfg(test)]
 mod tests {
@@ -177,5 +288,4 @@ mod tests {
         assert!(!state.is_active);
         assert_eq!(state.active_count, 0);
     }
-
 }

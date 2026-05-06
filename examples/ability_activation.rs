@@ -3,8 +3,9 @@
 //! Shows: TryActivate → Commit (costs/cooldowns) → End
 
 use bevy::prelude::*;
+use bevy_gameplay_ability_system::core::OwnedTags;
 use bevy_gameplay_ability_system::prelude::*;
-use bevy_gameplay_tag::{GameplayTagCountContainer, GameplayTagsPlugin};
+use bevy_gameplay_tag::GameplayTagsPlugin;
 
 fn main() {
     App::new()
@@ -24,7 +25,7 @@ fn setup(mut commands: Commands, mut ability_registry: ResMut<AbilityRegistry>) 
         .register(AbilityDefinition::new("Fireball").with_cooldown_effect("Cooldown.Fireball"));
 
     // Create player with granted ability
-    let player = commands.spawn(GameplayTagCountContainer::default()).id();
+    let player = commands.spawn(OwnedTags::default()).id();
     let ability = commands
         .spawn((
             AbilitySpec::new("Fireball", 1),
@@ -50,10 +51,7 @@ fn activate_ability(
             info!("→ TryActivate: active={}", active_state.is_active);
             if !active_state.is_active {
                 info!("→ TryActivate: {}", spec.definition_id);
-                commands.trigger(TryActivateAbilityEvent {
-                    ability_spec: ability_entity,
-                    owner: owner.0,
-                });
+                commands.trigger(TryActivateAbilityEvent::new(ability_entity, owner.0));
             }
         }
     }

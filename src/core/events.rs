@@ -10,8 +10,8 @@ pub use crate::effects::systems::{
 
 // Re-export ability events
 pub use crate::abilities::systems::{
-    AbilityActivatedEvent, AbilityActivationFailedEvent, CancelAbilityEvent,
-    CommitAbilityEvent, CommitAbilityResultEvent, EndAbilityEvent, TryActivateAbilityEvent,
+    AbilityActivatedEvent, AbilityActivationFailedEvent, CancelAbilityEvent, CommitAbilityEvent,
+    CommitAbilityResultEvent, EndAbilityEvent, TryActivateAbilityEvent,
 };
 
 // Re-export ability enums
@@ -39,12 +39,8 @@ mod tests {
     #[test]
     fn test_batchable_event_trait() {
         use string_cache::DefaultAtom as Atom;
-        let event = ApplyGameplayEffectEvent {
-            target: Entity::PLACEHOLDER,
-            effect_id: Atom::from("test"),
-            level: 1,
-            instigator: None,
-        };
+        let event =
+            ApplyGameplayEffectEvent::new(Atom::from("test"), Entity::PLACEHOLDER).with_level(1);
 
         assert!(event.can_batch());
     }

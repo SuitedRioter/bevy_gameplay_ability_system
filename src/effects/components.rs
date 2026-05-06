@@ -3,7 +3,8 @@
 //! This module defines the core components for the gameplay effect system.
 
 use bevy::prelude::*;
-use bevy_gameplay_tag::GameplayTagContainer;
+use bevy_gameplay_tag::{GameplayTag, GameplayTagContainer};
+use std::collections::HashMap;
 use string_cache::DefaultAtom as Atom;
 
 /// Active gameplay effect instance component.
@@ -14,23 +15,85 @@ use string_cache::DefaultAtom as Atom;
 pub struct ActiveGameplayEffect {
     /// The ID of the effect definition.
     pub definition_id: Atom,
+    /// The entity that applied this effect (instigator).
+    pub source: Entity,
+    /// The entity receiving this effect.
+    pub target: Entity,
     /// The level at which this effect was applied.
     pub level: i32,
     /// The time when this effect was applied (in seconds).
     pub start_time: f32,
+    /// Tags granted to the target while this effect is active.
+    pub granted_tags: GameplayTagContainer,
     /// The current stack count for this effect.
     pub stack_count: i32,
 }
 
 impl ActiveGameplayEffect {
     /// Creates a new active gameplay effect.
-    pub fn new(definition_id: impl Into<Atom>, level: i32, start_time: f32) -> Self {
+    pub fn new(
+        definition_id: impl Into<Atom>,
+        source: Entity,
+        target: Entity,
+        level: i32,
+        start_time: f32,
+    ) -> Self {
         Self {
             definition_id: definition_id.into(),
+            source,
+            target,
             level,
             start_time,
+            granted_tags: GameplayTagContainer::default(),
             stack_count: 1,
         }
+    }
+}
+
+/// Component storing SetByCaller magnitudes for an effect.
+///
+/// When applying an effect with SetByCaller magnitude calculations,
+/// the caller must provide values for each data tag.
+///
+/// # Example
+/// ```ignore
+/// commands.spawn((
+///     ActiveGameplayEffect::new("damage", 1, time),
+///     SetByCallerMagnitudes::new()
+///         .with_magnitude(damage_tag, 50.0)
+///         .with_magnitude(crit_chance_tag, 0.25),
+/// ));
+/// ```
+#[derive(Component, Debug, Clone, Default)]
+pub struct SetByCallerMagnitudes {
+    magnitudes: HashMap<GameplayTag, f32>,
+}
+
+impl SetByCallerMagnitudes {
+    /// Creates a new empty magnitude map.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Returns true when no caller-provided magnitudes are stored.
+    pub fn is_empty(&self) -> bool {
+        self.magnitudes.is_empty()
+    }
+
+    /// Adds a magnitude for a data tag.
+    pub fn with_magnitude(mut self, tag: GameplayTag, magnitude: f32) -> Self {
+        self.magnitudes.insert(tag, magnitude);
+        self
+    }
+
+    /// Sets a magnitude for a data tag.
+    pub fn set_magnitude(&mut self, tag: GameplayTag, magnitude: f32) {
+        self.magnitudes.insert(tag, magnitude);
+    }
+
+    /// Gets a magnitude for a data tag.
+    pub fn get_magnitude(&self, tag: &GameplayTag) -> Option<f32> {
+        self.magnitudes.get(tag).copied()
     }
 }
 
@@ -38,11 +101,198 @@ impl ActiveGameplayEffect {
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EffectTarget(pub Entity);
 
+/// Component tracking abilities granted by this effect.
+///
+/// When an effect grants abilities, this component stores the ability spec entities
+/// so they can be properly removed when the effect ends.
+#[derive(Component, Debug, Clone, Default)]
+pub struct EffectGrantedAbilities {
+    /// List of ability spec entities granted by this effect.
+    pub granted_ability_specs: Vec<Entity>,
+}
+
 /// Component that identifies the instigator of an effect.
 ///
 /// This is the entity that caused the effect to be applied.
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EffectInstigator(pub Option<Entity>);
+
+/// Context information for a gameplay effect.
+///
+/// Stores information about where the effect came from and how it was applied.
+/// This is useful for tracking damage sources, applying conditional logic, etc.
+///
+/// # Example
+/// ```ignore
+/// commands.spawn((
+///     ActiveGameplayEffect::new("damage", 1, time),
+///     GameplayEffectContext::new()
+///         .with_source(caster_entity)
+///         .with_instigator(weapon_entity)
+///         .with_hit_location(Vec3::new(0.0, 1.0, 0.0)),
+/// ));
+/// ```
+#[derive(Component, Debug, Clone)]
+pub struct GameplayEffectContext {
+    /// The entity that owns the ability/effect (e.g., the player).
+    pub source: Option<Entity>,
+    /// The entity that directly caused the effect (e.g., a projectile or weapon).
+    pub instigator: Option<Entity>,
+    /// The location where the effect was applied (e.g., hit location).
+    pub hit_location: Option<Vec3>,
+    /// The normal vector at the hit location.
+    pub hit_normal: Option<Vec3>,
+    /// Custom data that can be attached to the context.
+    pub custom_data: HashMap<String, f32>,
+}
+
+impl Default for GameplayEffectContext {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl GameplayEffectContext {
+    /// Creates a new empty context.
+    pub fn new() -> Self {
+        Self {
+            source: None,
+            instigator: None,
+            hit_location: None,
+            hit_normal: None,
+            custom_data: HashMap::new(),
+        }
+    }
+
+    /// Sets the source entity.
+    pub fn with_source(mut self, source: Entity) -> Self {
+        self.source = Some(source);
+        self
+    }
+
+    /// Sets the instigator entity.
+    pub fn with_instigator(mut self, instigator: Entity) -> Self {
+        self.instigator = Some(instigator);
+        self
+    }
+
+    /// Sets the hit location.
+    pub fn with_hit_location(mut self, location: Vec3) -> Self {
+        self.hit_location = Some(location);
+        self
+    }
+
+    /// Sets the hit normal.
+    pub fn with_hit_normal(mut self, normal: Vec3) -> Self {
+        self.hit_normal = Some(normal);
+        self
+    }
+
+    /// Adds custom data.
+    pub fn with_custom_data(mut self, key: impl Into<String>, value: f32) -> Self {
+        self.custom_data.insert(key.into(), value);
+        self
+    }
+
+    /// Gets custom data by key.
+    pub fn get_custom_data(&self, key: &str) -> Option<f32> {
+        self.custom_data.get(key).copied()
+    }
+}
+
+/// Runtime gameplay effect specification.
+///
+/// This is the ECS equivalent of Unreal's `FGameplayEffectSpec`: immutable enough
+/// to pass through events, but complete enough to carry caller-specific context.
+#[derive(Debug, Clone)]
+pub struct GameplayEffectSpec {
+    /// The effect definition ID in `GameplayEffectRegistry`.
+    pub effect_id: Atom,
+    /// The target entity receiving the effect.
+    pub target: Entity,
+    /// The level at which to apply the effect.
+    pub level: i32,
+    /// Runtime context describing source, causer, and hit data.
+    pub context: GameplayEffectContext,
+    /// Magnitudes supplied by the caller for SetByCaller calculations.
+    pub set_by_caller_magnitudes: SetByCallerMagnitudes,
+    /// Captured attribute values for Snapshot mode calculations.
+    /// Key: (entity, attribute_name), Value: captured value
+    pub captured_attributes: std::collections::HashMap<(Entity, Atom), f32>,
+}
+
+impl GameplayEffectSpec {
+    /// Creates a spec targeting an entity at level 1.
+    pub fn new(effect_id: impl Into<Atom>, target: Entity) -> Self {
+        Self {
+            effect_id: effect_id.into(),
+            target,
+            level: 1,
+            context: GameplayEffectContext::new(),
+            set_by_caller_magnitudes: SetByCallerMagnitudes::new(),
+            captured_attributes: std::collections::HashMap::new(),
+        }
+    }
+
+    /// Sets the effect level.
+    pub fn with_level(mut self, level: i32) -> Self {
+        self.level = level;
+        self
+    }
+
+    /// Sets the source entity in the effect context.
+    pub fn with_source(mut self, source: Entity) -> Self {
+        self.context.source = Some(source);
+        self
+    }
+
+    /// Sets the instigator entity in the effect context.
+    pub fn with_instigator(mut self, instigator: Entity) -> Self {
+        self.context.instigator = Some(instigator);
+        self
+    }
+
+    /// Replaces the full effect context.
+    pub fn with_context(mut self, context: GameplayEffectContext) -> Self {
+        self.context = context;
+        self
+    }
+
+    /// Adds a SetByCaller magnitude.
+    pub fn with_set_by_caller_magnitude(mut self, tag: GameplayTag, magnitude: f32) -> Self {
+        self.set_by_caller_magnitudes.set_magnitude(tag, magnitude);
+        self
+    }
+
+    /// Replaces all SetByCaller magnitudes.
+    pub fn with_set_by_caller_magnitudes(mut self, magnitudes: SetByCallerMagnitudes) -> Self {
+        self.set_by_caller_magnitudes = magnitudes;
+        self
+    }
+
+    /// Returns the entity used for source-side attribute capture.
+    pub fn source_entity(&self) -> Option<Entity> {
+        self.context.source.or(self.context.instigator)
+    }
+
+    /// Returns the legacy instigator field used by existing events/components.
+    pub fn instigator(&self) -> Option<Entity> {
+        self.context.instigator.or(self.context.source)
+    }
+
+    /// Captures an attribute value for Snapshot mode.
+    pub fn capture_attribute(&mut self, entity: Entity, attribute_name: Atom, value: f32) {
+        self.captured_attributes
+            .insert((entity, attribute_name), value);
+    }
+
+    /// Gets a captured attribute value for Snapshot mode.
+    pub fn get_captured_attribute(&self, entity: Entity, attribute_name: &Atom) -> Option<f32> {
+        self.captured_attributes
+            .get(&(entity, attribute_name.clone()))
+            .copied()
+    }
+}
 
 /// Component for effects with a duration.
 ///
@@ -88,10 +338,13 @@ pub struct PeriodicEffect {
 
 impl PeriodicEffect {
     /// Creates a new periodic effect.
+    ///
+    /// `time_until_next` starts at 0.0 so the first execution happens
+    /// immediately when the effect is applied (matching UE GAS behavior).
     pub fn new(period: f32) -> Self {
         Self {
             period,
-            time_until_next: period,
+            time_until_next: 0.0,
         }
     }
 
@@ -126,11 +379,69 @@ pub struct AttributeModifier {
     pub operation: ModifierOperation,
     /// The magnitude of the modification.
     pub magnitude: f32,
+    /// The evaluation channel for this modifier.
+    pub channel: EvaluationChannel,
 }
 
 /// The source of a modifier (which effect created it).
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ModifierSource(pub Entity);
+
+/// Evaluation channel for modifier application.
+///
+/// Channels control the order in which modifiers are applied to attributes.
+/// Each channel is evaluated in sequence (Channel0 → Channel1 → ... → Channel9),
+/// with the output of one channel becoming the input to the next.
+///
+/// This allows complex buff/debuff stacking rules. For example:
+/// - Channel0: Base additive bonuses (equipment, passive skills)
+/// - Channel1: Percentage multipliers (buffs, debuffs)
+/// - Channel2: Final additive bonuses (temporary effects)
+///
+/// Matches UE GAS's `EGameplayModEvaluationChannel`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum EvaluationChannel {
+    Channel0 = 0,
+    Channel1 = 1,
+    Channel2 = 2,
+    Channel3 = 3,
+    Channel4 = 4,
+    Channel5 = 5,
+    Channel6 = 6,
+    Channel7 = 7,
+    Channel8 = 8,
+    Channel9 = 9,
+}
+
+impl Default for EvaluationChannel {
+    fn default() -> Self {
+        Self::Channel0
+    }
+}
+
+impl EvaluationChannel {
+    /// Returns the channel as an integer for ordering.
+    pub fn as_u8(self) -> u8 {
+        self as u8
+    }
+
+    /// Creates a channel from an integer (0-9).
+    pub fn from_u8(value: u8) -> Option<Self> {
+        match value {
+            0 => Some(Self::Channel0),
+            1 => Some(Self::Channel1),
+            2 => Some(Self::Channel2),
+            3 => Some(Self::Channel3),
+            4 => Some(Self::Channel4),
+            5 => Some(Self::Channel5),
+            6 => Some(Self::Channel6),
+            7 => Some(Self::Channel7),
+            8 => Some(Self::Channel8),
+            9 => Some(Self::Channel9),
+            _ => None,
+        }
+    }
+}
 
 /// The type of modification operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -139,16 +450,16 @@ pub enum ModifierOperation {
     AddBase,
     /// Add to the current value (temporary).
     AddCurrent,
-    /// Multiply the current value.
+    /// Multiply the current value (additive stacking: 1.0 + sum of all multipliers).
     MultiplyAdditive,
-    /// Multiply the current value (multiplicative stacking).
+    /// Multiply the current value (multiplicative stacking: product of all multipliers).
     MultiplyMultiplicative,
-    /// Override the current value.
+    /// Override the current value (highest priority, short-circuits other modifiers).
     Override,
 }
 
 impl ModifierOperation {
-    /// Returns the priority order for applying modifiers.
+    /// Returns the priority order for applying modifiers within a channel.
     ///
     /// Override has highest priority (checked first, short-circuits).
     /// Lower values are applied first for other operations.
@@ -193,23 +504,26 @@ mod tests {
     #[test]
     fn test_periodic_effect() {
         let mut periodic = PeriodicEffect::new(1.0);
-        assert_eq!(periodic.time_until_next, 1.0);
-        assert!(!periodic.should_execute());
+        assert_eq!(periodic.time_until_next, 0.0);
+        assert!(periodic.should_execute());
 
+        // First frame: immediate execution
+        assert_eq!(periodic.tick(0.016), 1);
+        // time_until_next = 0.0 - 0.016 + 1.0 = 0.984
+        assert!((periodic.time_until_next - 0.984).abs() < 0.001);
+
+        // Partial period elapsed, no execution
         assert_eq!(periodic.tick(0.5), 0);
-        assert_eq!(periodic.time_until_next, 0.5);
-
-        assert_eq!(periodic.tick(0.6), 1);
-        assert_eq!(periodic.time_until_next, 0.9);
+        assert!((periodic.time_until_next - 0.484).abs() < 0.001);
     }
 
     #[test]
     fn test_periodic_effect_large_delta() {
         let mut periodic = PeriodicEffect::new(1.0);
 
-        // Large delta should trigger multiple executions
-        assert_eq!(periodic.tick(2.5), 2);
-        assert_eq!(periodic.time_until_next, 0.5);
+        // First execution at t=0 (time_until_next=0) + 2 more from the large delta
+        assert_eq!(periodic.tick(2.5), 3);
+        assert!((periodic.time_until_next - 0.5).abs() < 0.001);
     }
 
     #[test]

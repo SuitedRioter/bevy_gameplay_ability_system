@@ -15,12 +15,14 @@
 //!
 //! # Quick Start
 //!
-//! ```rust
+//! ```no_run
 //! use bevy::prelude::*;
 //! use bevy_gameplay_ability_system::prelude::*;
+//! use bevy_gameplay_tag::GameplayTagsPlugin;
 //!
 //! App::new()
 //!     .add_plugins(DefaultPlugins)
+//!     .add_plugins(GameplayTagsPlugin::with_data_path("assets/gameplay_tags.json".to_string()))
 //!     .add_plugins(GasPlugin)
 //!     .run();
 //! ```
@@ -42,6 +44,7 @@ pub mod attributes;
 pub mod core;
 pub mod cues;
 pub mod effects;
+pub mod error;
 pub mod utils;
 
 /// Prelude module for convenient imports.
@@ -61,10 +64,9 @@ pub mod prelude {
     pub use crate::abilities::definition::*;
     pub use crate::abilities::plugin::AbilityPlugin;
     pub use crate::abilities::systems::{
-        AbilityActivatedEvent, AbilityActivationFailedEvent,
-        ActivationFailureReason, CancelAbilityEvent, CommitAbilityEvent,
-        CommitAbilityResultEvent, EndAbilityEvent, OnGameplayAbilityEnded,
-        TryActivateAbilityEvent,
+        AbilityActivatedEvent, AbilityActivationFailedEvent, ActivationFailureReason,
+        CancelAbilityEvent, CommitAbilityEvent, CommitAbilityResultEvent, EndAbilityEvent,
+        OnGameplayAbilityEnded, TryActivateAbilityEvent,
     };
 
     pub use crate::cues::manager::*;
@@ -75,6 +77,7 @@ pub mod prelude {
     pub use crate::core::events::*;
     pub use crate::core::system_sets::*;
 
+    pub use crate::error::*;
     pub use crate::utils::*;
 
     pub use crate::GasPlugin;
@@ -89,12 +92,14 @@ use bevy::prelude::*;
 ///
 /// # Example
 ///
-/// ```
+/// ```no_run
 /// use bevy::prelude::*;
 /// use bevy_gameplay_ability_system::GasPlugin;
+/// use bevy_gameplay_tag::GameplayTagsPlugin;
 ///
 /// App::new()
 ///     .add_plugins(DefaultPlugins)
+///     .add_plugins(GameplayTagsPlugin::with_data_path("assets/gameplay_tags.json".to_string()))
 ///     .add_plugins(GasPlugin)
 ///     .run();
 /// ```
@@ -102,6 +107,8 @@ pub struct GasPlugin;
 
 impl Plugin for GasPlugin {
     fn build(&self, app: &mut App) {
+        core::configure_gas_system_sets(app);
+
         app.add_plugins(attributes::AttributePlugin)
             .add_plugins(effects::EffectPlugin)
             .add_plugins(abilities::AbilityPlugin)

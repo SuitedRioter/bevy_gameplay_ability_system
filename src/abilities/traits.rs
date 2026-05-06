@@ -3,9 +3,8 @@
 //! Defines the lifecycle hooks for custom ability implementations.
 
 use crate::abilities::OnGameplayAbilityEnded;
-use crate::core::ApplyGameplayEffectEvent;
+use crate::core::{ApplyGameplayEffectEvent, OwnedTags};
 use bevy::prelude::*;
-use bevy_gameplay_tag::gameplay_tag_count_container::GameplayTagCountContainer;
 use bevy_gameplay_tag::{GameplayTagContainer, GameplayTagsManager};
 
 use crate::effects::GameplayEffectRegistry;
@@ -57,18 +56,20 @@ pub trait AbilityBehavior: Send + Sync + 'static {
             return Err(ActivationCheckFailure::MissingComponents);
         };
         let effect_registry = world.resource::<GameplayEffectRegistry>();
-        let Some(source_tags) = world.get::<GameplayTagCountContainer>(source) else {
+        let Some(source_tags) = world.get::<OwnedTags>(source) else {
             return Err(ActivationCheckFailure::MissingComponents);
         };
 
         // Check cooldown
         if let Some(cd_id) = &definition.cooldown_effect
             && let Some(cd_def) = effect_registry.get(cd_id.as_ref())
-            && source_tags.has_any_matching_gameplay_tags(&cd_def.granted_tags)
+            && source_tags
+                .0
+                .has_any_matching_gameplay_tags(&cd_def.granted_tags)
         {
             let mut cooldown_tags = GameplayTagContainer::default();
             cooldown_tags.append_matches_tags(
-                &source_tags.explicit_tags,
+                &source_tags.0.explicit_tags,
                 &cd_def.granted_tags,
                 tags_manager,
             );
@@ -77,12 +78,14 @@ pub trait AbilityBehavior: Send + Sync + 'static {
 
         // Check source required tags
         if !definition.source_required_tags.is_empty()
-            && !source_tags.has_all_matching_gameplay_tags(&definition.source_required_tags)
+            && !source_tags
+                .0
+                .has_all_matching_gameplay_tags(&definition.source_required_tags)
         {
             let mut missing_tags = GameplayTagContainer::default();
             missing_tags.append_matches_tags(
                 &definition.source_required_tags,
-                &source_tags.explicit_tags,
+                &source_tags.0.explicit_tags,
                 tags_manager,
             );
             return Err(ActivationCheckFailure::SourceMissingRequiredTags(
@@ -91,10 +94,13 @@ pub trait AbilityBehavior: Send + Sync + 'static {
         }
 
         // Check source blocked tags
-        if source_tags.has_any_matching_gameplay_tags(&definition.source_blocked_tags) {
+        if source_tags
+            .0
+            .has_any_matching_gameplay_tags(&definition.source_blocked_tags)
+        {
             let mut blocked_tags = GameplayTagContainer::default();
             blocked_tags.append_matches_tags(
-                &source_tags.explicit_tags,
+                &source_tags.0.explicit_tags,
                 &definition.source_blocked_tags,
                 tags_manager,
             );
@@ -104,24 +110,48 @@ pub trait AbilityBehavior: Send + Sync + 'static {
         Ok(())
     }
 
-    /// Called before activation begins. Runs with &mut World access.
+    /// Called before activation begins. Adds activation_owned_tags and block_abilities_with_tags.
     fn pre_activate(
         &self,
-        _world: &mut World,
-        _instance_entity: Entity,
+        commands: &mut Commands,
+        _instance_entity: Option<Entity>,
         _spec_entity: Entity,
-        _source: Entity,
+        source: Entity,
+        definition: &AbilityDefinition,
+        tags_manager: &Res<GameplayTagsManager>,
+        tag_containers: &mut Query<&mut crate::core::OwnedTags>,
+        blocked_ability_tags: &mut Query<&mut crate::core::BlockedAbilityTags>,
     ) {
+        // Add activation_owned_tags to owner's OwnedTags.
+        if let Ok(mut owner_tags) = tag_containers.get_mut(source) {
+            owner_tags.0.update_tag_container_count(
+                &definition.activation_owned_tags,
+                1,
+                tags_manager,
+                commands,
+                source,
+            );
+        }
+
+        // Add block_abilities_with_tags to owner's BlockedAbilityTags.
+        if let Ok(mut blocked_tags) = blocked_ability_tags.get_mut(source) {
+            blocked_tags.0.update_tag_container_count(
+                &definition.block_abilities_with_tags,
+                1,
+                tags_manager,
+                commands,
+                source,
+            );
+        }
     }
 
     /// Called when the ability instance is activated. Main ability logic goes here.
     fn activate(
         &self,
-        _world: &mut World,
-        _instance_entity: Entity,
+        _world: &mut Commands,
+        _instance_entity: Option<Entity>,
         _spec_entity: Entity,
-        _source: Entity,
-        _target: Option<Entity>,
+        _activation_info: &super::activation_info::AbilityActivationInfo,
     ) {
     }
 
@@ -134,18 +164,20 @@ pub trait AbilityBehavior: Send + Sync + 'static {
         tags_manager: &Res<GameplayTagsManager>,
     ) -> ActivationCheckResult {
         let effect_registry = world.resource::<GameplayEffectRegistry>();
-        let Some(source_tags) = world.get::<GameplayTagCountContainer>(source) else {
+        let Some(source_tags) = world.get::<OwnedTags>(source) else {
             return Err(ActivationCheckFailure::MissingComponents);
         };
 
         // Check cooldown
         if let Some(cd_id) = &definition.cooldown_effect
             && let Some(cd_def) = effect_registry.get(cd_id.as_ref())
-            && source_tags.has_any_matching_gameplay_tags(&cd_def.granted_tags)
+            && source_tags
+                .0
+                .has_any_matching_gameplay_tags(&cd_def.granted_tags)
         {
             let mut cooldown_tags = GameplayTagContainer::default();
             cooldown_tags.append_matches_tags(
-                &source_tags.explicit_tags,
+                &source_tags.0.explicit_tags,
                 &cd_def.granted_tags,
                 tags_manager,
             );
@@ -179,30 +211,32 @@ pub trait AbilityBehavior: Send + Sync + 'static {
         source: Entity,
     ) {
         if let Some(cd_id) = &definition.cooldown_effect {
-            commands.trigger(ApplyGameplayEffectEvent {
-                effect_id: cd_id.clone(),
-                target: source,
-                instigator: Some(source),
-                level: spec.level,
-            });
+            commands.trigger(
+                ApplyGameplayEffectEvent::new(cd_id.clone(), source)
+                    .with_source(source)
+                    .with_instigator(source)
+                    .with_level(spec.level),
+            );
         };
 
         if let Some(cost_id) = &definition.cost_effect {
-            commands.trigger(ApplyGameplayEffectEvent {
-                effect_id: cost_id.clone(),
-                target: source,
-                instigator: Some(source),
-                level: spec.level,
-            });
+            commands.trigger(
+                ApplyGameplayEffectEvent::new(cost_id.clone(), source)
+                    .with_source(source)
+                    .with_instigator(source)
+                    .with_level(spec.level),
+            );
         }
     }
 
     /// Called when the ability instance ends. Cleanup logic goes here.
-    fn end(&self, commands: &mut Commands, instance_entity: Entity, was_cancelled: bool) {
-        commands.trigger(OnGameplayAbilityEnded {
-            ability_instance: instance_entity,
-            was_cancelled,
-        });
+    fn end(&self, commands: &mut Commands, instance_entity: Option<Entity>, was_cancelled: bool) {
+        if let Some(instance) = instance_entity {
+            commands.trigger(OnGameplayAbilityEnded {
+                ability_instance: instance,
+                was_cancelled,
+            });
+        }
     }
 }
 

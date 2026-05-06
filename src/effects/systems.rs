@@ -7,17 +7,23 @@ use super::definition::*;
 use crate::attributes::{
     AttributeData, AttributeLifecycleHooks, AttributeModifyContext, AttributeName, AttributeSetId,
 };
+use crate::core::OwnedTags;
+use crate::cues::manager::{GameplayCueEvent, GameplayCueParameters};
+use crate::cues::systems::TriggerGameplayCueEvent;
+use crate::effects::application_requirement::{
+    ApplicationAttributeSnapshot, ApplicationContext, ApplicationRequirementRegistry,
+};
 use bevy::ecs::relationship::Relationship;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy_gameplay_tag::GameplayTagsManager;
-use bevy_gameplay_tag::gameplay_tag_count_container::GameplayTagCountContainer;
 use string_cache::DefaultAtom as Atom;
 
 /// Bundled query parameters for applying gameplay effects.
 #[derive(SystemParam)]
 pub struct ApplyEffectParams<'w, 's> {
-    pub tag_containers: Query<'w, 's, &'static mut GameplayTagCountContainer>,
+    pub tag_containers: Query<'w, 's, &'static mut OwnedTags>,
+    pub immunity_tags: Query<'w, 's, &'static crate::core::ImmunityTags>,
     pub attributes: Query<
         'w,
         's,
@@ -32,9 +38,12 @@ pub struct ApplyEffectParams<'w, 's> {
         's,
         (
             Entity,
-            &'static ActiveGameplayEffect,
+            &'static mut ActiveGameplayEffect,
             &'static EffectTarget,
             Option<&'static mut EffectDuration>,
+            Option<&'static mut EffectInstigator>,
+            Option<&'static mut GameplayEffectContext>,
+            Option<&'static mut SetByCallerMagnitudes>,
         ),
     >,
 }
@@ -42,14 +51,70 @@ pub struct ApplyEffectParams<'w, 's> {
 /// Event for applying a gameplay effect.
 #[derive(Event, Debug, Clone)]
 pub struct ApplyGameplayEffectEvent {
-    /// The effect definition ID to apply.
-    pub effect_id: Atom,
-    /// The target entity.
-    pub target: Entity,
-    /// The instigator entity (optional).
-    pub instigator: Option<Entity>,
-    /// The level at which to apply the effect.
-    pub level: i32,
+    /// Complete runtime spec for this application.
+    pub spec: GameplayEffectSpec,
+}
+
+impl ApplyGameplayEffectEvent {
+    /// Creates an effect application event from a spec.
+    pub fn from_spec(spec: GameplayEffectSpec) -> Self {
+        Self { spec }
+    }
+
+    /// Creates an effect application event targeting an entity at level 1.
+    pub fn new(effect_id: impl Into<Atom>, target: Entity) -> Self {
+        Self::from_spec(GameplayEffectSpec::new(effect_id, target))
+    }
+
+    /// Sets the level on the contained spec.
+    pub fn with_level(mut self, level: i32) -> Self {
+        self.spec.level = level;
+        self
+    }
+
+    /// Sets the source entity on the contained spec.
+    pub fn with_source(mut self, source: Entity) -> Self {
+        self.spec.context.source = Some(source);
+        self
+    }
+
+    /// Sets the instigator entity on the contained spec.
+    pub fn with_instigator(mut self, instigator: Entity) -> Self {
+        self.spec.context.instigator = Some(instigator);
+        self
+    }
+
+    /// Adds a SetByCaller magnitude to the contained spec.
+    pub fn with_set_by_caller_magnitude(
+        mut self,
+        tag: bevy_gameplay_tag::gameplay_tag::GameplayTag,
+        magnitude: f32,
+    ) -> Self {
+        self.spec
+            .set_by_caller_magnitudes
+            .set_magnitude(tag, magnitude);
+        self
+    }
+
+    /// Returns the effect definition ID.
+    pub fn effect_id(&self) -> &Atom {
+        &self.spec.effect_id
+    }
+
+    /// Returns the target entity.
+    pub fn target(&self) -> Entity {
+        self.spec.target
+    }
+
+    /// Returns the legacy instigator field.
+    pub fn instigator(&self) -> Option<Entity> {
+        self.spec.instigator()
+    }
+
+    /// Returns the application level.
+    pub fn level(&self) -> i32 {
+        self.spec.level
+    }
 }
 
 /// Event triggered when an effect is applied.
@@ -74,46 +139,374 @@ pub struct GameplayEffectRemovedEvent {
     pub effect_id: Atom,
 }
 
+/// Event triggered when an effect is blocked by immunity.
+#[derive(Event, Debug, Clone)]
+pub struct GameplayEffectBlockedByImmunityEvent {
+    /// The effect definition ID that was blocked.
+    pub effect_id: Atom,
+    /// The target entity that has immunity.
+    pub target: Entity,
+    /// The instigator entity (if any).
+    pub instigator: Option<Entity>,
+    /// The immunity tag that blocked the effect.
+    pub immunity_tag: bevy_gameplay_tag::gameplay_tag::GameplayTag,
+}
+
+fn build_cue_parameters(spec: &GameplayEffectSpec) -> GameplayCueParameters {
+    let mut parameters = GameplayCueParameters::new().with_target(spec.target);
+
+    if let Some(instigator) = spec.context.instigator {
+        parameters = parameters.with_instigator(instigator);
+    }
+    if let Some(effect_causer) = spec.context.source {
+        parameters = parameters.with_effect_causer(effect_causer);
+    }
+    if let Some(location) = spec.context.hit_location {
+        parameters = parameters.with_location(location);
+    }
+    if let Some(normal) = spec.context.hit_normal {
+        parameters = parameters.with_normal(normal);
+    }
+
+    parameters
+}
+
+fn merge_cue_parameters(
+    base: GameplayCueParameters,
+    override_parameters: &GameplayCueParameters,
+) -> GameplayCueParameters {
+    GameplayCueParameters {
+        normalized_magnitude: if override_parameters.normalized_magnitude != 0.0 {
+            override_parameters.normalized_magnitude
+        } else {
+            base.normalized_magnitude
+        },
+        raw_magnitude: if override_parameters.raw_magnitude != 0.0 {
+            override_parameters.raw_magnitude
+        } else {
+            base.raw_magnitude
+        },
+        location: if override_parameters.location != Vec3::ZERO {
+            override_parameters.location
+        } else {
+            base.location
+        },
+        normal: if override_parameters.normal != Vec3::Y {
+            override_parameters.normal
+        } else {
+            base.normal
+        },
+        normal_impact_normal: override_parameters
+            .normal_impact_normal
+            .or(base.normal_impact_normal),
+        instigator: override_parameters.instigator.or(base.instigator),
+        effect_causer: override_parameters.effect_causer.or(base.effect_causer),
+        target: override_parameters.target.or(base.target),
+        physical_material: override_parameters
+            .physical_material
+            .clone()
+            .or(base.physical_material),
+        gameplay_effect_level: if override_parameters.gameplay_effect_level != 1.0 {
+            override_parameters.gameplay_effect_level
+        } else {
+            base.gameplay_effect_level
+        },
+        ability_level: if override_parameters.ability_level != 1.0 {
+            override_parameters.ability_level
+        } else {
+            base.ability_level
+        },
+        source_tags: override_parameters.source_tags.clone().or(base.source_tags),
+        target_tags: override_parameters.target_tags.clone().or(base.target_tags),
+    }
+}
+
+fn trigger_effect_cues(
+    commands: &mut Commands,
+    definition: &GameplayEffectDefinition,
+    event_type: GameplayCueEvent,
+    spec: &GameplayEffectSpec,
+) {
+    let base_parameters = build_cue_parameters(spec);
+
+    for cue in &definition.gameplay_cues {
+        if !cue.applies_to_level(spec.level) {
+            continue;
+        }
+
+        commands.trigger(TriggerGameplayCueEvent {
+            cue_tag: cue.cue_tag.clone(),
+            event_type,
+            parameters: merge_cue_parameters(base_parameters.clone(), &cue.parameters),
+        });
+    }
+}
+
+fn trigger_effect_cues_from_components(
+    commands: &mut Commands,
+    definition: &GameplayEffectDefinition,
+    event_type: GameplayCueEvent,
+    effect_id: &Atom,
+    target: Entity,
+    level: i32,
+    context: Option<&GameplayEffectContext>,
+) {
+    let spec = GameplayEffectSpec {
+        effect_id: effect_id.clone(),
+        target,
+        level,
+        context: context.cloned().unwrap_or_default(),
+        set_by_caller_magnitudes: SetByCallerMagnitudes::new(),
+        captured_attributes: std::collections::HashMap::new(),
+    };
+
+    trigger_effect_cues(commands, definition, event_type, &spec);
+}
+
+fn calculate_modifier_magnitude(
+    magnitude: &MagnitudeCalculation,
+    level: i32,
+    source_entity: Option<Entity>,
+    target_entity: Entity,
+    set_by_caller: Option<&SetByCallerMagnitudes>,
+    custom_calculators: &super::custom_calculation::CustomCalculationRegistry,
+    attributes: &[ApplicationAttributeSnapshot],
+) -> f32 {
+    let source_value = match magnitude {
+        MagnitudeCalculation::AttributeBased {
+            attribute_name,
+            capture_source,
+            calculation_type,
+            ..
+        } => {
+            use super::definition::{AttributeCalculationType, AttributeCaptureSource};
+
+            let capture_entity = match capture_source {
+                AttributeCaptureSource::Source => source_entity,
+                AttributeCaptureSource::Target => Some(target_entity),
+            };
+
+            capture_entity.and_then(|entity| {
+                attributes
+                    .iter()
+                    .find(|snapshot| {
+                        snapshot.owner == entity && snapshot.attribute_name == *attribute_name
+                    })
+                    .map(|snapshot| match calculation_type {
+                        AttributeCalculationType::AttributeMagnitude => snapshot.current_value,
+                        AttributeCalculationType::AttributeBaseValue => snapshot.base_value,
+                        AttributeCalculationType::AttributeBonusMagnitude => {
+                            snapshot.current_value - snapshot.base_value
+                        }
+                    })
+            })
+        }
+        MagnitudeCalculation::SetByCaller { data_tag } => {
+            set_by_caller.and_then(|magnitudes| magnitudes.get_magnitude(data_tag))
+        }
+        MagnitudeCalculation::CustomClass { calculator_name } => {
+            if let Some(calculator) = custom_calculators.get(calculator_name) {
+                use super::custom_calculation::CalculationContext;
+
+                let mut source_attrs = std::collections::HashMap::new();
+                let mut target_attrs = std::collections::HashMap::new();
+
+                if let Some(source) = source_entity {
+                    for attr_name in calculator.required_source_attributes() {
+                        if let Some(value) = attributes
+                            .iter()
+                            .find(|snapshot| {
+                                snapshot.owner == source
+                                    && snapshot.attribute_name.as_ref() == *attr_name
+                            })
+                            .map(|snapshot| snapshot.current_value)
+                        {
+                            source_attrs.insert((*attr_name).into(), value);
+                        }
+                    }
+                }
+
+                for attr_name in calculator.required_target_attributes() {
+                    if let Some(value) = attributes
+                        .iter()
+                        .find(|snapshot| {
+                            snapshot.owner == target_entity
+                                && snapshot.attribute_name.as_ref() == *attr_name
+                        })
+                        .map(|snapshot| snapshot.current_value)
+                    {
+                        target_attrs.insert((*attr_name).into(), value);
+                    }
+                }
+
+                let context = CalculationContext {
+                    source: source_entity,
+                    target: target_entity,
+                    level,
+                    source_attributes: source_attrs,
+                    target_attributes: target_attrs,
+                };
+
+                Some(calculator.calculate(&context))
+            } else {
+                warn!(
+                    "Custom calculator '{}' not found in registry",
+                    calculator_name
+                );
+                None
+            }
+        }
+        MagnitudeCalculation::CustomExecution { .. } => {
+            // CustomExecution is handled separately in the effect application flow
+            // It produces multiple modifiers, not a single magnitude value
+            warn!("CustomExecution should not be evaluated as a simple magnitude");
+            None
+        }
+        MagnitudeCalculation::ScalableFloat { .. } => None,
+    };
+
+    magnitude.evaluate(level, source_value)
+}
+
 /// Observer for ApplyGameplayEffectEvent.
 pub fn on_apply_gameplay_effect(
     ev: On<ApplyGameplayEffectEvent>,
     mut commands: Commands,
     registry: Res<GameplayEffectRegistry>,
+    application_requirements: Res<ApplicationRequirementRegistry>,
+    custom_calculators: Res<super::custom_calculation::CustomCalculationRegistry>,
     tags_manager: Res<GameplayTagsManager>,
     time: Res<Time>,
     mut params: ApplyEffectParams,
 ) {
     let event = ev.event();
-    let target = event.target;
-    let effect_id = &event.effect_id;
-    let level = event.level;
+    let spec = &event.spec;
+    let target = spec.target;
+    let effect_id = &spec.effect_id;
+    let level = spec.level;
 
     let Some(definition) = registry.get(effect_id) else {
         warn!("Effect definition not found: {}", effect_id);
         return;
     };
 
+    // Check immunity: if target has immunity tags matching effect's immunity_tags, reject
+    if let Ok(target_immunity) = params.immunity_tags.get(target) {
+        for immunity_tag in definition.immunity_tags.gameplay_tags.iter() {
+            if target_immunity
+                .0
+                .explicit_tags
+                .gameplay_tags
+                .contains(immunity_tag)
+            {
+                // Target is immune to this effect
+                info!(
+                    "Effect '{}' blocked by immunity tag '{:?}' on target {:?}",
+                    effect_id, immunity_tag, target
+                );
+
+                // Trigger immunity event
+                commands.trigger(GameplayEffectBlockedByImmunityEvent {
+                    effect_id: effect_id.clone(),
+                    target,
+                    instigator: spec.instigator(),
+                    immunity_tag: immunity_tag.clone(),
+                });
+
+                return;
+            }
+        }
+    }
+
+    // Legacy check: if target has any of the effect's asset_tags in their owned tags, reject
+    // This is for backwards compatibility with the old immunity system
+    if let Ok(owner_tags) = params.tag_containers.get(target) {
+        for asset_tag in definition.asset_tags.gameplay_tags.iter() {
+            if owner_tags.0.explicit_tags.gameplay_tags.contains(asset_tag) {
+                // Target is immune to this effect
+                info!(
+                    "Effect '{}' blocked by asset tag immunity '{:?}' on target {:?}",
+                    effect_id, asset_tag, target
+                );
+                return;
+            }
+        }
+    }
+
     // Check application_tag_requirements
-    if let Ok(owner_tags) = params.tag_containers.get(target)
-        && !definition
+    if let Ok(owner_tags) = params.tag_containers.get(target) {
+        // OwnedTags wraps GameplayTagCountContainer which has explicit_tags field
+        let tag_container = &owner_tags.0;
+        if !definition
             .application_tag_requirements
-            .requirements_met(&owner_tags.explicit_tags)
-    {
-        return;
+            .requirements_met(&tag_container.explicit_tags)
+        {
+            return;
+        }
+    }
+
+    // Check custom application requirements.
+    let target_tags = params.tag_containers.get(target).ok();
+    let source_tags = spec
+        .source_entity()
+        .and_then(|source| params.tag_containers.get(source).ok());
+
+    let attribute_snapshots: Vec<_> = params
+        .attributes
+        .iter()
+        .map(|(data, name, child_of)| ApplicationAttributeSnapshot::new(child_of.get(), name, data))
+        .collect();
+
+    for requirement_name in &definition.application_requirements {
+        let Some(requirement) = application_requirements.get(requirement_name) else {
+            warn!(
+                "Effect '{}' references unknown application requirement '{}'",
+                effect_id, requirement_name
+            );
+            return;
+        };
+
+        let context = ApplicationContext {
+            source: spec.source_entity(),
+            target,
+            level,
+            target_tags: target_tags.as_ref().copied(),
+            source_tags: source_tags.as_ref().copied(),
+            attributes: &attribute_snapshots,
+        };
+
+        if !requirement.can_apply(&context) {
+            return;
+        }
     }
 
     // Handle stacking
     match definition.stacking_policy {
         StackingPolicy::RefreshDuration => {
             // Find existing effect and refresh its duration
-            for (effect_entity, active_effect, effect_target, duration) in
-                params.existing_effects.iter_mut()
+            for (
+                effect_entity,
+                active_effect,
+                effect_target,
+                duration,
+                effect_instigator,
+                effect_context,
+                set_by_caller,
+            ) in params.existing_effects.iter_mut()
             {
                 if effect_target.0 == target && active_effect.definition_id == *effect_id {
                     if let Some(mut dur) = duration {
                         dur.remaining = definition.duration_magnitude;
                     }
-                    // Trigger applied event for the existing effect
+                    if let Some(mut instigator_component) = effect_instigator {
+                        instigator_component.0 = spec.instigator();
+                    }
+                    if let Some(mut context_component) = effect_context {
+                        *context_component = spec.context.clone();
+                    }
+                    if let Some(mut set_by_caller_component) = set_by_caller {
+                        *set_by_caller_component = spec.set_by_caller_magnitudes.clone();
+                    }
                     commands.trigger(GameplayEffectAppliedEvent {
                         effect: effect_entity,
                         target,
@@ -126,23 +519,37 @@ pub fn on_apply_gameplay_effect(
         }
         StackingPolicy::StackCount { max_stacks } => {
             // Find existing effect and increment stack count
-            for (effect_entity, active_effect, effect_target, _) in params.existing_effects.iter() {
+            for (
+                effect_entity,
+                mut active_effect,
+                effect_target,
+                duration,
+                effect_instigator,
+                effect_context,
+                set_by_caller,
+            ) in params.existing_effects.iter_mut()
+            {
                 if effect_target.0 == target && active_effect.definition_id == *effect_id {
                     if active_effect.stack_count < max_stacks {
-                        // Need to increment stack count - we'll spawn a new modifier set
-                        // by letting it fall through, but first update the existing effect
-                        commands.entity(effect_entity).insert(ActiveGameplayEffect {
-                            definition_id: active_effect.definition_id.clone(),
-                            level: active_effect.level,
-                            start_time: active_effect.start_time,
-                            stack_count: active_effect.stack_count + 1,
-                        });
-                        commands.trigger(GameplayEffectAppliedEvent {
-                            effect: effect_entity,
-                            target,
-                            effect_id: effect_id.clone(),
-                        });
+                        active_effect.stack_count += 1;
                     }
+                    if let Some(mut dur) = duration {
+                        dur.remaining = definition.duration_magnitude;
+                    }
+                    if let Some(mut instigator_component) = effect_instigator {
+                        instigator_component.0 = spec.instigator();
+                    }
+                    if let Some(mut context_component) = effect_context {
+                        *context_component = spec.context.clone();
+                    }
+                    if let Some(mut set_by_caller_component) = set_by_caller {
+                        *set_by_caller_component = spec.set_by_caller_magnitudes.clone();
+                    }
+                    commands.trigger(GameplayEffectAppliedEvent {
+                        effect: effect_entity,
+                        target,
+                        effect_id: effect_id.clone(),
+                    });
                     return;
                 }
             }
@@ -157,45 +564,53 @@ pub fn on_apply_gameplay_effect(
         DurationPolicy::Instant => {
             // Directly modify attribute base_value, no entity spawn
             for modifier in &definition.modifiers {
-                let magnitude = modifier.magnitude.evaluate(level, None);
+                let magnitude = calculate_modifier_magnitude(
+                    &modifier.magnitude,
+                    level,
+                    spec.source_entity(),
+                    target,
+                    Some(&spec.set_by_caller_magnitudes),
+                    &custom_calculators,
+                    &attribute_snapshots,
+                );
                 for (mut attr_data, attr_name, attr_owner) in params.attributes.iter_mut() {
                     if attr_owner.0 == target && attr_name.0 == modifier.attribute_name {
-                        match modifier.operation {
-                            ModifierOperation::AddBase => {
-                                attr_data.base_value += magnitude;
-                                attr_data.current_value = attr_data.base_value;
-                            }
-                            ModifierOperation::AddCurrent => {
-                                attr_data.base_value += magnitude;
-                                attr_data.current_value = attr_data.base_value;
+                        let old_value = attr_data.base_value;
+                        let new_value = match modifier.operation {
+                            ModifierOperation::AddBase | ModifierOperation::AddCurrent => {
+                                old_value + magnitude
                             }
                             ModifierOperation::MultiplyAdditive
                             | ModifierOperation::MultiplyMultiplicative => {
-                                attr_data.base_value *= 1.0 + magnitude;
-                                attr_data.current_value = attr_data.base_value;
+                                old_value * (1.0 + magnitude)
                             }
-                            ModifierOperation::Override => {
-                                attr_data.base_value = magnitude;
-                                attr_data.current_value = magnitude;
-                            }
-                        }
+                            ModifierOperation::Override => magnitude,
+                        };
+
+                        // Call pre_effect_execute hook (allows clamping/rejection)
+                        // TODO: Get AttributeSetId to look up hooks
+                        // For now, we skip hooks for instant effects
+                        // This will be implemented when we add AttributeSnapshot
+
+                        // Apply the modification
+                        attr_data.base_value = new_value;
+                        // Don't set current_value - let aggregation handle it
+
+                        // Call post_effect_execute hook
+                        // TODO: Implement when AttributeSnapshot is added
                     }
                 }
             }
 
-            // Add granted_tags to target (even for instant, they'll be removed when the "instant" is done)
-            // For instant effects, granted_tags are typically not used, but we support it
-            if !definition.granted_tags.is_empty()
-                && let Ok(mut target_tags) = params.tag_containers.get_mut(target)
-            {
-                target_tags.update_tag_container_count(
-                    &definition.granted_tags,
-                    1,
-                    &tags_manager,
-                    &mut commands,
-                    target,
-                );
-            }
+            // Defense-in-depth: registration validates this, but skip tags anyway.
+            // Instant effects have no persistent entity, so tags would never be removed.
+            debug_assert!(
+                definition.granted_tags.is_empty(),
+                "Instant effect '{}' has granted_tags — this should have been rejected at registration",
+                effect_id
+            );
+
+            trigger_effect_cues(&mut commands, definition, GameplayCueEvent::Executed, spec);
 
             // Use PLACEHOLDER since no entity is spawned for instant effects
             commands.trigger(GameplayEffectAppliedEvent {
@@ -206,11 +621,23 @@ pub fn on_apply_gameplay_effect(
         }
         DurationPolicy::HasDuration | DurationPolicy::Infinite => {
             // Spawn effect entity with components
+            let source = spec.context.source.unwrap_or(target);
             let mut effect_entity_commands = commands.spawn((
-                ActiveGameplayEffect::new(effect_id.clone(), level, time.elapsed_secs()),
+                ActiveGameplayEffect::new(
+                    effect_id.clone(),
+                    source,
+                    target,
+                    level,
+                    time.elapsed_secs(),
+                ),
                 EffectTarget(target),
-                EffectInstigator(event.instigator),
+                EffectInstigator(spec.instigator()),
+                spec.context.clone(),
             ));
+
+            if !spec.set_by_caller_magnitudes.is_empty() {
+                effect_entity_commands.insert(spec.set_by_caller_magnitudes.clone());
+            }
 
             // Add duration component for HasDuration
             if definition.duration_policy == DurationPolicy::HasDuration {
@@ -231,11 +658,11 @@ pub fn on_apply_gameplay_effect(
 
             let effect_entity = effect_entity_commands.id();
 
-            // Add granted_tags to target's GameplayTagCountContainer
+            // Add granted_tags to target's OwnedTags
             if !definition.granted_tags.is_empty()
                 && let Ok(mut target_tags) = params.tag_containers.get_mut(target)
             {
-                target_tags.update_tag_container_count(
+                target_tags.0.update_tag_container_count(
                     &definition.granted_tags,
                     1,
                     &tags_manager,
@@ -243,6 +670,8 @@ pub fn on_apply_gameplay_effect(
                     target,
                 );
             }
+
+            trigger_effect_cues(&mut commands, definition, GameplayCueEvent::OnActive, spec);
 
             commands.trigger(GameplayEffectAppliedEvent {
                 effect: effect_entity,
@@ -254,44 +683,117 @@ pub fn on_apply_gameplay_effect(
 }
 
 /// System that creates modifier entities for active effects.
+///
+/// This system runs when:
+/// 1. A new effect is added (Added<ActiveGameplayEffect>)
+/// 2. An effect's stack count changes (Changed<ActiveGameplayEffect>)
+///
+/// For stacking effects, we need to create additional modifiers when stack count increases.
+/// For AttributeBased and SetByCaller magnitudes, we need to capture/lookup values.
 pub fn create_effect_modifiers_system(
     mut commands: Commands,
     registry: Res<GameplayEffectRegistry>,
-    new_effects: Query<
+    custom_calculators: Res<super::custom_calculation::CustomCalculationRegistry>,
+    new_or_changed_effects: Query<
         (
             Entity,
             &ActiveGameplayEffect,
             &EffectTarget,
             Option<&EffectInstigator>,
+            Option<&SetByCallerMagnitudes>,
+            Option<&GameplayEffectContext>,
         ),
-        Added<ActiveGameplayEffect>,
+        (
+            Or<(Added<ActiveGameplayEffect>, Changed<ActiveGameplayEffect>)>,
+            Without<PeriodicEffect>,
+        ),
     >,
+    existing_modifiers: Query<(Entity, &ModifierSource)>,
+    attributes: Query<(&AttributeData, &AttributeName, &ChildOf)>,
 ) {
-    for (effect_entity, active_effect, target, _instigator) in new_effects.iter() {
+    for (effect_entity, active_effect, target, instigator, set_by_caller, context) in
+        new_or_changed_effects.iter()
+    {
         let Some(definition) = registry.get(&active_effect.definition_id) else {
             continue;
         };
 
-        for modifier_info in &definition.modifiers {
-            let source_value = None;
-            let magnitude = modifier_info
-                .magnitude
-                .evaluate(active_effect.level, source_value);
+        // Count existing modifiers for this effect
+        let existing_modifier_count = existing_modifiers
+            .iter()
+            .filter(|(_, source)| source.0 == effect_entity)
+            .count();
 
-            commands.spawn((
-                AttributeModifier {
-                    target_entity: target.0,
-                    target_attribute: modifier_info.attribute_name.clone(),
-                    operation: modifier_info.operation,
-                    magnitude,
-                },
-                ModifierSource(effect_entity),
-            ));
+        // Calculate how many modifier sets we need total
+        let needed_modifier_sets = active_effect.stack_count as usize;
+        let modifiers_per_set = definition.modifiers.len();
+        let needed_total = needed_modifier_sets * modifiers_per_set;
+
+        // If we already have the right number, skip
+        if existing_modifier_count == needed_total {
+            continue;
+        }
+
+        // If we have too many (stack decreased), remove excess
+        if existing_modifier_count > needed_total {
+            let to_remove = existing_modifier_count - needed_total;
+            let mut removed = 0;
+            for (modifier_entity, source) in existing_modifiers.iter() {
+                if source.0 == effect_entity && removed < to_remove {
+                    commands.entity(modifier_entity).despawn();
+                    removed += 1;
+                }
+            }
+            continue;
+        }
+
+        // We need more modifiers - spawn one complete set per missing stack
+        let missing_stacks = (needed_total - existing_modifier_count) / modifiers_per_set;
+
+        let attribute_snapshots: Vec<_> = attributes
+            .iter()
+            .map(|(data, name, child_of)| {
+                ApplicationAttributeSnapshot::new(child_of.get(), name, data)
+            })
+            .collect();
+        let source_entity = context
+            .and_then(|context| context.source.or(context.instigator))
+            .or_else(|| instigator.and_then(|instigator| instigator.0));
+
+        for _ in 0..missing_stacks {
+            for modifier_info in &definition.modifiers {
+                let magnitude = calculate_modifier_magnitude(
+                    &modifier_info.magnitude,
+                    active_effect.level,
+                    source_entity,
+                    target.0,
+                    set_by_caller,
+                    &custom_calculators,
+                    &attribute_snapshots,
+                );
+
+                commands.spawn((
+                    AttributeModifier {
+                        target_entity: target.0,
+                        target_attribute: modifier_info.attribute_name.clone(),
+                        operation: modifier_info.operation,
+                        magnitude,
+                        channel: modifier_info.channel,
+                    },
+                    ModifierSource(effect_entity),
+                ));
+            }
         }
     }
 }
 
 /// System that aggregates attribute modifiers and applies them to attributes.
+///
+/// Modifiers are evaluated in channel order (Channel0 → Channel1 → ... → Channel9).
+/// Within each channel, modifiers are applied in operation priority order.
+/// The output of one channel becomes the input to the next channel.
+///
+/// This optimized version uses batch aggregation to reduce iterations and improve cache locality.
 pub fn aggregate_attribute_modifiers_system(
     mut attributes: Query<(
         Entity,
@@ -303,23 +805,26 @@ pub fn aggregate_attribute_modifiers_system(
     modifiers: Query<&AttributeModifier>,
     hooks: Option<Res<AttributeLifecycleHooks>>,
 ) {
+    use super::batch_aggregation::ModifierAggregator;
+
+    // Build aggregator by collecting all modifiers
+    let mut aggregator = ModifierAggregator::new();
+    for modifier in modifiers.iter() {
+        aggregator.add_modifier(modifier);
+    }
+
+    // Process each attribute using the pre-aggregated batches
     for (attr_entity, mut attr_data, attr_name, child_of, set_id) in attributes.iter_mut() {
         let owner = child_of.get();
-        let mut applicable_modifiers: Vec<_> = modifiers
-            .iter()
-            .filter(|m| m.target_entity == owner && m.target_attribute == attr_name.0)
-            .collect();
 
-        applicable_modifiers.sort_by_key(|m| m.operation.priority());
+        // Get the batch for this attribute (if any)
+        if let Some(batch) = aggregator.get_batch(owner, &attr_name.0) {
+            // Evaluate the batch starting from base value
+            let new_value = batch.evaluate(attr_data.base_value);
 
-        // Check for Override first (short-circuit)
-        if let Some(override_mod) = applicable_modifiers
-            .iter()
-            .find(|m| matches!(m.operation, ModifierOperation::Override))
-        {
+            // Apply the final value with hooks
             let old_value = attr_data.current_value;
-            let new_value = override_mod.magnitude;
-            if (old_value - new_value).abs() > f32::EPSILON {
+            if (new_value - old_value).abs() > f32::EPSILON {
                 let mut context = AttributeModifyContext {
                     owner,
                     attribute: attr_entity,
@@ -329,7 +834,6 @@ pub fn aggregate_attribute_modifiers_system(
                     source_effect: None,
                 };
 
-                // Call pre hook for this AttributeSet
                 if let Some(hooks_res) = &hooks
                     && let Some(set_hooks) = hooks_res.get(set_id.0)
                 {
@@ -338,68 +842,94 @@ pub fn aggregate_attribute_modifiers_system(
 
                 attr_data.current_value = context.new_value;
 
-                // Call post hook
                 if let Some(hooks_res) = &hooks
                     && let Some(set_hooks) = hooks_res.get(set_id.0)
                 {
                     (set_hooks.post_change)(&context);
                 }
             }
-            continue;
-        }
+        } else {
+            // No modifiers for this attribute, reset to base value if needed
+            let old_value = attr_data.current_value;
+            if (attr_data.base_value - old_value).abs() > f32::EPSILON {
+                let mut context = AttributeModifyContext {
+                    owner,
+                    attribute: attr_entity,
+                    attribute_name: attr_name.0.clone(),
+                    old_value,
+                    new_value: attr_data.base_value,
+                    source_effect: None,
+                };
 
-        let mut current = attr_data.base_value;
+                if let Some(hooks_res) = &hooks
+                    && let Some(set_hooks) = hooks_res.get(set_id.0)
+                {
+                    (set_hooks.pre_change)(&mut context);
+                }
 
-        // AddCurrent
-        for modifier in applicable_modifiers
-            .iter()
-            .filter(|m| matches!(m.operation, ModifierOperation::AddCurrent))
-        {
-            current += modifier.magnitude;
-        }
+                attr_data.current_value = context.new_value;
 
-        // MultiplyAdditive: (1 + sum)
-        let additive_multiplier: f32 = applicable_modifiers
-            .iter()
-            .filter(|m| matches!(m.operation, ModifierOperation::MultiplyAdditive))
-            .map(|m| m.magnitude)
-            .sum();
-        current *= 1.0 + additive_multiplier;
-
-        // MultiplyMultiplicative: prod(1 + m)
-        for modifier in applicable_modifiers
-            .iter()
-            .filter(|m| matches!(m.operation, ModifierOperation::MultiplyMultiplicative))
-        {
-            current *= 1.0 + modifier.magnitude;
-        }
-
-        let old_value = attr_data.current_value;
-        if (current - old_value).abs() > f32::EPSILON {
-            let mut context = AttributeModifyContext {
-                owner,
-                attribute: attr_entity,
-                attribute_name: attr_name.0.clone(),
-                old_value,
-                new_value: current,
-                source_effect: None,
-            };
-
-            if let Some(hooks_res) = &hooks
-                && let Some(set_hooks) = hooks_res.get(set_id.0)
-            {
-                (set_hooks.pre_change)(&mut context);
-            }
-
-            attr_data.current_value = context.new_value;
-
-            if let Some(hooks_res) = &hooks
-                && let Some(set_hooks) = hooks_res.get(set_id.0)
-            {
-                (set_hooks.post_change)(&context);
+                if let Some(hooks_res) = &hooks
+                    && let Some(set_hooks) = hooks_res.get(set_id.0)
+                {
+                    (set_hooks.post_change)(&context);
+                }
             }
         }
     }
+}
+
+/// Evaluates modifiers within a single channel.
+///
+/// Formula: ((input + AddBase + AddCurrent) * (1 + sum(MultiplyAdditive)) * prod(1 + MultiplyMultiplicative))
+///
+/// Override short-circuits and returns immediately.
+fn evaluate_channel(input: f32, modifiers: &[&AttributeModifier]) -> f32 {
+    // Check for Override first (short-circuit)
+    if let Some(override_mod) = modifiers
+        .iter()
+        .find(|m| matches!(m.operation, ModifierOperation::Override))
+    {
+        return override_mod.magnitude;
+    }
+
+    let mut current = input;
+
+    // Step 1: AddBase - adds to base value
+    for modifier in modifiers
+        .iter()
+        .filter(|m| matches!(m.operation, ModifierOperation::AddBase))
+    {
+        current += modifier.magnitude;
+    }
+
+    // Step 2: AddCurrent - adds to current value
+    for modifier in modifiers
+        .iter()
+        .filter(|m| matches!(m.operation, ModifierOperation::AddCurrent))
+    {
+        current += modifier.magnitude;
+    }
+
+    // Step 3: MultiplyAdditive - multipliers are summed then applied: (1 + sum)
+    // E.g. 50% + 50% = 100% bonus = 2.0 multiplier
+    let additive_multiplier: f32 = modifiers
+        .iter()
+        .filter(|m| matches!(m.operation, ModifierOperation::MultiplyAdditive))
+        .map(|m| m.magnitude)
+        .sum();
+    current *= 1.0 + additive_multiplier;
+
+    // Step 4: MultiplyMultiplicative (Compound) - each multiplier is applied separately: prod(1 + m)
+    // E.g. 50% * 50% = 1.5 * 1.5 = 2.25 multiplier
+    for modifier in modifiers
+        .iter()
+        .filter(|m| matches!(m.operation, ModifierOperation::MultiplyMultiplicative))
+    {
+        current *= 1.0 + modifier.magnitude;
+    }
+
+    current
 }
 
 /// System that updates effect durations.
@@ -412,6 +942,7 @@ pub fn update_effect_durations_system(mut effects: Query<&mut EffectDuration>, t
 /// System that removes expired effects and cleans up granted tags.
 pub fn remove_expired_effects_system(
     mut commands: Commands,
+    registry: Res<GameplayEffectRegistry>,
     tags_manager: Res<GameplayTagsManager>,
     effects: Query<(
         Entity,
@@ -419,17 +950,18 @@ pub fn remove_expired_effects_system(
         &ActiveGameplayEffect,
         &EffectTarget,
         Option<&EffectGrantedTags>,
+        Option<&GameplayEffectContext>,
     )>,
     modifiers: Query<(Entity, &ModifierSource)>,
-    mut tag_containers: Query<&mut GameplayTagCountContainer>,
+    mut tag_containers: Query<&mut OwnedTags>,
 ) {
-    for (effect_entity, duration, active_effect, target, granted_tags) in effects.iter() {
+    for (effect_entity, duration, active_effect, target, granted_tags, context) in effects.iter() {
         if duration.is_expired() {
-            // Remove granted_tags from target's GameplayTagCountContainer
+            // Remove granted_tags from target's OwnedTags
             if let Some(granted) = granted_tags
                 && let Ok(mut target_tags) = tag_containers.get_mut(target.0)
             {
-                target_tags.update_tag_container_count(
+                target_tags.0.update_tag_container_count(
                     &granted.tags,
                     -1,
                     &tags_manager,
@@ -451,6 +983,17 @@ pub fn remove_expired_effects_system(
                 target: target.0,
                 effect_id: active_effect.definition_id.clone(),
             });
+            if let Some(definition) = registry.get(&active_effect.definition_id) {
+                trigger_effect_cues_from_components(
+                    &mut commands,
+                    definition,
+                    GameplayCueEvent::Removed,
+                    &active_effect.definition_id,
+                    target.0,
+                    active_effect.level,
+                    context,
+                );
+            }
 
             // Remove the effect
             commands.entity(effect_entity).despawn();
@@ -459,14 +1002,110 @@ pub fn remove_expired_effects_system(
 }
 
 /// System that executes periodic effects.
+///
+/// Periodic effects fire their modifiers at discrete intervals (e.g., poison that
+/// ticks every 2 seconds). Unlike duration-based effects whose modifiers apply
+/// continuously every frame, periodic modifiers only apply on each period tick.
+///
+/// To prevent double-counting, `create_effect_modifiers_system` skips periodic
+/// effects — no persistent `AttributeModifier` entities are created for them.
+/// This system handles all modifier application directly.
+///
+/// Modifier semantics:
+/// - `AddBase`: Permanently modifies `base_value` (rare for periodic effects).
+/// - `AddCurrent`, `Multiply*`, `Override`: Modify `current_value` directly
+///   as discrete events (e.g., "deal 10 damage now").
 pub fn execute_periodic_effects_system(
-    mut effects: Query<(&mut PeriodicEffect, &ActiveGameplayEffect, &EffectTarget)>,
+    mut commands: Commands,
+    mut effects: Query<(
+        &mut PeriodicEffect,
+        &ActiveGameplayEffect,
+        &EffectTarget,
+        Option<&EffectInstigator>,
+        Option<&GameplayEffectContext>,
+        Option<&SetByCallerMagnitudes>,
+    )>,
+    registry: Res<GameplayEffectRegistry>,
+    custom_calculators: Res<super::custom_calculation::CustomCalculationRegistry>,
+    mut attributes: Query<(&mut AttributeData, &AttributeName, &ChildOf)>,
     time: Res<Time>,
 ) {
-    for (mut periodic, _active_effect, _target) in effects.iter_mut() {
+    let attribute_snapshots: Vec<_> = attributes
+        .iter()
+        .map(|(data, name, child_of)| ApplicationAttributeSnapshot::new(child_of.get(), name, data))
+        .collect();
+
+    for (mut periodic, active_effect, target, instigator, context, set_by_caller) in
+        effects.iter_mut()
+    {
         let executions = periodic.tick(time.delta_secs());
+
+        if executions == 0 {
+            continue;
+        }
+
+        // Get the effect definition
+        let Some(definition) = registry.get(&active_effect.definition_id) else {
+            warn!(
+                "Periodic effect references unknown definition: {}",
+                active_effect.definition_id
+            );
+            continue;
+        };
+
+        let source_entity = context
+            .and_then(|context| context.source.or(context.instigator))
+            .or_else(|| instigator.and_then(|instigator| instigator.0));
+
+        if let Some(context) = context {
+            trigger_effect_cues_from_components(
+                &mut commands,
+                definition,
+                GameplayCueEvent::Executed,
+                &active_effect.definition_id,
+                target.0,
+                active_effect.level,
+                Some(context),
+            );
+        }
+
+        // Apply modifiers for each execution
         for _ in 0..executions {
-            // TODO: Trigger periodic execution
+            for modifier in &definition.modifiers {
+                let magnitude = calculate_modifier_magnitude(
+                    &modifier.magnitude,
+                    active_effect.level,
+                    source_entity,
+                    target.0,
+                    set_by_caller,
+                    &custom_calculators,
+                    &attribute_snapshots,
+                );
+
+                // Find and modify the target attribute
+                for (mut attr_data, attr_name, child_of) in attributes.iter_mut() {
+                    let owner = child_of.get();
+                    if owner == target.0 && attr_name.0 == modifier.attribute_name {
+                        match modifier.operation {
+                            // AddBase permanently modifies the base value
+                            ModifierOperation::AddBase => {
+                                attr_data.base_value += magnitude;
+                            }
+                            // All other operations are discrete events applied to current_value
+                            ModifierOperation::AddCurrent => {
+                                attr_data.current_value += magnitude;
+                            }
+                            ModifierOperation::MultiplyAdditive
+                            | ModifierOperation::MultiplyMultiplicative => {
+                                attr_data.current_value *= 1.0 + magnitude;
+                            }
+                            ModifierOperation::Override => {
+                                attr_data.current_value = magnitude;
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -505,6 +1144,8 @@ mod tests {
         app.init_resource::<ReceivedApplyEvents>();
         app.init_resource::<ReceivedAppliedEvents>();
         app.init_resource::<GameplayEffectRegistry>();
+        app.init_resource::<ApplicationRequirementRegistry>();
+        app.init_resource::<crate::effects::custom_calculation::CustomCalculationRegistry>();
         app.init_resource::<Time>();
         app.add_observer(on_apply_gameplay_effect);
         app.update();
@@ -525,23 +1166,17 @@ mod tests {
             .resource_mut::<GameplayEffectRegistry>()
             .register(effect);
 
-        let target = app
-            .world_mut()
-            .spawn(GameplayTagCountContainer::default())
-            .id();
+        let target = app.world_mut().spawn(OwnedTags::default()).id();
 
-        app.world_mut().trigger(ApplyGameplayEffectEvent {
-            effect_id: Atom::from("test_effect"),
-            target,
-            instigator: None,
-            level: 1,
-        });
+        app.world_mut().trigger(
+            ApplyGameplayEffectEvent::new(Atom::from("test_effect"), target).with_level(1),
+        );
 
         app.update();
 
         let apply_events = app.world().resource::<ReceivedApplyEvents>();
         assert_eq!(apply_events.0.len(), 1);
-        assert_eq!(apply_events.0[0].effect_id, Atom::from("test_effect"));
-        assert_eq!(apply_events.0[0].target, target);
+        assert_eq!(apply_events.0[0].effect_id(), &Atom::from("test_effect"));
+        assert_eq!(apply_events.0[0].target(), target);
     }
 }
