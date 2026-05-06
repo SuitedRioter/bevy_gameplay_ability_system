@@ -41,6 +41,11 @@ impl Plugin for CuePlugin {
                 manage_cue_actors_system.in_set(CueSystemSet::ManageActors),
                 cleanup_finished_cues_system.in_set(CueSystemSet::Cleanup),
                 update_while_active_cues_system.in_set(CueSystemSet::UpdateWhileActive),
+                // New specialized cue systems
+                process_burst_cues_system.in_set(CueSystemSet::ExecuteStatic),
+                process_looping_cues_system.in_set(CueSystemSet::UpdateWhileActive),
+                cleanup_looping_cues_system.in_set(CueSystemSet::Cleanup),
+                process_hit_impact_cues_system.in_set(CueSystemSet::ExecuteStatic),
             ),
         );
     }
