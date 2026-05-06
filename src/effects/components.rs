@@ -381,6 +381,29 @@ pub struct AttributeModifier {
     pub magnitude: f32,
     /// The evaluation channel for this modifier.
     pub channel: EvaluationChannel,
+    /// Dynamic magnitude calculation info (for AttributeBased with Dynamic mode).
+    pub dynamic_magnitude: Option<DynamicMagnitudeInfo>,
+}
+
+/// Information for dynamically recalculating magnitude each frame.
+///
+/// Used for AttributeBased modifiers with Dynamic capture mode.
+/// The magnitude is recalculated every aggregation cycle by reading
+/// the current value of the source attribute.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DynamicMagnitudeInfo {
+    /// The entity to capture the attribute from (source or target).
+    pub capture_entity: Entity,
+    /// The name of the attribute to capture.
+    pub attribute_name: Atom,
+    /// Which value to use from the attribute.
+    pub calculation_type: super::definition::AttributeCalculationType,
+    /// Coefficient to multiply the attribute value by.
+    pub coefficient: f32,
+    /// Value added before multiplication.
+    pub pre_multiply_additive: f32,
+    /// Value added after multiplication.
+    pub post_multiply_additive: f32,
 }
 
 /// The source of a modifier (which effect created it).

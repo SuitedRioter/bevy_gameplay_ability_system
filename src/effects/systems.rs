@@ -772,6 +772,38 @@ pub fn create_effect_modifiers_system(
                     &attribute_snapshots,
                 );
 
+                // Check if this is a Dynamic AttributeBased modifier
+                let dynamic_magnitude = if let MagnitudeCalculation::AttributeBased {
+                    attribute_name,
+                    capture_source,
+                    calculation_type,
+                    capture_mode,
+                    coefficient,
+                    pre_multiply_additive,
+                    post_multiply_additive,
+                } = &modifier_info.magnitude
+                {
+                    if *capture_mode == AttributeCaptureMode::Dynamic {
+                        let capture_entity = match capture_source {
+                            AttributeCaptureSource::Source => source_entity,
+                            AttributeCaptureSource::Target => Some(target.0),
+                        };
+
+                        capture_entity.map(|entity| DynamicMagnitudeInfo {
+                            capture_entity: entity,
+                            attribute_name: attribute_name.clone(),
+                            calculation_type: *calculation_type,
+                            coefficient: *coefficient,
+                            pre_multiply_additive: *pre_multiply_additive,
+                            post_multiply_additive: *post_multiply_additive,
+                        })
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
                 commands.spawn((
                     AttributeModifier {
                         target_entity: target.0,
@@ -779,6 +811,7 @@ pub fn create_effect_modifiers_system(
                         operation: modifier_info.operation,
                         magnitude,
                         channel: modifier_info.channel,
+                        dynamic_magnitude,
                     },
                     ModifierSource(effect_entity),
                 ));
@@ -794,18 +827,71 @@ pub fn create_effect_modifiers_system(
 /// The output of one channel becomes the input to the next channel.
 ///
 /// This optimized version uses batch aggregation to reduce iterations and improve cache locality.
+/// It also handles Dynamic magnitude recalculation for AttributeBased modifiers.
+///
+/// Performance optimization: Only recalculates Dynamic modifiers when their source attributes change.
 pub fn aggregate_attribute_modifiers_system(
-    mut attributes: Query<(
-        Entity,
-        &mut AttributeData,
-        &AttributeName,
-        &ChildOf,
-        &AttributeSetId,
+    mut param_set: ParamSet<(
+        Query<(
+            Entity,
+            &mut AttributeData,
+            &AttributeName,
+            &ChildOf,
+            &AttributeSetId,
+        )>,
+        Query<(&AttributeData, &AttributeName, &ChildOf), Changed<AttributeData>>,
     )>,
-    modifiers: Query<&AttributeModifier>,
+    mut modifiers: Query<&mut AttributeModifier>,
     hooks: Option<Res<AttributeLifecycleHooks>>,
 ) {
     use super::batch_aggregation::ModifierAggregator;
+    use super::definition::AttributeCalculationType;
+    use std::collections::HashSet;
+
+    // First pass: Update dynamic magnitudes (only for changed attributes)
+    {
+        let changed_attributes = param_set.p1();
+
+        // Build a set of changed (entity, attribute_name) pairs for fast lookup
+        let changed_set: HashSet<(Entity, Atom)> = changed_attributes
+            .iter()
+            .map(|(_, name, child_of)| (child_of.get(), name.0.clone()))
+            .collect();
+
+        // Only update modifiers whose source attributes changed
+        if !changed_set.is_empty() {
+            for mut modifier in modifiers.iter_mut() {
+                if let Some(ref dynamic_info) = modifier.dynamic_magnitude {
+                    // Check if this modifier's source attribute changed
+                    if changed_set.contains(&(dynamic_info.capture_entity, dynamic_info.attribute_name.clone())) {
+                        // Find the changed attribute and recalculate magnitude
+                        if let Some((data, _, _)) = changed_attributes
+                            .iter()
+                            .find(|(_, name, child_of)| {
+                                child_of.get() == dynamic_info.capture_entity
+                                    && name.0 == dynamic_info.attribute_name
+                            })
+                        {
+                            let attribute_value = match dynamic_info.calculation_type {
+                                AttributeCalculationType::AttributeMagnitude => data.current_value,
+                                AttributeCalculationType::AttributeBaseValue => data.base_value,
+                                AttributeCalculationType::AttributeBonusMagnitude => {
+                                    data.current_value - data.base_value
+                                }
+                            };
+
+                            // Apply formula: (source + pre) * coef + post
+                            let new_magnitude = (attribute_value + dynamic_info.pre_multiply_additive)
+                                * dynamic_info.coefficient
+                                + dynamic_info.post_multiply_additive;
+
+                            modifier.magnitude = new_magnitude;
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     // Build aggregator by collecting all modifiers
     let mut aggregator = ModifierAggregator::new();
@@ -814,6 +900,7 @@ pub fn aggregate_attribute_modifiers_system(
     }
 
     // Process each attribute using the pre-aggregated batches
+    let mut attributes = param_set.p0();
     for (attr_entity, mut attr_data, attr_name, child_of, set_id) in attributes.iter_mut() {
         let owner = child_of.get();
 

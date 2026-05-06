@@ -319,6 +319,7 @@ mod tests {
             channel: EvaluationChannel::Channel0,
             operation: ModifierOperation::AddBase,
             magnitude: 10.0,
+            dynamic_magnitude: None,
         };
 
         let modifier2 = AttributeModifier {
@@ -327,6 +328,7 @@ mod tests {
             channel: EvaluationChannel::Channel0,
             operation: ModifierOperation::AddBase,
             magnitude: 20.0,
+            dynamic_magnitude: None,
         };
 
         aggregator.add_modifier(&modifier1);
@@ -351,6 +353,7 @@ mod tests {
             channel: EvaluationChannel::Channel0,
             operation: ModifierOperation::AddBase,
             magnitude: 10.0,
+            dynamic_magnitude: None,
         };
 
         let mana_mod = AttributeModifier {
@@ -358,7 +361,8 @@ mod tests {
             target_attribute: mana.clone(),
             channel: EvaluationChannel::Channel0,
             operation: ModifierOperation::AddBase,
-            magnitude: 20.0,
+            magnitude: 5.0,
+            dynamic_magnitude: None,
         };
 
         aggregator.add_modifier(&health_mod);
@@ -370,6 +374,6 @@ mod tests {
         assert_eq!(health_batch.evaluate(100.0), 110.0);
 
         let mana_batch = aggregator.get_batch(owner, &mana).unwrap();
-        assert_eq!(mana_batch.evaluate(100.0), 120.0);
+        assert_eq!(mana_batch.evaluate(100.0), 105.0);
     }
 }
