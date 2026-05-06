@@ -137,6 +137,29 @@ pub enum MagnitudeCalculation {
         level_multiplier: f32,
     },
 
+    /// Curve-based magnitude using Bevy's Curve system.
+    ///
+    /// The curve is sampled at the effect level to determine magnitude.
+    /// This is equivalent to UE GAS's CurveTable lookup.
+    ///
+    /// # Example
+    /// ```ignore
+    /// use bevy::math::curve::{Curve, SampleCurve, Interval};
+    ///
+    /// // Damage curve: level 1 = 10, level 10 = 150, level 20 = 500
+    /// let samples = vec![10.0, 30.0, 60.0, 100.0, 150.0, 220.0, 300.0, 400.0, 500.0];
+    /// let curve = SampleCurve::new(interval(1.0, 20.0).unwrap(), samples).unwrap();
+    ///
+    /// MagnitudeCalculation::CurveBased {
+    ///     curve: Arc::new(curve),
+    /// }
+    /// ```
+    CurveBased {
+        /// The curve to sample (level -> magnitude).
+        /// Must implement `Curve<f32> + Send + Sync`.
+        curve: Arc<dyn bevy::math::curve::Curve<f32> + Send + Sync>,
+    },
+
     /// Calculate from an attribute on the source or target entity.
     ///
     /// Formula: `(coefficient * (pre_multiply_additive + [attribute_value])) + post_multiply_additive`
@@ -209,6 +232,10 @@ impl std::fmt::Debug for MagnitudeCalculation {
                 .field("base_value", base_value)
                 .field("level_multiplier", level_multiplier)
                 .finish(),
+            Self::CurveBased { .. } => f
+                .debug_struct("CurveBased")
+                .field("curve", &"<dyn Curve<f32>>")
+                .finish(),
             Self::AttributeBased {
                 attribute_name,
                 capture_source,
@@ -256,6 +283,10 @@ impl PartialEq for MagnitudeCalculation {
                     level_multiplier: r_mult,
                 },
             ) => l_base == r_base && l_mult == r_mult,
+            (Self::CurveBased { .. }, Self::CurveBased { .. }) => {
+                // Cannot compare trait objects, so always return false
+                false
+            }
             (
                 Self::AttributeBased {
                     attribute_name: l_name,
@@ -408,6 +439,22 @@ impl MagnitudeCalculation {
         self
     }
 
+    /// Creates a curve-based magnitude using Bevy's Curve system.
+    ///
+    /// # Example
+    /// ```ignore
+    /// use bevy::math::curve::{SampleCurve, interval};
+    ///
+    /// // Damage curve: level 1-5 with values [10, 30, 60, 100, 150]
+    /// let samples = vec![10.0, 30.0, 60.0, 100.0, 150.0];
+    /// let curve = SampleCurve::new(interval(1.0, 5.0).unwrap(), samples).unwrap();
+    ///
+    /// MagnitudeCalculation::curve(Arc::new(curve))
+    /// ```
+    pub fn curve(curve: Arc<dyn bevy::math::curve::Curve<f32> + Send + Sync>) -> Self {
+        Self::CurveBased { curve }
+    }
+
     /// Creates a SetByCaller magnitude.
     pub fn set_by_caller(data_tag: GameplayTag) -> Self {
         Self::SetByCaller { data_tag }
@@ -424,6 +471,7 @@ impl MagnitudeCalculation {
     ///
     /// For AttributeBased calculations, pass the captured attribute value as `source_value`.
     /// For SetByCaller, pass the caller-provided value.
+    /// For CurveBased, the level is used to sample the curve.
     pub fn evaluate(&self, level: i32, source_value: Option<f32>) -> f32 {
         match self {
             MagnitudeCalculation::ScalableFloat {
@@ -435,6 +483,11 @@ impl MagnitudeCalculation {
                 } else {
                     base_value * level_multiplier.powi(level - 1)
                 }
+            }
+            MagnitudeCalculation::CurveBased { curve } => {
+                use bevy::math::curve::Curve;
+                // Sample the curve at the effect level
+                curve.sample_clamped(level as f32)
             }
             MagnitudeCalculation::AttributeBased {
                 coefficient,

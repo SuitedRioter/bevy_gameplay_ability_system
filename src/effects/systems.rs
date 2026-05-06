@@ -273,6 +273,10 @@ fn calculate_modifier_magnitude(
     attributes: &[ApplicationAttributeSnapshot],
 ) -> f32 {
     let source_value = match magnitude {
+        MagnitudeCalculation::CurveBased { .. } => {
+            // CurveBased doesn't need source_value, it uses level directly
+            None
+        }
         MagnitudeCalculation::AttributeBased {
             attribute_name,
             capture_source,
