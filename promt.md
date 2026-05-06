@@ -17,6 +17,11 @@
 
 这个（/Users/zhengwei/GeneralProject/UnrealEngine/Engine/Plugins/Runtime/GameplayAbilities）文件夹下是UnrealEngine的GAS插件的代码，我希望你在当前项目使用bevy来实现UnrealEngine的GAS插件的功能，
 对外功能表现必须与原模块一致，你需要把原模块oop思想的代码已bevy的ecs思想实现，现有项目已经实现了一部分代码。你可以参考并优化（当需要优化的时候）。注意，我已经自己实现了GameplayTag的功能（源码在/Users/zhengwei/RustProject/bevy_gameplay_tag），相关需要使用GameplayTag，GameplayTagContainer，GameplayTagCountContainer的直接使用。如果需要查看bevy的api，可以分析bevy源码（源码在/Users/zhengwei/RustProject/bevy），我不需要实现联网功能，目标是做单机游戏。
+【转换铁律】
+1. 不再有 Actor、Component、UObject。一切都是实体(Entity)加纯数据组件(Component)。
+2. 任何有状态的变量都必须成为组件，不可内聚在系统里。
+3. 所有函数实现（包括虚函数）都变为系统，通过 Query 组合获取数据依赖。
+4. 继承树被扁平化，差异用标记组件或枚举字段代替。
 
 
 当前实现评估

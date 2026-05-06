@@ -637,6 +637,7 @@ pub fn on_apply_gameplay_effect(
                 EffectTarget(target),
                 EffectInstigator(spec.instigator()),
                 spec.context.clone(),
+                ChildOf(target), // Add ChildOf relationship for automatic cleanup
             ));
 
             if !spec.set_by_caller_magnitudes.is_empty() {
