@@ -288,26 +288,57 @@ impl ApplyEffectToTargetDataTask {
 
 /// WaitTargetData task - waits for target data to be provided.
 ///
-/// Completes when target data is set via `provide_target_data()`.
-/// This is typically used for abilities that need player input to select targets.
+/// This task is used for abilities that require player input to select targets,
+/// such as skill shots, area-of-effect abilities, or targeted spells.
+///
+/// # Example
+/// ```ignore
+/// // Spawn a WaitTargetData task
+/// commands.spawn((
+///     AbilityTask { ability_instance, ability_spec, owner },
+///     WaitTargetDataTask::new(),
+///     TaskState::Running,
+/// ));
+///
+/// // Later, provide target data via event
+/// commands.trigger(ProvideTargetDataEvent {
+///     task: task_entity,
+///     target_data: GameplayAbilityTargetData::from_actor(target_entity),
+/// });
+/// ```
 #[derive(Component, Debug, Clone)]
 pub struct WaitTargetDataTask {
     /// The target data once provided (None = waiting).
     pub target_data: Option<crate::abilities::GameplayAbilityTargetData>,
+    /// Whether to trigger only once.
+    pub only_trigger_once: bool,
+    /// Whether the target data has been received.
+    pub data_received: bool,
 }
 
 impl WaitTargetDataTask {
     /// Create a new wait target data task.
     pub fn new() -> Self {
-        Self { target_data: None }
+        Self {
+            target_data: None,
+            only_trigger_once: true,
+            data_received: false,
+        }
     }
 
-    /// Provide target data to complete the task.
+    /// Set whether to trigger only once.
+    pub fn with_only_trigger_once(mut self, only_once: bool) -> Self {
+        self.only_trigger_once = only_once;
+        self
+    }
+
+    /// Provide target data to complete the task (legacy method).
     pub fn provide_target_data(
         &mut self,
         target_data: crate::abilities::GameplayAbilityTargetData,
     ) {
         self.target_data = Some(target_data);
+        self.data_received = true;
     }
 }
 
@@ -315,6 +346,28 @@ impl Default for WaitTargetDataTask {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Event for providing target data to a WaitTargetData task.
+///
+/// This event is triggered by external systems (e.g., UI, input handlers)
+/// when the player has selected a target.
+#[derive(Event, Debug, Clone)]
+pub struct ProvideTargetDataEvent {
+    /// The task entity waiting for target data.
+    pub task: Entity,
+    /// The target data to provide.
+    pub target_data: super::target_data::GameplayAbilityTargetData,
+}
+
+/// Event for cancelling a WaitTargetData task.
+///
+/// This event is triggered when the player cancels target selection
+/// (e.g., pressing ESC or right-clicking).
+#[derive(Event, Debug, Clone)]
+pub struct CancelTargetDataEvent {
+    /// The task entity to cancel.
+    pub task: Entity,
 }
 
 /// Input action for WaitInputPress task.
@@ -755,12 +808,13 @@ pub fn check_wait_target_data_tasks_system(
         &mut TaskState,
     )>,
 ) {
-    for (task_entity, ability_task, wait_target, mut state) in tasks.iter_mut() {
+    for (task_entity, ability_task, mut wait_target, mut state) in tasks.iter_mut() {
         if *state != TaskState::Running {
             continue;
         }
 
-        if wait_target.target_data.is_some() {
+        // Check if target data has been provided
+        if wait_target.data_received && wait_target.target_data.is_some() {
             *state = TaskState::Completed;
             commands.trigger(TaskCompletedEvent {
                 task: task_entity,
@@ -768,9 +822,69 @@ pub fn check_wait_target_data_tasks_system(
                 ability_spec: ability_task.ability_spec,
                 owner: ability_task.owner,
             });
+
+            // Reset for next trigger if not only_trigger_once
+            if !wait_target.only_trigger_once {
+                wait_target.data_received = false;
+                wait_target.target_data = None;
+                *state = TaskState::Running;
+            }
         }
     }
 }
+
+/// Observer that handles target data provision for WaitTargetData tasks.
+pub fn handle_provide_target_data_system(
+    trigger: On<ProvideTargetDataEvent>,
+    mut commands: Commands,
+    mut tasks: Query<(Entity, &AbilityTask, &mut WaitTargetDataTask, &mut TaskState)>,
+) {
+    let event = trigger.event();
+
+    let Ok((task_entity, ability_task, mut wait_target, mut state)) = tasks.get_mut(event.task)
+    else {
+        return;
+    };
+
+    if *state != TaskState::Running {
+        return;
+    }
+
+    // Provide target data
+    wait_target.target_data = Some(event.target_data.clone());
+    wait_target.data_received = true;
+
+    // Complete immediately
+    *state = TaskState::Completed;
+    commands.trigger(TaskCompletedEvent {
+        task: task_entity,
+        ability_instance: ability_task.ability_instance,
+        ability_spec: ability_task.ability_spec,
+        owner: ability_task.owner,
+    });
+}
+
+/// Observer that handles target data cancellation for WaitTargetData tasks.
+pub fn handle_cancel_target_data_system(
+    trigger: On<CancelTargetDataEvent>,
+    mut tasks: Query<(&mut WaitTargetDataTask, &mut TaskState)>,
+) {
+    let event = trigger.event();
+
+    let Ok((mut wait_target, mut state)) = tasks.get_mut(event.task) else {
+        return;
+    };
+
+    if *state != TaskState::Running {
+        return;
+    }
+
+    // Cancel the task
+    wait_target.data_received = false;
+    wait_target.target_data = None;
+    *state = TaskState::Cancelled;
+}
+
 
 /// Observer that handles input pressed events for WaitInputPress tasks.
 pub fn handle_input_pressed_for_tasks_system(
@@ -887,3 +1001,172 @@ pub fn on_ability_instance_removed(
         }
     }
 }
+
+/// PlayMontageAndWait task - plays an animation and waits for it to complete.
+///
+/// This task is used for abilities that need to play animations (montages) and
+/// wait for them to finish before continuing. This is essential for skill animations,
+/// attack sequences, and other animated abilities.
+///
+/// # Example
+/// ```ignore
+/// // Spawn a PlayMontageAndWait task
+/// commands.spawn((
+///     AbilityTask { ability_instance, ability_spec, owner },
+///     PlayMontageAndWaitTask::new("attack_montage", 1.0),
+///     TaskState::Running,
+/// ));
+///
+/// // The task will complete when the animation finishes
+/// // or can be cancelled via CancelMontageEvent
+/// ```
+#[derive(Component, Debug, Clone)]
+pub struct PlayMontageAndWaitTask {
+    /// The name/ID of the montage to play.
+    pub montage_name: String,
+    /// The playback rate (1.0 = normal speed).
+    pub play_rate: f32,
+    /// The section name to start from (None = start from beginning).
+    pub start_section: Option<String>,
+    /// Whether to stop the montage when the task is cancelled.
+    pub stop_on_cancel: bool,
+    /// The entity playing the animation (usually the owner).
+    pub animation_entity: Option<Entity>,
+    /// Elapsed time since the montage started.
+    pub elapsed_time: f32,
+    /// Total duration of the montage.
+    pub duration: f32,
+    /// Whether the montage has started playing.
+    pub started: bool,
+}
+
+impl PlayMontageAndWaitTask {
+    /// Create a new play montage and wait task.
+    pub fn new(montage_name: impl Into<String>, duration: f32) -> Self {
+        Self {
+            montage_name: montage_name.into(),
+            play_rate: 1.0,
+            start_section: None,
+            stop_on_cancel: true,
+            animation_entity: None,
+            elapsed_time: 0.0,
+            duration,
+            started: false,
+        }
+    }
+
+    /// Set the playback rate.
+    pub fn with_play_rate(mut self, play_rate: f32) -> Self {
+        self.play_rate = play_rate;
+        self
+    }
+
+    /// Set the start section.
+    pub fn with_start_section(mut self, section: impl Into<String>) -> Self {
+        self.start_section = Some(section.into());
+        self
+    }
+
+    /// Set whether to stop the montage when cancelled.
+    pub fn with_stop_on_cancel(mut self, stop: bool) -> Self {
+        self.stop_on_cancel = stop;
+        self
+    }
+
+    /// Set the animation entity.
+    pub fn with_animation_entity(mut self, entity: Entity) -> Self {
+        self.animation_entity = Some(entity);
+        self
+    }
+}
+
+/// Event for starting a montage playback.
+#[derive(Event, Debug, Clone)]
+pub struct StartMontageEvent {
+    /// The task entity that requested the montage.
+    pub task: Entity,
+    /// The entity that should play the animation.
+    pub animation_entity: Entity,
+    /// The montage name to play.
+    pub montage_name: String,
+    /// The playback rate.
+    pub play_rate: f32,
+    /// The section to start from.
+    pub start_section: Option<String>,
+}
+
+/// Event for cancelling a montage playback.
+#[derive(Event, Debug, Clone)]
+pub struct CancelMontageEvent {
+    /// The task entity to cancel.
+    pub task: Entity,
+    /// Whether to blend out the animation.
+    pub blend_out: bool,
+}
+
+/// System that updates PlayMontageAndWait tasks.
+pub fn update_play_montage_tasks_system(
+    mut commands: Commands,
+    mut tasks: Query<(Entity, &AbilityTask, &mut PlayMontageAndWaitTask, &mut TaskState)>,
+    time: Res<Time>,
+) {
+    for (task_entity, ability_task, mut montage_task, mut state) in tasks.iter_mut() {
+        if *state != TaskState::Running {
+            continue;
+        }
+
+        // Start the montage on first update
+        if !montage_task.started {
+            let animation_entity = montage_task
+                .animation_entity
+                .unwrap_or(ability_task.owner);
+
+            commands.trigger(StartMontageEvent {
+                task: task_entity,
+                animation_entity,
+                montage_name: montage_task.montage_name.clone(),
+                play_rate: montage_task.play_rate,
+                start_section: montage_task.start_section.clone(),
+            });
+
+            montage_task.started = true;
+        }
+
+        // Update elapsed time
+        montage_task.elapsed_time += time.delta_secs() * montage_task.play_rate;
+
+        // Check if montage has finished
+        if montage_task.elapsed_time >= montage_task.duration {
+            *state = TaskState::Completed;
+            commands.trigger(TaskCompletedEvent {
+                task: task_entity,
+                ability_instance: ability_task.ability_instance,
+                ability_spec: ability_task.ability_spec,
+                owner: ability_task.owner,
+            });
+        }
+    }
+}
+
+/// System that handles montage cancellation.
+pub fn handle_cancel_montage_system(
+    trigger: On<CancelMontageEvent>,
+    mut tasks: Query<(&mut PlayMontageAndWaitTask, &mut TaskState)>,
+) {
+    let event = trigger.event();
+
+    let Ok((_montage_task, mut state)) = tasks.get_mut(event.task) else {
+        return;
+    };
+
+    if *state != TaskState::Running {
+        return;
+    }
+
+    *state = TaskState::Cancelled;
+
+    // Note: The actual animation stopping should be handled by the animation system
+    // listening to this event. This task only manages the state.
+}
+
+

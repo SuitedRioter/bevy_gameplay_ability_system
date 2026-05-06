@@ -264,3 +264,345 @@
   你的实现已经非常接近 UE GAS 的核心功能，主要差异在于 UE 5.3+ 引入的组件化设计。建议优先实现 GameplayEffectComponent trait 和几个关键 components（Immunity、AdditionalEffects、ChanceToApply），这将大幅提升系统的灵活性和可扩展性。
 
   当前代码质量很高，测试覆盖率完整，ECS 架构设计优秀。继续保持这种设计哲学，逐步添加上述功能即可。
+
+
+---
+  🔴 未实现的核心功能
+
+  1. GameplayEffect Components (UE 5.3+ 模块化系统)
+
+  UE GAS:
+  // UE 5.3 引入的模块化 GE 系统
+  UGameplayEffectComponent (基类)
+    ├─ AbilitiesGameplayEffectComponent        // 授予 Ability
+    ├─ AdditionalEffectsGameplayEffectComponent // 触发额外 Effect
+    ├─ AssetTagsGameplayEffectComponent        // 资产标签
+    ├─ BlockAbilityTagsGameplayEffectComponent // 阻止 Ability
+    ├─ CancelAbilityTagsGameplayEffectComponent // 取消 Ability
+    ├─ ChanceToApplyGameplayEffectComponent    // 概率应用
+    ├─ CustomCanApplyGameplayEffectComponent   // 自定义应用条件
+    ├─ ImmunityGameplayEffectComponent         // 免疫系统
+    ├─ RemoveOtherGameplayEffectComponent      // 移除其他 Effect
+    ├─ TargetTagRequirementsGameplayEffectComponent // 目标标签需求
+    └─ TargetTagsGameplayEffectComponent       // 目标标签
+
+  Bevy GAS 现状:
+  - ❌ 完全未实现 模块化组件系统
+  - ✅ 部分功能已内置在 GameplayEffectDefinition 中（如 granted_abilities, granted_tags）
+  - ⚠️ 缺少：概率应用、免疫系统、条件触发额外 Effect
+
+  影响:
+  - 无法实现复杂的 Effect 组合逻辑（如"50% 概率触发额外伤害"）
+  - 无法实现免疫系统（如"免疫所有 Stun 效果"）
+
+  ---
+  2. Ability Task 系统（部分缺失）
+
+  UE GAS 有 42 个 Task，Bevy GAS 实现了 12 个:
+
+  ┌───────────────────────────┬───────────┬──────────────────────────┐
+  │              UE Task              │ Bevy 实现 │           说明           │
+  ├───────────────────────────────────┼───────────┼──────────────────────────┤
+  │ WaitDelay                         │ ✅        │ 等待延迟                 │
+  ├───────────────────────────────────┼───────────┼──────────────────────────┤
+  │ WaitGameplayEvent                 │ ✅        │ 等待游戏事件             │
+  ├───────────────────────────────────┼───────────┼──────────────────────────┤
+  │ WaitAttributeChange               │ ✅        │ 等待属性变化             │
+  ├───────────────────────────────────┼───────────┼──────────────────────────┤
+  │ WaitGameplayEffectApplied         │ ✅        │ 等待 Effect 应用         │
+  ├───────────────────────────────────┼───────────┼──────────────────────────┤
+  │ WaitGameplayEffectRemoved         │ ✅        │ 等待 Effect 移除         │
+  ├───────────────────────────────────┼───────────┼──────────────────────────┤
+  │ WaitGameplayTag                   │ ✅        │ 等待标签添加/移除        │
+  ├───────────────────────────────────┼───────────┼──────────────────────────┤
+  │ WaitInputPress                    │ ✅        │ 等待输入按下             │
+  ├───────────────────────────────────┼───────────┼──────────────────────────┤
+  │ WaitInputRelease                  │ ✅        │ 等待输入释放             │
+  ├───────────────────────────────────┼───────────┼──────────────────────────┤
+  │ WaitConfirm                       │ ✅        │ 等待确认                 │
+  ├───────────────────────────────────┼───────────┼──────────────────────────┤
+  │ WaitCancel                        │ ✅        │ 等待取消                 │
+  ├───────────────────────────────────┼───────────┼──────────────────────────┤
+  │ WaitAbilityActivate               │ ✅        │ 等待其他 Ability 激活    │
+  ├───────────────────────────────────┼───────────┼──────────────────────────┤
+  │ WaitAbilityCommit                 │ ✅        │ 等待 Ability 提交        │
+  ├───────────────────────────────────┼───────────┼──────────────────────────┤
+  │ WaitTargetData                    │ ❌        │ 等待目标数据（重要）     │
+  ├───────────────────────────────────┼───────────┼──────────────────────────┤
+  │ PlayMontageAndWait                │ ❌        │ 播放动画并等待（重要）   │
+  ├───────────────────────────────────┼───────────┼──────────────────────────┤
+  │ PlayAnimAndWait                   │ ❌        │ 播放动画并等待           │
+  ├───────────────────────────────────┼───────────┼──────────────────────────┤
+  │ ApplyRootMotion*                  │ ❌        │ 根运动相关（7 个 Task）  │
+  ├───────────────────────────────────┼───────────┼──────────────────────────┤
+  │ MoveToLocation                    │ ❌        │ 移动到位置               │
+  ├───────────────────────────────────┼───────────┼──────────────────────────┤
+  │ NetworkSyncPoint                  │ ❌        │ 网络同步点（单机不需要） │
+  ├───────────────────────────────────┼───────────┼──────────────────────────┤
+  │ Repeat                            │ ❌        │ 重复执行                 │
+  ├───────────────────────────────────┼───────────┼──────────────────────────┤
+  │ SpawnActor                        │ ❌        │ 生成 Actor               │
+  ├───────────────────────────────────┼───────────┼──────────────────────────┤
+  │ StartAbilityState                 │ ❌        │ 启动 Ability 状态        │
+  ├───────────────────────────────────┼───────────┼──────────────────────────┤
+  │ VisualizeTargeting                │ ❌        │ 可视化目标               │
+  ├───────────────────────────────────┼───────────┼──────────────────────────┤
+  │ WaitAttributeChangeRatioThreshold │ ❌        │ 等待属性比例阈值         │
+  ├───────────────────────────────────┼───────────┼──────────────────────────┤
+  │ WaitAttributeChangeThreshold      │ ❌        │ 等待属性阈值             │
+  ├───────────────────────────────────┼───────────┼──────────────────────────┤
+  │ WaitConfirmCancel                 │ ❌        │ 等待确认或取消           │
+  ├───────────────────────────────────┼───────────┼──────────────────────────┤
+  │ WaitGameplayEffectBlockedImmunity │ ❌        │ 等待免疫阻止             │
+  ├───────────────────────────────────┼───────────┼──────────────────────────┤
+  │ WaitGameplayEffectStackChange     │ ❌        │ 等待 Effect 堆叠变化     │
+  ├───────────────────────────────────┼───────────┼──────────────────────────┤
+  │ WaitGameplayTagCountChanged       │ ❌        │ 等待标签计数变化         │
+  ├───────────────────────────────────┼───────────┼──────────────────────────┤
+  │ WaitGameplayTagQuery              │ ❌        │ 等待标签查询             │
+  ├───────────────────────────────────┼───────────┼──────────────────────────┤
+  │ WaitMovementModeChange            │ ❌        │ 等待移动模式变化         │
+  ├───────────────────────────────────┼───────────┼──────────────────────────┤
+  │ WaitOverlap                       │ ❌        │ 等待重叠                 │
+  ├───────────────────────────────────┼───────────┼──────────────────────────┤
+  │ WaitVelocityChange                │ ❌        │ 等待速度变化             │
+  └───────────────────────────────────┴───────────┴──────────────────────────┘
+
+  关键缺失:
+  - ❌ WaitTargetData: 等待玩家选择目标（技能指示器、瞄准）
+  - ❌ PlayMontageAndWait: 播放动画并等待完成（技能动画）
+  - ❌ SpawnActor: 生成实体（召唤物、投射物）
+
+  ---
+  3. Attribute 预计算/缓存系统
+
+  UE GAS:
+  // FAggregator 缓存计算结果
+  struct FAggregator {
+      float CachedValue;
+      bool bIsDirty;
+
+      float Evaluate() {
+          if (bIsDirty) {
+              CachedValue = RecalculateValue();
+              bIsDirty = false;
+          }
+          return CachedValue;
+      }
+  };
+
+  Bevy GAS 现状:
+  - ❌ 每次查询都重新计算（aggregate_modifiers_system）
+  - ⚠️ 性能问题：大量 Attribute 查询时会重复计算
+
+  解决方案:
+  // 添加缓存组件
+  #[derive(Component)]
+  struct AttributeCache {
+      cached_value: f32,
+      is_dirty: bool,
+  }
+
+  ---
+  4. Prediction System（网络预测）
+
+  UE GAS:
+  // 客户端预测 + 服务器校验
+  struct FPredictionKey {
+      int16 Current;
+      int16 Base;
+  };
+
+  // 预测流程
+  Client: TryActivateAbility() → 预测激活 → 等待服务器确认
+  Server: 校验 → 确认/拒绝 → 回滚客户端状态
+
+  Bevy GAS 现状:
+  - ❌ 完全未实现（单机游戏不需要）
+  - ⚠️ 如果未来需要联网，需要重构整个架构
+
+  ---
+  5. GameplayCue 高级功能
+
+  UE GAS 有，Bevy GAS 缺失:
+
+  ┌────────────────────────────┬────────┬──────────┐
+  │            功能            │ UE GAS │ Bevy GAS │
+  ├────────────────────────────┼────────┼──────────┤
+  │ Burst Cue（爆发式）        │ ✅     │ ✅       │
+  ├────────────────────────────┼────────┼──────────┤
+  │ Looping Cue（循环式）      │ ✅     │ ✅       │
+  ├────────────────────────────┼────────┼──────────┤
+  │ Latent Cue（延迟式）       │ ✅     │ ❌       │
+  ├────────────────────────────┼────────┼──────────┤
+  │ HitImpact Cue（命中反馈）  │ ✅     │ ❌       │
+  ├────────────────────────────┼────────┼──────────┤
+  │ Cue Translator（标签转换） │ ✅     │ ❌       │
+  ├────────────────────────────┼────────┼──────────┤
+  │ Cue Set（批量管理）        │ ✅     │ ❌       │
+  └────────────────────────────┴────────┴──────────┘
+
+  缺失功能:
+  - ❌ Latent Cue: 延迟触发（如"3 秒后爆炸"）
+  - ❌ HitImpact Cue: 命中反馈（物理参数：法线、命中点）
+  - ❌ Cue Translator: 标签转换（如 Damage.Fire → GameplayCue.Fire.Impact）
+
+  ---
+  6. AttributeSet 高级功能
+
+  UE GAS:
+  class UAttributeSet {
+      // 属性变化前回调
+      virtual void PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue);
+
+      // 属性变化后回调
+      virtual void PostGameplayEffectExecute(const FGameplayEffectModCallbackData& Data);
+
+      // 属性基础值变化回调
+      virtual void PreAttributeBaseChange(const FGameplayAttribute& Attribute, float& NewValue);
+
+      // 属性聚合器初始化
+      virtual void InitFromMetaDataTable(const UDataTable* DataTable);
+  };
+
+  Bevy GAS 现状:
+  - ✅ 有 AttributeHooks trait（pre_modify, post_modify）
+  - ❌ 缺少 PreAttributeBaseChange（基础值变化前回调）
+  - ❌ 缺少 InitFromMetaDataTable（从数据表初始化）
+
+  ---
+  7. GameplayEffect 高级计算
+
+  UE GAS 有，Bevy GAS 部分实现:
+
+  ┌────────────────────┬────────┬──────────┐
+  │        功能        │ UE GAS │ Bevy GAS │
+  ├────────────────────┼────────┼──────────┤
+  │ ScalableFloat      │ ✅     │ ✅       │
+  ├────────────────────┼────────┼──────────┤
+  │ AttributeBased     │ ✅     │ ✅       │
+  ├────────────────────┼────────┼──────────┤
+  │ CustomCalculation  │ ✅     │ ✅       │
+  ├────────────────────┼────────┼──────────┤
+  │ SetByCaller        │ ✅     │ ❌       │
+  ├────────────────────┼────────┼──────────┤
+  │ CurveTable         │ ✅     │ ❌       │
+  ├────────────────────┼────────┼──────────┤
+  │ ConditionalEffects │ ✅     │ ❌       │
+  └────────────────────┴────────┴──────────┘
+
+  缺失功能:
+  - ❌ SetByCaller: 运行时动态设置 Magnitude（如"伤害 = 攻击力 * 技能等级"）
+  - ❌ CurveTable: 曲线表查找（如"等级 1-100 的伤害曲线"）
+  - ❌ ConditionalEffects: 条件触发 Effect（如"生命值 < 50% 时触发额外效果"）
+
+  ---
+  8. Ability 高级功能
+
+  UE GAS 有，Bevy GAS 缺失:
+
+  ┌──────────────────────┬────────┬────────────┐
+  │         功能         │ UE GAS │  Bevy GAS  │
+  ├──────────────────────┼────────┼────────────┤
+  │ Instancing Policy    │ ✅     │ ✅         │
+  ├──────────────────────┼────────┼────────────┤
+  │ Replication Policy   │ ✅     │ ❌（单机） │
+  ├──────────────────────┼────────┼────────────┤
+  │ Net Execution Policy │ ✅     │ ❌（单机） │
+  ├──────────────────────┼────────┼────────────┤
+  │ Ability Level        │ ✅     │ ❌         │
+  ├──────────────────────┼────────┼────────────┤
+  │ Input Binding        │ ✅     │ ❌         │
+  ├──────────────────────┼────────┼────────────┤
+  │ Ability Set          │ ✅     │ ❌         │
+  ├──────────────────────┼────────┼────────────┤
+  │ Ability State        │ ✅     │ ❌         │
+  └──────────────────────┴────────┴────────────┘
+
+  缺失功能:
+  - ❌ Ability Level: 技能等级系统（影响伤害、冷却等）
+  - ❌ Input Binding: 输入绑定（如"按 Q 键激活技能"）
+  - ❌ Ability Set: 批量授予技能（如"职业技能包"）
+  - ❌ Ability State: 技能状态机（如"蓄力 → 释放 → 冷却"）
+
+  ---
+  🟡 部分实现的功能
+
+  9. GameplayEffect Execution Calculation
+
+  现状:
+  - ✅ 有 GameplayEffectExecutionCalculation trait
+  - ⚠️ 缺少示例和文档
+  - ⚠️ 缺少 AttributeCaptureDefinition（属性捕获定义）
+
+  ---
+  10. Custom Application Requirements
+
+  现状:
+  - ✅ 有 CustomApplicationRequirement trait
+  - ✅ 有 4 种内置实现（百分比、等级范围、标签、源 vs 目标）
+  - ⚠️ 缺少更多示例（如"暴击率"、"格挡率"）
+
+  ---
+  📊 功能覆盖率统计
+
+  ┌─────────────────┬───────────────┬─────────────────┬────────┐
+  │      模块       │ UE GAS 功能数 │ Bevy GAS 实现数 │ 覆盖率 │
+  ├─────────────────┼───────────────┼─────────────────┼────────┤
+  │ Attributes      │ 10            │ 8               │ 80%    │
+  ├─────────────────┼───────────────┼─────────────────┼────────┤
+  │ GameplayEffects │ 25            │ 18              │ 72%    │
+  ├─────────────────┼───────────────┼─────────────────┼────────┤
+  │ Abilities       │ 20            │ 14              │ 70%    │
+  ├─────────────────┼───────────────┼─────────────────┼────────┤
+  │ GameplayCues    │ 10            │ 6               │ 60%    │
+  ├─────────────────┼───────────────┼─────────────────┼────────┤
+  │ Ability Tasks   │ 42            │ 12              │ 29%    │
+  ├─────────────────┼───────────────┼─────────────────┼────────┤
+  │ 总计            │ 107           │ 58              │ 54%    │
+  └─────────────────┴───────────────┴─────────────────┴────────┘
+
+  ---
+  🎯 建议的实现优先级
+
+  P0 (Critical - 必须实现):
+
+  1. ✅ 核心 Attribute/Effect/Ability/Cue 系统（已完成）
+  2. ❌ WaitTargetData Task（技能指示器）
+  3. ❌ PlayMontageAndWait Task（技能动画）
+  4. ❌ SetByCaller Magnitude（动态伤害计算）
+
+  P1 (High - 强烈建议):
+
+  5. ❌ Ability Level 系统（技能等级）
+  6. ❌ Input Binding（输入绑定）
+  7. ❌ Attribute Cache（性能优化）
+  8. ❌ ChanceToApplyGameplayEffectComponent（概率应用）
+  9. ❌ ImmunityGameplayEffectComponent（免疫系统）
+
+  P2 (Medium - 可选):
+
+  10. ❌ CurveTable Magnitude（曲线表）
+  11. ❌ ConditionalEffects（条件触发）
+  12. ❌ Ability State Machine（状态机）
+  13. ❌ GameplayCue Translator（标签转换）
+  14. ❌ 更多 Ability Tasks（SpawnActor, Repeat, WaitOverlap 等）
+
+  P3 (Low - 未来扩展):
+
+  15. ❌ Prediction System（网络预测，如果需要联网）
+  16. ❌ Replication（网络同步）
+  17. ❌ Blueprint 可视化编辑器（Bevy 不支持）
+
+  ---
+  总结
+
+  当前 Bevy GAS 实现了 UE GAS 约 54% 的功能，核心系统（Attributes、Effects、Abilities、Cues）已完成，但缺少：
+
+  1. 模块化 GameplayEffect Components（UE 5.3+ 新特性）
+  2. 30 个 Ability Tasks（特别是 WaitTargetData 和 PlayMontageAndWait）
+  3. Ability Level 和 Input Binding
+  4. SetByCaller 和 CurveTable（动态计算）
+  5. 免疫系统和概率应用
+
+  如果你的目标是单机 RPG 游戏，当前实现已经足够。如果需要复杂的技能系统（如 MOBA、MMORPG），建议优先实现 P0 和 P1 的功能。

@@ -43,6 +43,7 @@ impl Plugin for AbilityPlugin {
                 (
                     tasks::tick_wait_delay_tasks_system,
                     tasks::check_wait_target_data_tasks_system,
+                    tasks::update_play_montage_tasks_system,
                     tasks::cleanup_finished_tasks_system,
                 )
                     .chain()
@@ -52,6 +53,9 @@ impl Plugin for AbilityPlugin {
             .add_observer(tasks::handle_gameplay_event_for_tasks_system)
             .add_observer(tasks::handle_input_pressed_for_tasks_system)
             .add_observer(tasks::handle_overlap_for_tasks_system)
+            .add_observer(tasks::handle_provide_target_data_system)
+            .add_observer(tasks::handle_cancel_target_data_system)
+            .add_observer(tasks::handle_cancel_montage_system)
             // Trigger systems
             .add_systems(
                 Update,
