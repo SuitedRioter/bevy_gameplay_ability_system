@@ -51,6 +51,48 @@ impl GrantedAbilityConfig {
         self
     }
 }
+
+/// Conditional gameplay effect that applies only if source tags match.
+///
+/// Matches UE GAS's `FConditionalGameplayEffect`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConditionalGameplayEffect {
+    /// The effect definition ID to apply.
+    pub effect_id: Atom,
+    /// Tags that the source must have for this effect to apply.
+    /// If empty, the effect always applies.
+    pub required_source_tags: GameplayTagContainer,
+}
+
+impl ConditionalGameplayEffect {
+    /// Creates a new conditional effect.
+    pub fn new(effect_id: impl Into<Atom>) -> Self {
+        Self {
+            effect_id: effect_id.into(),
+            required_source_tags: GameplayTagContainer::default(),
+        }
+    }
+
+    /// Adds a required source tag.
+    pub fn require_source_tag(
+        mut self,
+        tag: GameplayTag,
+        tags_manager: &GameplayTagsManager,
+    ) -> Self {
+        self.required_source_tags.add_tag(tag, tags_manager);
+        self
+    }
+
+    /// Checks if this conditional effect can apply given the source tags.
+    ///
+    /// Returns true if the source has all required tags, or if no tags are required.
+    pub fn can_apply(&self, source_tags: &GameplayTagContainer) -> bool {
+        if self.required_source_tags.is_empty() {
+            return true;
+        }
+        source_tags.has_all(&self.required_source_tags)
+    }
+}
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DurationPolicy {
     /// Effect applies instantly and is removed immediately.
@@ -633,6 +675,11 @@ pub struct GameplayEffectDefinition {
     pub granted_abilities: Vec<GrantedAbilityConfig>,
     /// Gameplay cues triggered by this effect.
     pub gameplay_cues: Vec<GameplayEffectCue>,
+    /// Conditional effects that apply if source tags match.
+    ///
+    /// These effects are applied to the target when this effect successfully applies.
+    /// Each conditional effect checks the source's tags before applying.
+    pub conditional_effects: Vec<ConditionalGameplayEffect>,
     /// Modular components that extend effect behavior (UE 5.3+ feature).
     ///
     /// Components are executed at specific lifecycle points:
@@ -661,6 +708,7 @@ impl std::fmt::Debug for GameplayEffectDefinition {
             .field("stacking_policy", &self.stacking_policy)
             .field("granted_abilities", &self.granted_abilities)
             .field("gameplay_cues", &self.gameplay_cues)
+            .field("conditional_effects", &self.conditional_effects)
             .field(
                 "components",
                 &format!("{} components", self.components.len()),
@@ -684,6 +732,7 @@ impl PartialEq for GameplayEffectDefinition {
             && self.stacking_policy == other.stacking_policy
             && self.granted_abilities == other.granted_abilities
             && self.gameplay_cues == other.gameplay_cues
+            && self.conditional_effects == other.conditional_effects
             && self.components.len() == other.components.len()
     }
 }
@@ -705,6 +754,7 @@ impl GameplayEffectDefinition {
             stacking_policy: StackingPolicy::Independent,
             granted_abilities: Vec::new(),
             gameplay_cues: Vec::new(),
+            conditional_effects: Vec::new(),
             components: Vec::new(),
         }
     }
@@ -822,6 +872,22 @@ impl GameplayEffectDefinition {
         component: crate::effects::ge_component::BoxedGameplayEffectComponent,
     ) -> Self {
         self.components.push(component);
+        self
+    }
+
+    /// Adds a conditional effect that applies if source tags match.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let effect = GameplayEffectDefinition::new("primary_damage")
+    ///     .add_conditional_effect(
+    ///         ConditionalGameplayEffect::new("bonus_damage")
+    ///             .require_source_tag(tag!("Buff.CriticalHit"), &tags_manager)
+    ///     );
+    /// ```
+    pub fn add_conditional_effect(mut self, conditional: ConditionalGameplayEffect) -> Self {
+        self.conditional_effects.push(conditional);
         self
     }
 }

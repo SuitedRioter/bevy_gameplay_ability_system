@@ -22,10 +22,16 @@ use string_cache::DefaultAtom as Atom;
 /// Bundled query parameters for applying gameplay effects.
 #[derive(SystemParam)]
 pub struct ApplyEffectParams<'w, 's> {
-    pub tag_containers: Query<'w, 's, &'static mut OwnedTags>,
+    pub tag_containers: ParamSet<
+        'w,
+        's,
+        (
+            Query<'static, 'static, &'static OwnedTags>,
+            Query<'static, 'static, &'static mut OwnedTags>,
+        ),
+    >,
     pub immunity_tags: Query<'w, 's, &'static crate::core::ImmunityTags>,
     pub active_immunities: Query<'w, 's, &'static super::ge_components::ActiveImmunityEffects>,
-    pub world: &'w World,
     pub attributes: Query<
         'w,
         's,
@@ -383,6 +389,7 @@ pub fn on_apply_gameplay_effect(
     custom_calculators: Res<super::custom_calculation::CustomCalculationRegistry>,
     tags_manager: Res<GameplayTagsManager>,
     time: Res<Time>,
+    world: &World,
     mut params: ApplyEffectParams,
 ) {
     let event = ev.event();
@@ -430,7 +437,7 @@ pub fn on_apply_gameplay_effect(
             effect_id.as_ref(),
             spec.source_entity(),
             target,
-            &params.world,
+            world,
         ) {
             info!(
                 "Effect '{}' blocked by immunity effect {:?} on target {:?}",
@@ -451,7 +458,7 @@ pub fn on_apply_gameplay_effect(
 
     // Legacy check: if target has any of the effect's asset_tags in their owned tags, reject
     // This is for backwards compatibility with the old immunity system
-    if let Ok(owner_tags) = params.tag_containers.get(target) {
+    if let Ok(owner_tags) = params.tag_containers.p0().get(target) {
         for asset_tag in definition.asset_tags.gameplay_tags.iter() {
             if owner_tags.0.explicit_tags.gameplay_tags.contains(asset_tag) {
                 // Target is immune to this effect
@@ -465,7 +472,7 @@ pub fn on_apply_gameplay_effect(
     }
 
     // Check application_tag_requirements
-    if let Ok(owner_tags) = params.tag_containers.get(target) {
+    if let Ok(owner_tags) = params.tag_containers.p0().get(target) {
         // OwnedTags wraps GameplayTagCountContainer which has explicit_tags field
         let tag_container = &owner_tags.0;
         if !definition
@@ -477,10 +484,10 @@ pub fn on_apply_gameplay_effect(
     }
 
     // Check custom application requirements.
-    let target_tags = params.tag_containers.get(target).ok();
-    let source_tags = spec
-        .source_entity()
-        .and_then(|source| params.tag_containers.get(source).ok());
+    let tag_query = params.tag_containers.p0();
+    let target_tags = tag_query.get(target).ok();
+    let source_entity = spec.source_entity();
+    let source_tags = source_entity.and_then(|source| tag_query.get(source).ok());
 
     let attribute_snapshots: Vec<_> = params
         .attributes
@@ -692,7 +699,7 @@ pub fn on_apply_gameplay_effect(
 
             // Add granted_tags to target's OwnedTags
             if !definition.granted_tags.is_empty()
-                && let Ok(mut target_tags) = params.tag_containers.get_mut(target)
+                && let Ok(mut target_tags) = params.tag_containers.p1().get_mut(target)
             {
                 target_tags.0.update_tag_container_count(
                     &definition.granted_tags,
@@ -710,6 +717,48 @@ pub fn on_apply_gameplay_effect(
                 target,
                 effect_id: effect_id.clone(),
             });
+        }
+    }
+
+    // Apply conditional effects (deferred to avoid query conflicts)
+    apply_conditional_effects(&mut commands, definition, spec, &params.tag_containers.p0());
+}
+
+/// Helper function to apply conditional effects.
+///
+/// This is separated to avoid query conflicts when effects trigger recursively.
+fn apply_conditional_effects(
+    commands: &mut Commands,
+    definition: &GameplayEffectDefinition,
+    spec: &GameplayEffectSpec,
+    tag_containers: &Query<&OwnedTags>,
+) {
+    if definition.conditional_effects.is_empty() {
+        return;
+    }
+
+    let source_tags = spec
+        .source_entity()
+        .and_then(|source| tag_containers.get(source).ok());
+
+    for conditional in &definition.conditional_effects {
+        let can_apply = if let Some(source_tags) = source_tags {
+            conditional.can_apply(&source_tags.0.explicit_tags)
+        } else {
+            conditional.required_source_tags.is_empty()
+        };
+
+        if can_apply {
+            let conditional_spec = GameplayEffectSpec {
+                effect_id: conditional.effect_id.clone(),
+                target: spec.target,
+                level: spec.level,
+                context: spec.context.clone(),
+                set_by_caller_magnitudes: spec.set_by_caller_magnitudes.clone(),
+                captured_attributes: spec.captured_attributes.clone(),
+            };
+
+            commands.trigger(ApplyGameplayEffectEvent::from_spec(conditional_spec));
         }
     }
 }
