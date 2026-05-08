@@ -2,7 +2,7 @@
 //!
 //! This module provides the plugin for the gameplay cue system.
 
-use super::manager::GameplayCueManager;
+use super::manager::{GameplayCueManager, StaticCueHandlers};
 use super::systems::*;
 use crate::core::system_sets::CueSystemSet;
 use bevy::prelude::*;
@@ -26,7 +26,8 @@ pub struct CuePlugin;
 impl Plugin for CuePlugin {
     fn build(&self, app: &mut App) {
         // Register resources
-        app.init_resource::<GameplayCueManager>();
+        app.init_resource::<GameplayCueManager>()
+            .init_resource::<StaticCueHandlers>();
 
         // TODO: Register events with Bevy 0.18 observer pattern
         // For now, systems will handle cue execution directly

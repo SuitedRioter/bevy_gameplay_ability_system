@@ -24,6 +24,8 @@ use string_cache::DefaultAtom as Atom;
 pub struct ApplyEffectParams<'w, 's> {
     pub tag_containers: Query<'w, 's, &'static mut OwnedTags>,
     pub immunity_tags: Query<'w, 's, &'static crate::core::ImmunityTags>,
+    pub active_immunities: Query<'w, 's, &'static super::ge_components::ActiveImmunityEffects>,
+    pub world: &'w World,
     pub attributes: Query<
         'w,
         's,
@@ -419,6 +421,31 @@ pub fn on_apply_gameplay_effect(
 
                 return;
             }
+        }
+    }
+
+    // Check immunity from active immunity effects (GameplayEffectComponent-based)
+    if let Ok(active_immunities) = params.active_immunities.get(target) {
+        if let Some(blocking_effect) = active_immunities.is_effect_blocked(
+            effect_id.as_ref(),
+            spec.source_entity(),
+            target,
+            &params.world,
+        ) {
+            info!(
+                "Effect '{}' blocked by immunity effect {:?} on target {:?}",
+                effect_id, blocking_effect, target
+            );
+
+            // Trigger immunity event
+            commands.trigger(GameplayEffectBlockedByImmunityEvent {
+                effect_id: effect_id.clone(),
+                target,
+                instigator: spec.instigator(),
+                immunity_tag: bevy_gameplay_tag::gameplay_tag::GameplayTag::new("Immunity.Effect"),
+            });
+
+            return;
         }
     }
 

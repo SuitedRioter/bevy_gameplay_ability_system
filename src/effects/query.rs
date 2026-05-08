@@ -203,6 +203,71 @@ impl GameplayEffectQuery {
         self
     }
 
+    /// Checks if an effect definition matches this query.
+    ///
+    /// This is used by immunity checks to determine if an incoming effect
+    /// should be blocked before it's applied.
+    ///
+    /// # Parameters
+    /// - `effect_definition_id`: The ID of the effect definition to check
+    /// - `source`: The entity applying the effect (if any)
+    /// - `target`: The entity receiving the effect
+    /// - `world`: World reference for querying tags
+    ///
+    /// # Returns
+    /// `true` if the effect matches this query and should be blocked
+    pub fn matches_effect(
+        &self,
+        effect_definition_id: &str,
+        source: Option<Entity>,
+        _target: Entity,
+        world: &World,
+    ) -> bool {
+        // Check definition ID
+        if let Some(ref required_id) = self.effect_definition {
+            if required_id.as_ref() != effect_definition_id {
+                return false;
+            }
+        }
+
+        // Check source tags
+        if let Some(source_entity) = source {
+            if let Some(ref required_tags) = self.source_tags_all {
+                if let Some(source_tags) = world.get::<OwnedTags>(source_entity) {
+                    if !source_tags.0.explicit_tags.has_all(required_tags) {
+                        return false;
+                    }
+                } else {
+                    return false;
+                }
+            }
+
+            if let Some(ref required_tags) = self.source_tags_any {
+                if let Some(source_tags) = world.get::<OwnedTags>(source_entity) {
+                    if !source_tags.0.explicit_tags.has_any(required_tags) {
+                        return false;
+                    }
+                } else {
+                    return false;
+                }
+            }
+
+            if let Some(ref forbidden_tags) = self.source_tags_none {
+                if let Some(source_tags) = world.get::<OwnedTags>(source_entity) {
+                    if source_tags.0.explicit_tags.has_any(forbidden_tags) {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        // Note: owning_tags checks are not applicable here because the effect
+        // hasn't been applied yet, so we can't check its granted tags.
+        // Those checks are only used when querying existing active effects.
+
+        true
+    }
+
     /// Check if an effect entity matches this query.
     ///
     /// # Parameters

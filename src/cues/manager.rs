@@ -2,9 +2,11 @@
 //!
 //! This module manages the registration and execution of gameplay cues.
 
+use super::notify::GameplayCueNotifyStatic;
 use bevy::prelude::*;
 use bevy_gameplay_tag::gameplay_tag::GameplayTag;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 /// GameplayCue event type.
 ///
@@ -189,6 +191,73 @@ pub struct GameplayCueManager {
     pub pending_cues: Vec<PendingCueExecution>,
     /// Whether batching is currently active.
     pub batching_active: bool,
+}
+
+/// Resource storing static cue handlers.
+///
+/// Static cues are trait objects that implement GameplayCueNotifyStatic.
+/// They're registered at startup and invoked by the cue system.
+#[derive(Resource, Default)]
+pub struct StaticCueHandlers {
+    handlers: HashMap<GameplayTag, Arc<dyn GameplayCueNotifyStatic>>,
+}
+
+impl StaticCueHandlers {
+    /// Creates a new empty registry.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Registers a static cue handler.
+    pub fn register(&mut self, tag: GameplayTag, handler: Arc<dyn GameplayCueNotifyStatic>) {
+        self.handlers.insert(tag, handler);
+    }
+
+    /// Gets a handler by tag.
+    pub fn get(&self, tag: &GameplayTag) -> Option<&Arc<dyn GameplayCueNotifyStatic>> {
+        self.handlers.get(tag)
+    }
+
+    /// Returns all registered tags.
+    pub fn tags(&self) -> impl Iterator<Item = &GameplayTag> {
+        self.handlers.keys()
+    }
+}
+
+/// Component tracking active WhileActive cues on a target entity.
+///
+/// This component is added to entities that have active WhileActive cues.
+/// It stores the cue tags and parameters so the update system can call
+/// while_active() every frame.
+#[derive(Component, Debug, Clone)]
+pub struct ActiveWhileActiveCues {
+    /// Map of active cue tags to their parameters.
+    pub cues: HashMap<GameplayTag, GameplayCueParameters>,
+}
+
+impl Default for ActiveWhileActiveCues {
+    fn default() -> Self {
+        Self {
+            cues: HashMap::new(),
+        }
+    }
+}
+
+impl ActiveWhileActiveCues {
+    /// Adds a WhileActive cue.
+    pub fn add(&mut self, tag: GameplayTag, params: GameplayCueParameters) {
+        self.cues.insert(tag, params);
+    }
+
+    /// Removes a WhileActive cue.
+    pub fn remove(&mut self, tag: &GameplayTag) {
+        self.cues.remove(tag);
+    }
+
+    /// Returns true if there are no active cues.
+    pub fn is_empty(&self) -> bool {
+        self.cues.is_empty()
+    }
 }
 
 impl GameplayCueManager {

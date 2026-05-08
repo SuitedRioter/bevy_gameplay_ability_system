@@ -102,15 +102,50 @@ impl ImmunityComponent {
 }
 
 impl GameplayEffectComponent for ImmunityComponent {
-    fn on_effect_applied(&self, effect: Entity, target: Entity, _world: &mut World) {
-        // Register immunity callback
-        // This would need to be implemented in the effect system
-        // For now, we just log
+    fn on_effect_applied(&self, effect: Entity, target: Entity, world: &mut World) {
+        // Register this effect as granting immunity
+        // Store the immunity queries in a component on the target
+        if let Ok(mut entity_mut) = world.get_entity_mut(target) {
+            if let Some(mut active_immunities) = entity_mut.get_mut::<ActiveImmunityEffects>() {
+                active_immunities.add_immunity(effect, self.immunity_queries.clone());
+            } else {
+                entity_mut.insert(ActiveImmunityEffects::new(
+                    effect,
+                    self.immunity_queries.clone(),
+                ));
+            }
+        }
+
         info!(
             "Immunity effect {:?} applied to {:?}, blocking {} queries",
             effect,
             target,
             self.immunity_queries.len()
+        );
+    }
+
+    fn on_effect_removed(
+        &self,
+        effect: Entity,
+        target: Entity,
+        _removal_info: &EffectRemovalInfo,
+        world: &mut World,
+    ) {
+        // Remove this effect's immunity grants
+        if let Ok(mut entity_mut) = world.get_entity_mut(target) {
+            if let Some(mut active_immunities) = entity_mut.get_mut::<ActiveImmunityEffects>() {
+                active_immunities.remove_immunity(effect);
+
+                // If no more immunities, remove the component
+                if active_immunities.is_empty() {
+                    entity_mut.remove::<ActiveImmunityEffects>();
+                }
+            }
+        }
+
+        info!(
+            "Immunity effect {:?} removed from {:?}",
+            effect, target
         );
     }
 
@@ -121,9 +156,63 @@ impl GameplayEffectComponent for ImmunityComponent {
         _target: Entity,
         _world: &World,
     ) -> bool {
-        // Check if any active immunity effects on the target block this effect
-        // This is a simplified check - full implementation would query all active immunity effects
+        // Immunity components don't block their own application
+        // They block OTHER effects after being applied
         true
+    }
+}
+
+/// Component tracking active immunity effects on an entity.
+///
+/// This component is added to entities that have active immunity-granting effects.
+/// It stores the immunity queries from all active immunity effects.
+#[derive(Component, Debug, Clone)]
+pub struct ActiveImmunityEffects {
+    /// Map of effect entity -> immunity queries granted by that effect
+    immunities: std::collections::HashMap<Entity, Vec<GameplayEffectQuery>>,
+}
+
+impl ActiveImmunityEffects {
+    /// Creates a new active immunity tracker with one effect.
+    pub fn new(effect: Entity, queries: Vec<GameplayEffectQuery>) -> Self {
+        let mut immunities = std::collections::HashMap::new();
+        immunities.insert(effect, queries);
+        Self { immunities }
+    }
+
+    /// Adds immunity queries from a new effect.
+    pub fn add_immunity(&mut self, effect: Entity, queries: Vec<GameplayEffectQuery>) {
+        self.immunities.insert(effect, queries);
+    }
+
+    /// Removes immunity queries from an effect.
+    pub fn remove_immunity(&mut self, effect: Entity) {
+        self.immunities.remove(&effect);
+    }
+
+    /// Returns true if no immunities are active.
+    pub fn is_empty(&self) -> bool {
+        self.immunities.is_empty()
+    }
+
+    /// Checks if the given effect definition is blocked by any active immunity.
+    ///
+    /// Returns the blocking effect entity if blocked, None otherwise.
+    pub fn is_effect_blocked(
+        &self,
+        effect_definition_id: &str,
+        source: Option<Entity>,
+        target: Entity,
+        world: &World,
+    ) -> Option<Entity> {
+        for (immunity_effect, queries) in &self.immunities {
+            for query in queries {
+                if query.matches_effect(effect_definition_id, source, target, world) {
+                    return Some(*immunity_effect);
+                }
+            }
+        }
+        None
     }
 }
 
@@ -295,6 +384,7 @@ impl GameplayEffectComponent for RemoveOtherEffectsComponent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bevy::ecs::system::RunSystemOnce;
 
     #[test]
     fn test_chance_to_apply_always() {
@@ -347,5 +437,99 @@ mod tests {
         assert_eq!(component.on_complete_always.len(), 1);
         assert_eq!(component.on_complete_normal.len(), 1);
         assert_eq!(component.on_complete_prematurely.len(), 1);
+    }
+
+    #[test]
+    fn test_immunity_component_blocks_matching_effects() {
+        let mut app = App::new();
+        app.add_plugins(bevy_gameplay_tag::GameplayTagsPlugin::with_data_path(
+            "assets/gameplay_tags.json".to_string(),
+        ));
+        app.add_plugins(crate::effects::EffectPlugin);
+        app.update(); // Load tags
+
+        // Register immunity effect
+        let poison_query = crate::effects::query::GameplayEffectQuery::new()
+            .with_definition_id("poison_damage");
+
+        let immunity_effect = crate::effects::definition::GameplayEffectDefinition::new("poison_immunity")
+            .with_duration_policy(crate::effects::definition::DurationPolicy::Infinite)
+            .add_component(std::sync::Arc::new(ImmunityComponent::new(vec![poison_query])));
+
+        app.world_mut()
+            .resource_mut::<crate::effects::definition::GameplayEffectRegistry>()
+            .register(immunity_effect);
+
+        // Register poison effect
+        let poison_effect = crate::effects::definition::GameplayEffectDefinition::new("poison_damage")
+            .with_duration_policy(crate::effects::definition::DurationPolicy::HasDuration)
+            .with_duration(5.0)
+            .add_modifier(crate::effects::definition::ModifierInfo::new(
+                "Health",
+                crate::effects::components::ModifierOperation::AddBase,
+                crate::effects::definition::MagnitudeCalculation::ScalableFloat {
+                    base_value: -10.0,
+                    level_multiplier: 1.0,
+                },
+            ));
+
+        app.world_mut()
+            .resource_mut::<crate::effects::definition::GameplayEffectRegistry>()
+            .register(poison_effect);
+
+        // Spawn player
+        let player = app
+            .world_mut()
+            .spawn((
+                Name::new("Player"),
+                crate::core::OwnedTags::default(),
+                crate::core::BlockedAbilityTags::default(),
+            ))
+            .id();
+
+        // Apply immunity effect
+        app.world_mut().commands().trigger(crate::effects::systems::ApplyGameplayEffectEvent {
+            spec: crate::effects::components::GameplayEffectSpec {
+                effect_id: "poison_immunity".into(),
+                target: player,
+                level: 1,
+                context: Default::default(),
+                set_by_caller_magnitudes: Default::default(),
+                captured_attributes: Default::default(),
+            },
+        });
+
+        app.update();
+
+        // Verify immunity component was added
+        assert!(app
+            .world()
+            .get::<ActiveImmunityEffects>(player)
+            .is_some());
+
+        // Try to apply poison - should be blocked
+        app.world_mut().commands().trigger(crate::effects::systems::ApplyGameplayEffectEvent {
+            spec: crate::effects::components::GameplayEffectSpec {
+                effect_id: "poison_damage".into(),
+                target: player,
+                level: 1,
+                context: Default::default(),
+                set_by_caller_magnitudes: Default::default(),
+                captured_attributes: Default::default(),
+            },
+        });
+
+        app.update();
+
+        // Verify poison was NOT applied by checking active effects
+        let has_poison = app.world_mut().run_system_once(
+            |effects: Query<&crate::effects::components::ActiveGameplayEffect>| {
+                effects
+                    .iter()
+                    .any(|effect| effect.definition_id.as_ref() == "poison_damage")
+            },
+        ).unwrap_or(false);
+
+        assert!(!has_poison, "Poison should have been blocked by immunity");
     }
 }
