@@ -61,6 +61,7 @@ pub mod ge_components;
 pub mod plugin;
 pub mod query;
 pub mod systems;
+pub mod tag_cleanup;
 
 pub use ability_granting::*;
 pub use application_requirement::*;

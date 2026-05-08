@@ -18,7 +18,10 @@ fn main() {
         ))
         .add_plugins(GasPlugin)
         .add_systems(Startup, setup)
-        .add_systems(Update, (apply_immunity, apply_poison, check_immunity_events))
+        .add_systems(
+            Update,
+            (apply_immunity, apply_poison, check_immunity_events),
+        )
         .run();
 }
 
@@ -117,9 +120,7 @@ fn apply_poison(
     }
 }
 
-fn check_immunity_events(
-    mut events: EventReader<GameplayEffectBlockedByImmunityEvent>,
-) {
+fn check_immunity_events(mut events: EventReader<GameplayEffectBlockedByImmunityEvent>) {
     for event in events.read() {
         info!(
             "Effect '{}' was blocked by immunity on target {:?}!",

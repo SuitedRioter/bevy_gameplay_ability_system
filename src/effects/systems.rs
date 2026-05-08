@@ -519,82 +519,98 @@ pub fn on_apply_gameplay_effect(
     }
 
     // Handle stacking
-    match definition.stacking_policy {
-        StackingPolicy::RefreshDuration => {
-            // Find existing effect and refresh its duration
-            for (
-                effect_entity,
-                active_effect,
-                effect_target,
-                duration,
-                effect_instigator,
-                effect_context,
-                set_by_caller,
-            ) in params.existing_effects.iter_mut()
-            {
-                if effect_target.0 == target && active_effect.definition_id == *effect_id {
-                    if let Some(mut dur) = duration {
+    let stacking_config = &definition.stacking_config;
+
+    if stacking_config.allows_stacking() {
+        // Find existing effect based on stacking type
+        for (
+            effect_entity,
+            mut active_effect,
+            effect_target,
+            duration,
+            effect_instigator,
+            effect_context,
+            set_by_caller,
+        ) in params.existing_effects.iter_mut()
+        {
+            // Check if this is the same effect
+            if effect_target.0 != target || active_effect.definition_id != *effect_id {
+                continue;
+            }
+
+            // Check stacking type match
+            let should_stack = match stacking_config.stacking_type {
+                StackingType::None => false,
+                StackingType::AggregateBySource => {
+                    // Stack only if same source
+                    spec.source_entity() == Some(active_effect.source)
+                }
+                StackingType::AggregateByTarget => {
+                    // Stack for any source on same target
+                    true
+                }
+            };
+
+            if !should_stack {
+                continue;
+            }
+
+            // Check if at stack limit
+            let at_limit = stacking_config.is_at_limit(active_effect.stack_count);
+            if at_limit && stacking_config.deny_overflow_application {
+                // Deny application
+                return;
+            }
+
+            // Handle overflow
+            if at_limit {
+                if stacking_config.clear_stack_on_overflow {
+                    // Clear the entire stack
+                    commands.entity(effect_entity).despawn();
+                    // Fall through to spawn new
+                    break;
+                }
+                // Otherwise, overflow but don't increment stack
+            } else {
+                // Increment stack count
+                active_effect.stack_count += 1;
+            }
+
+            // Handle duration refresh
+            if let Some(mut dur) = duration {
+                match stacking_config.duration_refresh_policy {
+                    StackingDurationPolicy::RefreshOnSuccessfulApplication => {
                         dur.remaining = definition.duration_magnitude;
                     }
-                    if let Some(mut instigator_component) = effect_instigator {
-                        instigator_component.0 = spec.instigator();
+                    StackingDurationPolicy::ExtendDuration => {
+                        dur.remaining += definition.duration_magnitude;
                     }
-                    if let Some(mut context_component) = effect_context {
-                        *context_component = spec.context.clone();
+                    StackingDurationPolicy::NeverRefresh => {
+                        // Keep current duration
                     }
-                    if let Some(mut set_by_caller_component) = set_by_caller {
-                        *set_by_caller_component = spec.set_by_caller_magnitudes.clone();
-                    }
-                    commands.trigger(GameplayEffectAppliedEvent {
-                        effect: effect_entity,
-                        target,
-                        effect_id: effect_id.clone(),
-                    });
-                    return;
                 }
             }
-            // Fall through to spawn new if no existing found
-        }
-        StackingPolicy::StackCount { max_stacks } => {
-            // Find existing effect and increment stack count
-            for (
-                effect_entity,
-                mut active_effect,
-                effect_target,
-                duration,
-                effect_instigator,
-                effect_context,
-                set_by_caller,
-            ) in params.existing_effects.iter_mut()
-            {
-                if effect_target.0 == target && active_effect.definition_id == *effect_id {
-                    if active_effect.stack_count < max_stacks {
-                        active_effect.stack_count += 1;
-                    }
-                    if let Some(mut dur) = duration {
-                        dur.remaining = definition.duration_magnitude;
-                    }
-                    if let Some(mut instigator_component) = effect_instigator {
-                        instigator_component.0 = spec.instigator();
-                    }
-                    if let Some(mut context_component) = effect_context {
-                        *context_component = spec.context.clone();
-                    }
-                    if let Some(mut set_by_caller_component) = set_by_caller {
-                        *set_by_caller_component = spec.set_by_caller_magnitudes.clone();
-                    }
-                    commands.trigger(GameplayEffectAppliedEvent {
-                        effect: effect_entity,
-                        target,
-                        effect_id: effect_id.clone(),
-                    });
-                    return;
-                }
+
+            // Handle period reset
+            // TODO: Implement period reset when PeriodicEffect component is available
+
+            // Update instigator and context
+            if let Some(mut instigator_component) = effect_instigator {
+                instigator_component.0 = spec.instigator();
             }
-            // Fall through to spawn new if no existing found
-        }
-        StackingPolicy::Independent => {
-            // Always spawn a new effect entity
+            if let Some(mut context_component) = effect_context {
+                *context_component = spec.context.clone();
+            }
+            if let Some(mut set_by_caller_component) = set_by_caller {
+                *set_by_caller_component = spec.set_by_caller_magnitudes.clone();
+            }
+
+            commands.trigger(GameplayEffectAppliedEvent {
+                effect: effect_entity,
+                target,
+                effect_id: effect_id.clone(),
+            });
+            return;
         }
     }
 
@@ -1158,7 +1174,6 @@ pub fn remove_expired_effects_system(
         Option<&GameplayEffectContext>,
     )>,
     modifiers: Query<(Entity, &ModifierSource)>,
-    mut tag_containers: Query<&mut OwnedTags>,
     attributes: Query<(Entity, &AttributeName, &ChildOf)>,
 ) {
     for (effect_entity, duration, active_effect, target, granted_tags, context) in effects.iter() {
@@ -1167,17 +1182,8 @@ pub fn remove_expired_effects_system(
             let definition = registry.get(&active_effect.definition_id);
 
             // Remove granted_tags from target's OwnedTags
-            if let Some(granted) = granted_tags
-                && let Ok(mut target_tags) = tag_containers.get_mut(target.0)
-            {
-                target_tags.0.update_tag_container_count(
-                    &granted.tags,
-                    -1,
-                    &tags_manager,
-                    &mut commands,
-                    target.0,
-                );
-            }
+            // Note: Tag removal is now handled by a separate cleanup system
+            // to avoid query conflicts with the observer
 
             // Remove all modifiers created by this effect
             for (modifier_entity, source) in modifiers.iter() {

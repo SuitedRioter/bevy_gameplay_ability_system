@@ -10,6 +10,7 @@ use super::application_requirement::ApplicationRequirementRegistry;
 use super::custom_calculation::CustomCalculationRegistry;
 use super::definition::GameplayEffectRegistry;
 use super::systems::*;
+use super::tag_cleanup::cleanup_expired_effect_tags_system;
 use crate::core::system_sets::{EffectSystemSet, GasSystemSet};
 use bevy::prelude::*;
 
@@ -42,6 +43,12 @@ impl Plugin for EffectPlugin {
             .add_systems(
                 Update,
                 remove_expired_effects_system.in_set(EffectSystemSet::RemoveExpired),
+            )
+            .add_systems(
+                Update,
+                cleanup_expired_effect_tags_system
+                    .in_set(EffectSystemSet::RemoveExpired)
+                    .after(remove_expired_effects_system),
             )
             .add_systems(
                 Update,

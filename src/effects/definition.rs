@@ -103,7 +103,198 @@ pub enum DurationPolicy {
     Infinite,
 }
 
-/// Stacking policy for gameplay effects.
+/// Stacking type for gameplay effects.
+///
+/// Defines how multiple applications of the same effect aggregate.
+/// Matches UE GAS's `EGameplayEffectStackingType`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum StackingType {
+    /// No stacking. Each application is a separate instance.
+    None,
+    /// Stacks only when the same source reapplies the effect.
+    AggregateBySource,
+    /// Stacks only when the effect is reapplied to the same target.
+    AggregateByTarget,
+}
+
+impl Default for StackingType {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
+/// Policy for refreshing effect duration while stacking.
+///
+/// Matches UE GAS's `EGameplayEffectStackingDurationPolicy`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum StackingDurationPolicy {
+    /// The duration is refreshed from any successful stack application.
+    RefreshOnSuccessfulApplication,
+    /// The duration is never refreshed.
+    NeverRefresh,
+    /// New stacks add their duration onto current remaining time.
+    ExtendDuration,
+}
+
+impl Default for StackingDurationPolicy {
+    fn default() -> Self {
+        Self::RefreshOnSuccessfulApplication
+    }
+}
+
+/// Policy for resetting effect period while stacking.
+///
+/// Matches UE GAS's `EGameplayEffectStackingPeriodPolicy`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum StackingPeriodPolicy {
+    /// Progress toward next tick is discarded upon successful stack application.
+    ResetOnSuccessfulApplication,
+    /// Progress toward next tick is never reset.
+    NeverReset,
+}
+
+impl Default for StackingPeriodPolicy {
+    fn default() -> Self {
+        Self::NeverReset
+    }
+}
+
+/// Policy for handling stack expiration in duration-based effects.
+///
+/// Matches UE GAS's `EGameplayEffectStackingExpirationPolicy`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum StackingExpirationPolicy {
+    /// The entire stack is cleared when the effect expires.
+    ClearEntireStack,
+    /// Decrement stack count by 1 and refresh duration.
+    RemoveSingleStackAndRefreshDuration,
+    /// Refresh duration without decrementing (makes effect infinite).
+    RefreshDuration,
+}
+
+impl Default for StackingExpirationPolicy {
+    fn default() -> Self {
+        Self::ClearEntireStack
+    }
+}
+
+/// Complete stacking configuration for gameplay effects.
+///
+/// This replaces the old `StackingPolicy` enum with a comprehensive
+/// three-layer model matching UE GAS.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct StackingConfig {
+    /// How this effect stacks with other instances.
+    pub stacking_type: StackingType,
+    /// Stack limit. 0 or negative means no limit.
+    pub stack_limit_count: i32,
+    /// Policy for refreshing duration while stacking.
+    pub duration_refresh_policy: StackingDurationPolicy,
+    /// Policy for resetting period while stacking.
+    pub period_reset_policy: StackingPeriodPolicy,
+    /// Policy for handling expiration.
+    pub expiration_policy: StackingExpirationPolicy,
+    /// If true, deny applications when at stack limit.
+    pub deny_overflow_application: bool,
+    /// If true, clear entire stack on overflow.
+    pub clear_stack_on_overflow: bool,
+    /// If true, include stack count in modifier magnitude calculations.
+    pub factor_in_stack_count: bool,
+}
+
+impl Default for StackingConfig {
+    fn default() -> Self {
+        Self {
+            stacking_type: StackingType::None,
+            stack_limit_count: 0,
+            duration_refresh_policy: StackingDurationPolicy::default(),
+            period_reset_policy: StackingPeriodPolicy::default(),
+            expiration_policy: StackingExpirationPolicy::default(),
+            deny_overflow_application: false,
+            clear_stack_on_overflow: false,
+            factor_in_stack_count: false,
+        }
+    }
+}
+
+impl StackingConfig {
+    /// Creates a config with no stacking (each application is independent).
+    pub fn none() -> Self {
+        Self::default()
+    }
+
+    /// Creates a config that stacks by source with default policies.
+    pub fn aggregate_by_source(stack_limit: i32) -> Self {
+        Self {
+            stacking_type: StackingType::AggregateBySource,
+            stack_limit_count: stack_limit,
+            ..Default::default()
+        }
+    }
+
+    /// Creates a config that stacks by target with default policies.
+    pub fn aggregate_by_target(stack_limit: i32) -> Self {
+        Self {
+            stacking_type: StackingType::AggregateByTarget,
+            stack_limit_count: stack_limit,
+            ..Default::default()
+        }
+    }
+
+    /// Sets the duration refresh policy.
+    pub fn with_duration_policy(mut self, policy: StackingDurationPolicy) -> Self {
+        self.duration_refresh_policy = policy;
+        self
+    }
+
+    /// Sets the period reset policy.
+    pub fn with_period_policy(mut self, policy: StackingPeriodPolicy) -> Self {
+        self.period_reset_policy = policy;
+        self
+    }
+
+    /// Sets the expiration policy.
+    pub fn with_expiration_policy(mut self, policy: StackingExpirationPolicy) -> Self {
+        self.expiration_policy = policy;
+        self
+    }
+
+    /// Sets whether to deny overflow applications.
+    pub fn deny_overflow(mut self, deny: bool) -> Self {
+        self.deny_overflow_application = deny;
+        self
+    }
+
+    /// Sets whether to clear stack on overflow.
+    pub fn clear_on_overflow(mut self, clear: bool) -> Self {
+        self.clear_stack_on_overflow = clear;
+        self
+    }
+
+    /// Sets whether to factor stack count into magnitude calculations.
+    pub fn factor_stack_count(mut self, factor: bool) -> Self {
+        self.factor_in_stack_count = factor;
+        self
+    }
+
+    /// Returns true if this config allows stacking.
+    pub fn allows_stacking(&self) -> bool {
+        self.stacking_type != StackingType::None
+    }
+
+    /// Returns true if the stack limit has been reached.
+    pub fn is_at_limit(&self, current_count: i32) -> bool {
+        if self.stack_limit_count <= 0 {
+            return false; // No limit
+        }
+        current_count >= self.stack_limit_count
+    }
+}
+
+/// Deprecated: Old stacking policy enum.
+///
+/// Use `StackingConfig` instead for full UE GAS compatibility.
+#[deprecated(since = "0.2.0", note = "Use StackingConfig instead")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum StackingPolicy {
     /// Each application is independent.
@@ -669,8 +860,8 @@ pub struct GameplayEffectDefinition {
     pub application_tag_requirements: GameplayTagRequirements,
     /// Custom application requirements that must all pass before the effect applies.
     pub application_requirements: Vec<Atom>,
-    /// Stacking policy.
-    pub stacking_policy: StackingPolicy,
+    /// Stacking configuration.
+    pub stacking_config: StackingConfig,
     /// Abilities granted while this effect is active.
     pub granted_abilities: Vec<GrantedAbilityConfig>,
     /// Gameplay cues triggered by this effect.
@@ -705,7 +896,7 @@ impl std::fmt::Debug for GameplayEffectDefinition {
                 &self.application_tag_requirements,
             )
             .field("application_requirements", &self.application_requirements)
-            .field("stacking_policy", &self.stacking_policy)
+            .field("stacking_config", &self.stacking_config)
             .field("granted_abilities", &self.granted_abilities)
             .field("gameplay_cues", &self.gameplay_cues)
             .field("conditional_effects", &self.conditional_effects)
@@ -729,7 +920,7 @@ impl PartialEq for GameplayEffectDefinition {
             && self.immunity_tags == other.immunity_tags
             && self.application_tag_requirements == other.application_tag_requirements
             && self.application_requirements == other.application_requirements
-            && self.stacking_policy == other.stacking_policy
+            && self.stacking_config == other.stacking_config
             && self.granted_abilities == other.granted_abilities
             && self.gameplay_cues == other.gameplay_cues
             && self.conditional_effects == other.conditional_effects
@@ -751,7 +942,7 @@ impl GameplayEffectDefinition {
             immunity_tags: GameplayTagContainer::default(),
             application_tag_requirements: GameplayTagRequirements::default(),
             application_requirements: Vec::new(),
-            stacking_policy: StackingPolicy::Independent,
+            stacking_config: StackingConfig::default(),
             granted_abilities: Vec::new(),
             gameplay_cues: Vec::new(),
             conditional_effects: Vec::new(),
@@ -824,9 +1015,24 @@ impl GameplayEffectDefinition {
         self
     }
 
-    /// Sets the stacking policy.
+    /// Sets the stacking configuration.
+    pub fn with_stacking_config(mut self, config: StackingConfig) -> Self {
+        self.stacking_config = config;
+        self
+    }
+
+    /// Deprecated: Sets the stacking policy using old enum.
+    #[deprecated(since = "0.2.0", note = "Use with_stacking_config instead")]
+    #[allow(deprecated)]
     pub fn with_stacking_policy(mut self, policy: StackingPolicy) -> Self {
-        self.stacking_policy = policy;
+        self.stacking_config = match policy {
+            StackingPolicy::Independent => StackingConfig::none(),
+            StackingPolicy::RefreshDuration => StackingConfig::aggregate_by_target(0)
+                .with_duration_policy(StackingDurationPolicy::RefreshOnSuccessfulApplication),
+            StackingPolicy::StackCount { max_stacks } => {
+                StackingConfig::aggregate_by_target(max_stacks)
+            }
+        };
         self
     }
 
