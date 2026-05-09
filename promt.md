@@ -29,7 +29,7 @@
 
 
 这个（/Users/zhengwei/GeneralProject/UnrealEngine/Engine/Plugins/Runtime/GameplayAbilities）文件夹下是UnrealEngine的GAS插件的代码，我希望你在当前项目使用Godot-CSharp来实现UnrealEngine的GAS插件的功能，也就是我希望从UE复刻到适配Godot的GameplayAbilities，
-对外功能表现必须与原模块一致，现有项目下已经复刻了一部分，在GameplayAbilities文件夹，你可以在此基础上继续复刻，补全或者优化现有代码。注意，我已经自己实现了GameplayTag的功能（就在当前项目的GameplayTag目录下），相关需要使用GameplayTag，GameplayTagContainer，GameplayTagCountContainer的直接使用。我不需要实现联网功能，目标是做优先2D单机游戏。
+对外功能表现必须与原模块一致，现有项目下已经复刻了一部分，在GameplayAbilities文件夹，你可以在此基础上继续复刻，补全或者优化现有代码，核心是优先完成功能的复刻，最后再考虑针对CSharp的实现进行性能优化。注意，我已经自己实现了GameplayTag的功能（就在当前项目的GameplayTag目录下），相关需要使用GameplayTag，GameplayTagContainer，GameplayTagCountContainer的直接使用。我不需要实现联网功能，目标是做优先2D单机游戏。
 在写代码之前：
 1. 先解释架构映射关系
 2. 识别等价实现
