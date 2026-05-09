@@ -6,6 +6,10 @@
 //! 3. Handle immunity events
 
 use bevy::prelude::*;
+use bevy_gameplay_ability_system::core::{BlockedAbilityTags, OwnedTags};
+use bevy_gameplay_ability_system::effects::{
+    GameplayEffectBlockedByImmunityEvent, GameplayEffectQuery, ImmunityComponent,
+};
 use bevy_gameplay_ability_system::prelude::*;
 use bevy_gameplay_tag::{GameplayTag, GameplayTagsManager, GameplayTagsPlugin};
 use std::sync::Arc;
@@ -17,11 +21,9 @@ fn main() {
             "assets/gameplay_tags.json".to_string(),
         ))
         .add_plugins(GasPlugin)
+        .add_observer(check_immunity_events)
         .add_systems(Startup, setup)
-        .add_systems(
-            Update,
-            (apply_immunity, apply_poison, check_immunity_events),
-        )
+        .add_systems(Update, (apply_immunity, apply_poison))
         .run();
 }
 
@@ -64,13 +66,7 @@ fn apply_immunity(
     for player in players.iter() {
         info!("Applying poison immunity to player {:?}", player);
 
-        commands.trigger(ApplyGameplayEffectEvent {
-            effect_id: "poison_immunity".into(),
-            target: player,
-            source: None,
-            level: 1,
-            set_by_caller_magnitudes: None,
-        });
+        commands.trigger(ApplyGameplayEffectEvent::new("poison_immunity", player));
     }
 }
 
@@ -86,13 +82,13 @@ fn apply_poison(
     }
 
     // Create poison effect
-    if !registry.contains("poison_damage") {
+    if !registry.get("poison_damage").is_some() {
         let mut poison = GameplayEffectDefinition::new("poison_damage")
             .with_duration_policy(DurationPolicy::HasDuration)
             .with_duration(5.0)
             .add_modifier(ModifierInfo::new(
                 "Health",
-                ModifierOperation::Add,
+                ModifierOperation::AddCurrent,
                 MagnitudeCalculation::ScalableFloat {
                     base_value: -10.0,
                     level_multiplier: 1.0,
@@ -110,21 +106,14 @@ fn apply_poison(
     for player in players.iter() {
         info!("Attempting to apply poison to player {:?}", player);
 
-        commands.trigger(ApplyGameplayEffectEvent {
-            effect_id: "poison_damage".into(),
-            target: player,
-            source: None,
-            level: 1,
-            set_by_caller_magnitudes: None,
-        });
+        commands.trigger(ApplyGameplayEffectEvent::new("poison_damage", player));
     }
 }
 
-fn check_immunity_events(mut events: EventReader<GameplayEffectBlockedByImmunityEvent>) {
-    for event in events.read() {
-        info!(
-            "Effect '{}' was blocked by immunity on target {:?}!",
-            event.effect_id, event.target
-        );
-    }
+fn check_immunity_events(trigger: On<GameplayEffectBlockedByImmunityEvent>) {
+    let event = trigger.event();
+    info!(
+        "Effect '{}' was blocked by immunity on target {:?}!",
+        event.effect_id, event.target
+    );
 }
