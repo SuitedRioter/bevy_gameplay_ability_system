@@ -6,7 +6,6 @@
 //! 3. Handle immunity events
 
 use bevy::prelude::*;
-use bevy_gameplay_ability_system::core::{BlockedAbilityTags, OwnedTags};
 use bevy_gameplay_ability_system::effects::{
     GameplayEffectBlockedByImmunityEvent, GameplayEffectQuery, ImmunityComponent,
 };
@@ -32,11 +31,10 @@ struct Player;
 
 fn setup(mut commands: Commands) {
     // Spawn a player entity
+    // Note: OwnedTags and BlockedAbilityTags are not required for immunity to work
     commands.spawn((
         Player,
         Name::new("Player"),
-        OwnedTags::default(),
-        BlockedAbilityTags::default(),
     ));
 
     info!("Setup complete. Press I to apply immunity, P to apply poison.");

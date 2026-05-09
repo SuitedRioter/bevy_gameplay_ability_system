@@ -458,64 +458,83 @@ pub fn on_apply_gameplay_effect(
 
     // Legacy check: if target has any of the effect's asset_tags in their owned tags, reject
     // This is for backwards compatibility with the old immunity system
-    if let Ok(owner_tags) = params.tag_containers.p0().get(target) {
-        for asset_tag in definition.asset_tags.gameplay_tags.iter() {
-            if owner_tags.0.explicit_tags.gameplay_tags.contains(asset_tag) {
-                // Target is immune to this effect
-                info!(
-                    "Effect '{}' blocked by asset tag immunity '{:?}' on target {:?}",
-                    effect_id, asset_tag, target
-                );
+    // Check application_tag_requirements
+    // Check custom application requirements.
+    // We need to do ALL read-only tag checks in one scope before we can mutate tags via p1().
+    // Also collect source tags for conditional effects while we have p0() access.
+    let (should_apply, source_tags_for_conditional) = {
+        let tag_query_ro = params.tag_containers.p0();
+
+        // Legacy immunity check
+        if let Ok(owner_tags) = tag_query_ro.get(target) {
+            for asset_tag in definition.asset_tags.gameplay_tags.iter() {
+                if owner_tags.0.explicit_tags.gameplay_tags.contains(asset_tag) {
+                    // Target is immune to this effect
+                    info!(
+                        "Effect '{}' blocked by asset tag immunity '{:?}' on target {:?}",
+                        effect_id, asset_tag, target
+                    );
+                    return;
+                }
+            }
+        }
+
+        // Check application_tag_requirements
+        if let Ok(owner_tags) = tag_query_ro.get(target) {
+            // OwnedTags wraps GameplayTagCountContainer which has explicit_tags field
+            let tag_container = &owner_tags.0;
+            if !definition
+                .application_tag_requirements
+                .requirements_met(&tag_container.explicit_tags)
+            {
                 return;
             }
         }
-    }
 
-    // Check application_tag_requirements
-    if let Ok(owner_tags) = params.tag_containers.p0().get(target) {
-        // OwnedTags wraps GameplayTagCountContainer which has explicit_tags field
-        let tag_container = &owner_tags.0;
-        if !definition
-            .application_tag_requirements
-            .requirements_met(&tag_container.explicit_tags)
-        {
-            return;
+        // Check custom application requirements
+        let target_tags = tag_query_ro.get(target).ok();
+        let source_entity = spec.source_entity();
+        let source_tags = source_entity.and_then(|source| tag_query_ro.get(source).ok());
+
+        // Clone source tags for conditional effects
+        let source_tags_for_conditional = source_tags.map(|tags| tags.0.explicit_tags.clone());
+
+        let attribute_snapshots: Vec<_> = params
+            .attributes
+            .iter()
+            .map(|(data, name, child_of)| ApplicationAttributeSnapshot::new(child_of.get(), name, data))
+            .collect();
+
+        let mut should_apply = true;
+        for requirement_name in &definition.application_requirements {
+            let Some(requirement) = application_requirements.get(requirement_name) else {
+                warn!(
+                    "Effect '{}' references unknown application requirement '{}'",
+                    effect_id, requirement_name
+                );
+                should_apply = false;
+                break;
+            };
+
+            let context = ApplicationContext {
+                source: spec.source_entity(),
+                target,
+                level,
+                target_tags,
+                source_tags,
+                attributes: &attribute_snapshots,
+            };
+
+            if !requirement.can_apply(&context) {
+                should_apply = false;
+                break;
+            }
         }
-    }
+        (should_apply, source_tags_for_conditional)
+    };
 
-    // Check custom application requirements.
-    let tag_query = params.tag_containers.p0();
-    let target_tags = tag_query.get(target).ok();
-    let source_entity = spec.source_entity();
-    let source_tags = source_entity.and_then(|source| tag_query.get(source).ok());
-
-    let attribute_snapshots: Vec<_> = params
-        .attributes
-        .iter()
-        .map(|(data, name, child_of)| ApplicationAttributeSnapshot::new(child_of.get(), name, data))
-        .collect();
-
-    for requirement_name in &definition.application_requirements {
-        let Some(requirement) = application_requirements.get(requirement_name) else {
-            warn!(
-                "Effect '{}' references unknown application requirement '{}'",
-                effect_id, requirement_name
-            );
-            return;
-        };
-
-        let context = ApplicationContext {
-            source: spec.source_entity(),
-            target,
-            level,
-            target_tags: target_tags.as_ref().copied(),
-            source_tags: source_tags.as_ref().copied(),
-            attributes: &attribute_snapshots,
-        };
-
-        if !requirement.can_apply(&context) {
-            return;
-        }
+    if !should_apply {
+        return;
     }
 
     // Handle stacking
@@ -617,6 +636,13 @@ pub fn on_apply_gameplay_effect(
     match definition.duration_policy {
         DurationPolicy::Instant => {
             // Directly modify attribute base_value, no entity spawn
+            // Re-collect attribute snapshots since we're outside the scope
+            let attribute_snapshots: Vec<_> = params
+                .attributes
+                .iter()
+                .map(|(data, name, child_of)| ApplicationAttributeSnapshot::new(child_of.get(), name, data))
+                .collect();
+
             for modifier in &definition.modifiers {
                 let magnitude = calculate_modifier_magnitude(
                     &modifier.magnitude,
@@ -737,29 +763,26 @@ pub fn on_apply_gameplay_effect(
     }
 
     // Apply conditional effects (deferred to avoid query conflicts)
-    apply_conditional_effects(&mut commands, definition, spec, &params.tag_containers.p0());
+    // Use the source tags we collected earlier
+    apply_conditional_effects_with_tags(&mut commands, definition, spec, source_tags_for_conditional.as_ref());
 }
 
 /// Helper function to apply conditional effects.
 ///
 /// This is separated to avoid query conflicts when effects trigger recursively.
-fn apply_conditional_effects(
+fn apply_conditional_effects_with_tags(
     commands: &mut Commands,
     definition: &GameplayEffectDefinition,
     spec: &GameplayEffectSpec,
-    tag_containers: &Query<&OwnedTags>,
+    source_tags: Option<&bevy_gameplay_tag::GameplayTagContainer>,
 ) {
     if definition.conditional_effects.is_empty() {
         return;
     }
 
-    let source_tags = spec
-        .source_entity()
-        .and_then(|source| tag_containers.get(source).ok());
-
     for conditional in &definition.conditional_effects {
         let can_apply = if let Some(source_tags) = source_tags {
-            conditional.can_apply(&source_tags.0.explicit_tags)
+            conditional.can_apply(source_tags)
         } else {
             conditional.required_source_tags.is_empty()
         };
